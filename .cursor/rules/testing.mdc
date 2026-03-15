@@ -1,0 +1,78 @@
+---
+description: Testing conventions for Go backend and React frontend
+globs: "**/*_test.go,**/*.test.ts,**/*.test.tsx"
+alwaysApply: false
+---
+
+# Testing Conventions
+
+## Go Backend Tests
+
+### Unit Tests (service layer)
+
+```go
+func TestGuildService_Create(t *testing.T) {
+    repo := &mockGuildRepo{}
+    svc := guild.NewService(repo)
+
+    t.Run("creates guild successfully", func(t *testing.T) {
+        repo.createFn = func(ctx context.Context, g *guild.Guild) error {
+            return nil
+        }
+        result, err := svc.Create(context.Background(), "user-1", guild.CreateRequest{Name: "Test"})
+        assert.NoError(t, err)
+        assert.Equal(t, "Test", result.Name)
+    })
+
+    t.Run("returns error on empty name", func(t *testing.T) {
+        _, err := svc.Create(context.Background(), "user-1", guild.CreateRequest{Name: ""})
+        assert.Error(t, err)
+    })
+}
+```
+
+- Use table-driven tests for multiple input variations
+- Use `t.Run` subtests for readable output
+- Use `testify/assert` for assertions
+- Mock at the repository interface boundary
+- Test file lives next to the code: `service_test.go` beside `service.go`
+
+### Integration Tests (handler layer)
+
+```go
+func TestCreateGuild_Integration(t *testing.T) {
+    app := setupTestApp(t) // spins up Fiber with test DB
+
+    t.Run("201 on valid request", func(t *testing.T) {
+        body := `{"name":"My Guild"}`
+        req := httptest.NewRequest("POST", "/guilds", strings.NewReader(body))
+        req.Header.Set("Content-Type", "application/json")
+        req.Header.Set("Authorization", "Bearer "+testToken)
+
+        resp, _ := app.Test(req)
+        assert.Equal(t, 201, resp.StatusCode)
+    })
+}
+```
+
+## React Frontend Tests
+
+Use Vitest + React Testing Library.
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import { GuildList } from "./GuildList";
+
+test("renders guild names", () => {
+  const guilds = [{ id: "1", name: "Test Guild" }];
+  render(<GuildList guilds={guilds} onSelect={vi.fn()} />);
+  expect(screen.getByText("Test Guild")).toBeInTheDocument();
+});
+```
+
+## What to Test
+
+- **Always**: service business logic, input validation, auth/permission checks
+- **Always**: API handler happy path + main error paths
+- **Selectively**: frontend component rendering + user interactions
+- **Skip**: trivial getters, pure pass-through functions

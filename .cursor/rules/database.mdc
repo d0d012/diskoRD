@@ -1,0 +1,71 @@
+---
+description: PostgreSQL schema conventions, migration patterns, and query standards
+globs: backend/migrations/**/*.sql,backend/**/repository.go
+alwaysApply: false
+---
+
+# Database & Migration Conventions
+
+## Migration Files
+
+Use golang-migrate. Files follow this naming:
+
+```
+backend/migrations/
+  000001_create_users.up.sql
+  000001_create_users.down.sql
+  000002_create_guilds.up.sql
+  000002_create_guilds.down.sql
+```
+
+- Sequential 6-digit prefix
+- Descriptive snake_case name
+- Every `up.sql` MUST have a corresponding `down.sql`
+
+## Schema Conventions
+
+```sql
+CREATE TABLE guilds (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       VARCHAR(100) NOT NULL,
+    icon_url   TEXT,
+    owner_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_guilds_owner_id ON guilds(owner_id);
+```
+
+Rules:
+- All primary keys: `UUID DEFAULT gen_random_uuid()`
+- All tables have `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`
+- Tables that are updatable also have `updated_at`
+- Soft-deletable tables add `deleted_at TIMESTAMPTZ` (nullable)
+- Foreign keys always specify `ON DELETE` behavior
+- Create indexes on all foreign key columns and frequently queried fields
+- Use `VARCHAR(n)` with length limits for user input, `TEXT` for unbounded content
+
+## Query Pattern (repository.go)
+
+```go
+func (r *Repository) GetByID(ctx context.Context, id string) (*Guild, error) {
+    var g Guild
+    err := r.db.QueryRowContext(ctx,
+        `SELECT id, name, icon_url, owner_id, created_at, updated_at
+         FROM guilds WHERE id = $1 AND deleted_at IS NULL`, id,
+    ).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt)
+    if err == sql.ErrNoRows {
+        return nil, fiber.NewError(fiber.StatusNotFound, "guild not found")
+    }
+    if err != nil {
+        return nil, fmt.Errorf("guild.Repository.GetByID: %w", err)
+    }
+    return &g, nil
+}
+```
+
+- Use `$1, $2` parameterized queries (never string interpolation)
+- Always check `sql.ErrNoRows` separately
+- Use `context.Context` for all DB calls
+- Wrap errors with `package.Type.Method:` prefix

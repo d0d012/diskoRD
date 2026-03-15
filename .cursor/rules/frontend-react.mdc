@@ -1,0 +1,95 @@
+---
+description: React + TypeScript frontend conventions for components, hooks, stores, and API calls
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend React/TypeScript Conventions
+
+## Component Structure
+
+```
+frontend/src/
+  components/     # Reusable UI components
+    ui/           # Primitives (Button, Input, Modal, Avatar)
+    layout/       # Sidebar, Header, MainLayout
+  features/       # Feature-specific components grouped by domain
+    auth/         # LoginForm, RegisterForm
+    guild/        # GuildList, GuildSettings
+    channel/      # ChannelList, ChannelHeader
+    message/      # MessageList, MessageInput, MessageItem
+    voice/        # VoicePanel, VoiceControls
+  hooks/          # Custom hooks
+  stores/         # Zustand stores
+  lib/            # API client, WS client, utils
+  types/          # Shared TypeScript types
+  pages/          # Route-level page components
+```
+
+## Component Pattern
+
+```tsx
+interface GuildListProps {
+  onSelect: (guildId: string) => void;
+}
+
+export function GuildList({ onSelect }: GuildListProps) {
+  const guilds = useGuildStore((s) => s.guilds);
+
+  return (
+    <div className="guild-list">
+      {guilds.map((g) => (
+        <GuildIcon key={g.id} guild={g} onClick={() => onSelect(g.id)} />
+      ))}
+    </div>
+  );
+}
+```
+
+Rules:
+- Named exports only (no default exports)
+- Function declarations, not arrow const
+- Props interface defined directly above the component
+- Destructure props in the parameter
+
+## Zustand Store Pattern
+
+```tsx
+interface AuthStore {
+  user: User | null;
+  token: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+}
+
+export const useAuthStore = create<AuthStore>((set) => ({
+  user: null,
+  token: null,
+  login: async (email, password) => {
+    const { data } = await api.post("/auth/login", { email, password });
+    set({ user: data.user, token: data.accessToken });
+  },
+  logout: () => {
+    set({ user: null, token: null });
+  },
+}));
+```
+
+## API Client
+
+Use a centralized axios instance in `lib/api.ts` with interceptors for auth token injection and refresh.
+
+## Styling
+
+Use Tailwind CSS utility classes. Extract repeated patterns into component-level classes via `@apply` only when used 3+ times.
+
+## Types
+
+Shared types go in `types/`. API response types mirror the backend `Response` envelope:
+
+```tsx
+interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+}
+```

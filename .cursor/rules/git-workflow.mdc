@@ -1,0 +1,51 @@
+---
+description: Git workflow, commit message format, and branch conventions
+alwaysApply: true
+---
+
+# Git Workflow
+
+## Branch Naming
+
+```
+feature/phase-{N}-{short-description}
+fix/phase-{N}-{short-description}
+refactor/{short-description}
+```
+
+Examples: `feature/phase-1-auth-register`, `fix/phase-2-invite-validation`
+
+## Commit Messages
+
+Format: `type(scope): description`
+
+```
+feat(auth): add JWT access and refresh token flow
+fix(gateway): handle reconnection race condition
+refactor(guild): extract permission checks to middleware
+test(message): add pagination edge case tests
+chore(infra): update docker-compose postgres version
+docs: update CLAUDE.md with voice architecture
+```
+
+Types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`
+Scopes: `auth`, `guild`, `channel`, `message`, `gateway`, `presence`, `voice`, `friend`, `storage`, `infra`, `frontend`
+
+## PR Convention
+
+One PR per sub-task (e.g., "Phase 1: auth register endpoint" is one PR). Title matches the commit convention. PR body should have:
+
+```
+## Summary
+- What was added/changed and why
+
+## Test plan
+- How it was tested (commands, manual steps)
+```
+
+## Rules
+
+- Never commit `.env` files, secrets, or credentials
+- Always run `go test ./...` before committing backend changes
+- Always run `npm run lint` before committing frontend changes
+- Keep PRs small and focused — one logical change per PR

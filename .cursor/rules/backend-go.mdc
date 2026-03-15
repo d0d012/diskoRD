@@ -1,0 +1,81 @@
+---
+description: Go backend conventions for Fiber handlers, error handling, and package structure
+globs: backend/**/*.go
+alwaysApply: false
+---
+
+# Go Backend Conventions
+
+## Package Structure
+
+Each domain package (`internal/auth/`, `internal/guild/`, etc.) follows this layout:
+
+```
+internal/<domain>/
+  handler.go    # Fiber route handlers
+  service.go    # Business logic (called by handlers)
+  repository.go # Database queries (called by service)
+  models.go     # Request/response structs, domain types
+  routes.go     # Route registration function
+  <domain>_test.go
+```
+
+## Handler Pattern
+
+Every handler follows this exact structure:
+
+```go
+func (h *Handler) CreateGuild(c *fiber.Ctx) error {
+    var req CreateGuildRequest
+    if err := c.BodyParser(&req); err != nil {
+        return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+    }
+
+    if err := h.validate.Struct(req); err != nil {
+        return fiber.NewError(fiber.StatusBadRequest, formatValidationError(err))
+    }
+
+    userID := c.Locals("userID").(string)
+
+    result, err := h.service.CreateGuild(c.Context(), userID, req)
+    if err != nil {
+        return err // service returns fiber.NewError with proper status
+    }
+
+    return c.Status(fiber.StatusCreated).JSON(Response{
+        Data: result,
+    })
+}
+```
+
+## Response Envelope
+
+All JSON responses use this envelope:
+
+```go
+type Response struct {
+    Data  any    `json:"data,omitempty"`
+    Error string `json:"error,omitempty"`
+}
+```
+
+## Error Handling
+
+- Use `fiber.NewError(statusCode, message)` for HTTP errors
+- Never expose internal errors to clients — log them, return generic message
+- Use `zerolog` for structured logging: `log.Error().Err(err).Str("userID", id).Msg("failed to create guild")`
+- Wrap errors with context: `fmt.Errorf("guild.Service.Create: %w", err)`
+
+## Naming
+
+- Files: `snake_case.go`
+- Structs/interfaces: `PascalCase`
+- Unexported helpers: `camelCase`
+- Table names in SQL: `snake_case`, plural (`guilds`, `guild_members`)
+- JSON fields: `camelCase` via struct tags
+
+## Dependencies
+
+- Use constructor injection for all services and repositories
+- Accept interfaces, return structs
+- Context propagation: always pass `context.Context` from handler through service to repository

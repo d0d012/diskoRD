@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  /* Discord background layers */
+  --color-dc-bg-primary: #313338;
+  --color-dc-bg-secondary: #2b2d31;
+  --color-dc-bg-tertiary: #1e1f22;
+  --color-dc-bg-floating: #111214;
+  --color-dc-bg-modifier-hover: rgba(79, 84, 92, 0.16);
+  --color-dc-bg-modifier-active: rgba(79, 84, 92, 0.24);
+  --color-dc-bg-modifier-selected: rgba(79, 84, 92, 0.32);
+
+  /* Discord text */
+  --color-dc-text-normal: #f2f3f5;
+  --color-dc-text-muted: #80848e;
+  --color-dc-text-link: #00a8fc;
+  --color-dc-header-primary: #f2f3f5;
+  --color-dc-header-secondary: #b5bac1;
+  --color-dc-interactive-normal: #b5bac1;
+  --color-dc-interactive-hover: #dbdee1;
+  --color-dc-interactive-active: #f2f3f5;
+  --color-dc-interactive-muted: #4e5058;
+
+  /* Discord brand */
+  --color-dc-brand: #5865f2;
+  --color-dc-brand-560: #4752c4;
+  --color-dc-brand-600: #3c45a5;
+
+  /* Discord status */
+  --color-dc-online: #23a559;
+  --color-dc-idle: #f0b232;
+  --color-dc-dnd: #f23f42;
+  --color-dc-offline: #80848e;
+
+  /* Discord channels */
+  --color-dc-channel-default: #80848e;
+
+  /* Discord misc */
+  --color-dc-divider: rgba(79, 84, 92, 0.48);
+  --color-dc-mention-bg: rgba(88, 101, 242, 0.3);
+  --color-dc-red: #ed4245;
+
+  /* Font */
+  --font-family-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-family-mono: "Consolas", "Andale Mono WT", "Andale Mono", "Lucida Console", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family-discord);
+  background-color: var(--color-dc-bg-primary);
+  color: var(--color-dc-text-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-dc-bg-floating);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}

@@ -1,0 +1,94 @@
+---
+description: REST API design conventions — routes, status codes, pagination, and WebSocket event format
+alwaysApply: true
+---
+
+# API Design Conventions
+
+## Route Structure
+
+```
+POST   /auth/register
+POST   /auth/login
+POST   /auth/refresh
+POST   /auth/logout
+
+GET    /users/:id
+PATCH  /users/me
+
+POST   /guilds
+GET    /guilds/:id
+DELETE /guilds/:id
+POST   /guilds/:id/invite
+POST   /invites/:code/join
+GET    /guilds/:id/members
+DELETE /guilds/:id/members/:userId
+
+POST   /guilds/:id/channels
+PATCH  /channels/:id
+DELETE /channels/:id
+
+POST   /channels/:id/messages
+GET    /channels/:id/messages?before=<cursor>&limit=50
+PATCH  /messages/:id
+DELETE /messages/:id
+
+POST   /channels/:id/voice/token
+```
+
+## Response Format
+
+All endpoints return the standard envelope:
+
+```json
+// Success
+{ "data": { ... } }
+
+// Error
+{ "error": "human-readable message" }
+```
+
+## Status Codes
+
+| Code | When |
+|------|------|
+| 200  | Successful GET, PATCH, DELETE |
+| 201  | Successful POST that creates a resource |
+| 204  | Successful operation with no response body |
+| 400  | Validation error or malformed request |
+| 401  | Missing or invalid authentication |
+| 403  | Authenticated but not authorized |
+| 404  | Resource not found |
+| 409  | Conflict (duplicate username, already a member) |
+| 429  | Rate limited |
+| 500  | Unexpected server error |
+
+## Pagination
+
+Cursor-based for all list endpoints:
+
+```
+GET /channels/:id/messages?before=<messageId>&limit=50
+```
+
+Response includes whether more results exist:
+
+```json
+{ "data": { "items": [...], "hasMore": true } }
+```
+
+## WebSocket Event Format
+
+All gateway events use this structure:
+
+```json
+{
+  "op": "MESSAGE_CREATE",
+  "d": { "id": "...", "channelId": "...", "content": "Hello", "author": { ... } },
+  "s": 42
+}
+```
+
+- `op`: event operation type
+- `d`: event data payload
+- `s`: sequence number (for resume)
