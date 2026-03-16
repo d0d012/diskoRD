@@ -7,6 +7,7 @@ interface AuthStore {
   accessToken: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, displayName: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
 }
@@ -20,11 +21,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
 
     // Mock account for development
-    if (email === "test" && password === "12345") {
+    if ((email === "test" || email === "test@test.com") && password === "12345") {
       const mockUser: User = {
         id: "mock-user-1",
         username: "test",
-        discriminator: "0001",
+        displayName: "Test User",
         status: "online",
         createdAt: new Date().toISOString(),
       };
@@ -39,8 +40,19 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
   },
 
+  register: async (email, displayName, username, password) => {
+    set({ isLoading: true });
+    const { data } = await api.post("/auth/register", { email, displayName, username, password });
+    localStorage.setItem("access_token", data.data.accessToken);
+    localStorage.setItem("refresh_token", data.data.refreshToken);
+    set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
+  },
+
   logout: async () => {
-    await api.post("/auth/logout").catch(() => {});
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      await api.post("/auth/logout", { refreshToken }).catch(() => {});
+    }
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     set({ user: null, accessToken: null });

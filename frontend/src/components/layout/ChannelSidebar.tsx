@@ -43,7 +43,7 @@ function UserPanel() {
   return (
     <div
       className="flex items-center gap-2 p-2 cursor-pointer rounded-md hover:bg-[var(--color-dc-bg-modifier-hover)] transition-colors"
-      title={`${user?.username}#${user?.discriminator}`}
+      title={user?.displayName ?? user?.username ?? ""}
     >
       <div className="relative flex-shrink-0">
         <div className="w-8 h-8 rounded-full bg-[var(--color-dc-brand)] flex items-center justify-center text-white text-sm font-semibold">
@@ -57,7 +57,7 @@ function UserPanel() {
           {user?.username ?? "..."}
         </span>
         <span className="text-[var(--color-dc-text-muted)] text-xs leading-tight">
-          #{user?.discriminator ?? "0000"}
+          {user?.displayName ?? user?.username ?? ""}
         </span>
       </div>
       <div className="ml-auto flex gap-1">

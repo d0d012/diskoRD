@@ -14,8 +14,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/d0d012/diskord/internal/auth"
+	"github.com/d0d012/diskord/internal/user"
 	"github.com/d0d012/diskord/pkg/config"
 	"github.com/d0d012/diskord/pkg/db"
+	"github.com/d0d012/diskord/pkg/middleware"
 	pkgredis "github.com/d0d012/diskord/pkg/redis"
 )
 
@@ -50,6 +53,15 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			msg := "internal server error"
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+				msg = e.Message
+			}
+			return c.Status(code).JSON(fiber.Map{"error": msg})
+		},
 	})
 
 	app.Use(recover.New())
@@ -59,10 +71,20 @@ func main() {
 		return c.JSON(fiber.Map{"data": "ok"})
 	})
 
-	// Domain routes will be registered here as they are implemented:
-	// auth.RegisterRoutes(app, ...)
-	// guild.RegisterRoutes(app, ...)
-	// etc.
+	authRepo := auth.NewRepository(pool)
+	authService := auth.NewService(authRepo, rdb, cfg.JWT)
+	authHandler := auth.NewHandler(authService)
+	authMw := auth.AuthMiddleware(authService)
+	auth.RegisterRoutes(app, authHandler, auth.RouteConfig{
+		AuthMiddleware:    authMw,
+		LoginRateLimit:    middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 5, Window: time.Minute}),
+		RegisterRateLimit: middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 3, Window: time.Minute}),
+	})
+
+	userRepo := user.NewRepository(pool)
+	userService := user.NewService(userRepo)
+	userHandler := user.NewHandler(userService)
+	user.RegisterRoutes(app, userHandler, authMw)
 
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.App.Port)

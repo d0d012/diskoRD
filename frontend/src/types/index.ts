@@ -14,7 +14,8 @@ export interface PaginatedResponse<T> {
 export interface User {
   id: string;
   username: string;
-  discriminator: string;
+  email?: string;
+  displayName?: string;
   avatarUrl?: string;
   status: "online" | "idle" | "dnd" | "offline";
   createdAt: string;
