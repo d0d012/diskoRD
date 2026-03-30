@@ -33,6 +33,21 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*User, error) {
 	return &u, nil
 }
 
+func (r *Repository) FindByUsername(ctx context.Context, username string) (*User, error) {
+	var u User
+	err := r.db.QueryRow(ctx,
+		`SELECT id, username, email, password_hash, display_name, avatar_url, status, created_at, updated_at
+		 FROM users WHERE lower(username) = lower($1)`, username,
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fiber.NewError(fiber.StatusNotFound, "user not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("user.Repository.FindByUsername: %w", err)
+	}
+	return &u, nil
+}
+
 func (r *Repository) UpdateProfile(ctx context.Context, id string, displayName *string, avatarURL *string) (*User, error) {
 	var u User
 	err := r.db.QueryRow(ctx,

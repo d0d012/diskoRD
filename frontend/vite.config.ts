@@ -10,6 +10,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
+      "/gateway": {
+        target: "ws://localhost:8080",
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 });

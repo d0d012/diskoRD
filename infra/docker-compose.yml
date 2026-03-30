@@ -29,6 +29,19 @@ services:
       timeout: 5s
       retries: 5
 
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "52000-52020:52000-52020/udp"
+    volumes:
+      - ./livekit/livekit.yaml:/livekit.yaml
+    command: --config /livekit.yaml --dev
+    depends_on:
+      - redis
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped

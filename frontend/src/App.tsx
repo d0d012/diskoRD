@@ -1,12 +1,18 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { AppPage } from "./pages/AppPage";
+import { InvitePage } from "./pages/InvitePage";
 import { useAuthStore } from "./stores/authStore";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
-  return accessToken ? <>{children}</> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return accessToken ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/login" state={{ returnTo: location.pathname }} replace />
+  );
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
@@ -25,6 +31,14 @@ export function App() {
           element={
             <PrivateRoute>
               <AppPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/invite/:code"
+          element={
+            <PrivateRoute>
+              <InvitePage />
             </PrivateRoute>
           }
         />

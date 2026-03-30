@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 
 interface FieldError {
@@ -14,7 +14,9 @@ export function LoginPage() {
   const [shaking, setShaking] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const formRef = useRef<HTMLDivElement>(null);
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? "/app";
 
   function triggerShake() {
     setShaking(true);
@@ -36,7 +38,7 @@ export function LoginPage() {
 
     try {
       await login(email.trim(), password);
-      navigate("/app");
+      navigate(returnTo);
     } catch {
       setErrors({ password: "Invalid email or password." });
       triggerShake();
@@ -75,7 +77,7 @@ export function LoginPage() {
                 )}
               </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}
                 className="px-2.5 py-2 rounded text-base outline-none focus:ring-2"

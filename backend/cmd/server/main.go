@@ -15,7 +15,15 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/auth"
+	"github.com/d0d012/diskord/internal/channel"
+	"github.com/d0d012/diskord/internal/friend"
+	"github.com/d0d012/diskord/internal/gateway"
+	"github.com/d0d012/diskord/internal/guild"
+	"github.com/d0d012/diskord/internal/invite"
+	"github.com/d0d012/diskord/internal/message"
+	"github.com/d0d012/diskord/internal/presence"
 	"github.com/d0d012/diskord/internal/user"
+	"github.com/d0d012/diskord/internal/voice"
 	"github.com/d0d012/diskord/pkg/config"
 	"github.com/d0d012/diskord/pkg/db"
 	"github.com/d0d012/diskord/pkg/middleware"
@@ -59,6 +67,8 @@ func main() {
 			if e, ok := err.(*fiber.Error); ok {
 				code = e.Code
 				msg = e.Message
+			} else {
+				log.Error().Err(err).Str("method", c.Method()).Str("path", c.Path()).Msg("unhandled error")
 			}
 			return c.Status(code).JSON(fiber.Map{"error": msg})
 		},
@@ -85,6 +95,47 @@ func main() {
 	userService := user.NewService(userRepo)
 	userHandler := user.NewHandler(userService)
 	user.RegisterRoutes(app, userHandler, authMw)
+
+	presenceSvc := presence.NewService(rdb)
+
+	guildRepo := guild.NewRepository(pool)
+	guildService := guild.NewService(guildRepo, presenceSvc)
+	guildHandler := guild.NewHandler(guildService)
+	guild.RegisterRoutes(app, guildHandler, authMw)
+
+	channelRepo := channel.NewRepository(pool)
+	channelService := channel.NewService(channelRepo, guildRepo)
+	channelHandler := channel.NewHandler(channelService)
+	channel.RegisterRoutes(app, channelHandler, authMw)
+
+	inviteRepo := invite.NewRepository(pool)
+	inviteService := invite.NewService(inviteRepo, guildRepo)
+	inviteHandler := invite.NewHandler(inviteService)
+	invite.RegisterRoutes(app, inviteHandler, authMw)
+
+	friendRepo := friend.NewRepository(pool)
+	friendService := friend.NewService(friendRepo, presenceSvc)
+	friendHandler := friend.NewHandler(friendService)
+	friend.RegisterRoutes(app, friendHandler, authMw)
+
+	hub := gateway.NewHub(rdb, pool, presenceSvc)
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+	go hub.Run(serverCtx)
+
+	msgRepo := message.NewRepository(pool)
+	msgService := message.NewService(msgRepo, guildRepo)
+	msgService.SetPublisher(hub)
+	msgHandler := message.NewHandler(msgService)
+	message.RegisterRoutes(app, msgHandler, authMw)
+
+	voiceSvc := voice.NewService(pool, channelRepo, guildRepo, rdb, cfg.LiveKit)
+	voiceSvc.SetPublisher(hub)
+	voiceHandler := voice.NewHandler(voiceSvc)
+	voice.RegisterRoutes(app, voiceHandler, authMw)
+
+	gatewayHandler := gateway.NewHandler(hub, authService)
+	gateway.RegisterRoutes(app, gatewayHandler)
 
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.App.Port)

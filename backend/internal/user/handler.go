@@ -31,6 +31,18 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 	return c.JSON(Response{Data: result})
 }
 
+func (h *Handler) SearchByUsername(c *fiber.Ctx) error {
+	username := c.Query("username")
+	if username == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "username query param required")
+	}
+	result, err := h.service.FindByUsername(c.Context(), username)
+	if err != nil {
+		return err
+	}
+	return c.JSON(Response{Data: result})
+}
+
 func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
 	var req UpdateProfileRequest
 	if err := c.BodyParser(&req); err != nil {

@@ -12,9 +12,18 @@ interface AuthStore {
   setUser: (user: User) => void;
 }
 
+function loadUser(): User | null {
+  try {
+    const raw = sessionStorage.getItem("user");
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: null,
-  accessToken: localStorage.getItem("access_token"),
+  user: loadUser(),
+  accessToken: sessionStorage.getItem("access_token") ?? localStorage.getItem("access_token"),
   isLoading: false,
 
   login: async (email, password) => {
@@ -29,13 +38,14 @@ export const useAuthStore = create<AuthStore>((set) => ({
         status: "online",
         createdAt: new Date().toISOString(),
       };
-      localStorage.setItem("access_token", "mock-token");
+      sessionStorage.setItem("access_token", "mock-token");
       set({ user: mockUser, accessToken: "mock-token", isLoading: false });
       return;
     }
 
     const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("access_token", data.data.accessToken);
+    sessionStorage.setItem("access_token", data.data.accessToken);
+    sessionStorage.setItem("user", JSON.stringify(data.data.user));
     localStorage.setItem("refresh_token", data.data.refreshToken);
     set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
   },
@@ -43,7 +53,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
   register: async (email, displayName, username, password) => {
     set({ isLoading: true });
     const { data } = await api.post("/auth/register", { email, displayName, username, password });
-    localStorage.setItem("access_token", data.data.accessToken);
+    sessionStorage.setItem("access_token", data.data.accessToken);
+    sessionStorage.setItem("user", JSON.stringify(data.data.user));
     localStorage.setItem("refresh_token", data.data.refreshToken);
     set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
   },
@@ -53,7 +64,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     if (refreshToken) {
       await api.post("/auth/logout", { refreshToken }).catch(() => {});
     }
-    localStorage.removeItem("access_token");
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("user");
     localStorage.removeItem("refresh_token");
     set({ user: null, accessToken: null });
   },

@@ -1,0 +1,111 @@
+import { create } from "zustand";
+import { api } from "../lib/api";
+
+export interface FriendUser {
+  id: string;
+  username: string;
+  displayName?: string;
+  avatarUrl?: string;
+  status: "online" | "offline";
+}
+
+export interface FriendRequest {
+  id: string; // friendship ID
+  direction: "incoming" | "outgoing";
+  user: FriendUser;
+  createdAt: string;
+}
+
+export interface DMChannel {
+  id: string;
+  recipient: FriendUser;
+  createdAt: string;
+}
+
+interface FriendStore {
+  friends: FriendUser[];
+  requests: FriendRequest[];
+  dms: DMChannel[];
+  activeDMId: string | null;
+
+  fetchFriends: () => Promise<void>;
+  fetchRequests: () => Promise<void>;
+  fetchDMs: () => Promise<void>;
+  sendRequest: (userId: string) => Promise<void>;
+  acceptRequest: (friendshipId: string) => Promise<void>;
+  declineRequest: (friendshipId: string) => Promise<void>;
+  removeFriend: (friendshipId: string) => Promise<void>;
+  openDM: (userId: string) => Promise<DMChannel>;
+  setActiveDM: (dmId: string | null) => void;
+  updatePresence: (userId: string, status: "online" | "offline") => void;
+}
+
+export const useFriendStore = create<FriendStore>((set, get) => ({
+  friends: [],
+  requests: [],
+  dms: [],
+  activeDMId: null,
+
+  fetchFriends: async () => {
+    const { data } = await api.get("/users/me/friends");
+    set({ friends: data.data ?? [] });
+  },
+
+  fetchRequests: async () => {
+    const { data } = await api.get("/users/me/friend-requests");
+    set({ requests: data.data ?? [] });
+  },
+
+  fetchDMs: async () => {
+    const { data } = await api.get("/users/me/dms");
+    set({ dms: data.data ?? [] });
+  },
+
+  sendRequest: async (userId) => {
+    await api.post(`/users/${userId}/friend-request`);
+    get().fetchRequests();
+  },
+
+  acceptRequest: async (friendshipId) => {
+    await api.post(`/friend-requests/${friendshipId}/accept`);
+    await Promise.all([get().fetchFriends(), get().fetchRequests()]);
+  },
+
+  declineRequest: async (friendshipId) => {
+    await api.post(`/friend-requests/${friendshipId}/decline`);
+    get().fetchRequests();
+  },
+
+  removeFriend: async (friendshipId) => {
+    await api.delete(`/friends/${friendshipId}`);
+    set((s) => ({ friends: s.friends.filter((f) => f.id !== friendshipId) }));
+  },
+
+  openDM: async (userId) => {
+    const { data } = await api.post(`/dms/${userId}`);
+    const dm: DMChannel = data.data;
+    set((s) => {
+      const exists = s.dms.find((d) => d.id === dm.id);
+      return {
+        dms: exists ? s.dms : [dm, ...s.dms],
+        activeDMId: dm.id,
+      };
+    });
+    return dm;
+  },
+
+  setActiveDM: (dmId) => set({ activeDMId: dmId }),
+
+  updatePresence: (userId, status) => {
+    set((s) => ({
+      friends: s.friends.map((f) =>
+        f.id === userId ? { ...f, status } : f
+      ),
+      dms: s.dms.map((d) =>
+        d.recipient.id === userId
+          ? { ...d, recipient: { ...d.recipient, status } }
+          : d
+      ),
+    }));
+  },
+}));
