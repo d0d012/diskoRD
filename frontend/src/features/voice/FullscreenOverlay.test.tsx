@@ -36,7 +36,8 @@ function mkp(overrides: Partial<VoiceParticipant> = {}): VoiceParticipant {
 describe("FullscreenOverlay", () => {
   it("renders participant name", () => {
     render(<FullscreenOverlay participant={mkp({ name: "Alice" })} onClose={vi.fn()} />);
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByTestId("participant-name-label")).toBeInTheDocument();
+    expect(screen.getByTestId("participant-name-label")).toHaveTextContent("Alice");
   });
 
   it("renders with data-testid fullscreen-overlay", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceParticipant } from "../../hooks/useVoice";
 import { ParticipantTile } from "./ParticipantTile";
 import { ControlBar } from "./ControlBar";
@@ -22,18 +22,18 @@ export function FullscreenOverlay({ participant, onClose }: FullscreenOverlayPro
   }, [onClose]);
 
   // Auto-hide controls after 3s of no mouse movement
-  function resetHideTimer() {
+  const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
-  }
+  }, []);
 
   useEffect(() => {
     resetHideTimer();
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [resetHideTimer]);
 
   return (
     <div
@@ -44,6 +44,15 @@ export function FullscreenOverlay({ participant, onClose }: FullscreenOverlayPro
       {/* Video / avatar fills the space */}
       <div className="flex-1 relative overflow-hidden">
         <ParticipantTile participant={participant} variant="main" />
+
+        {/* Participant name label */}
+        <div
+          data-testid="participant-name-label"
+          className="absolute bottom-4 left-4 px-2 py-1 rounded text-sm font-medium"
+          style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
+        >
+          {participant.name}
+        </div>
 
         {/* Exit button — always visible */}
         <button
