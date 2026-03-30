@@ -11,7 +11,7 @@ export function VideoTile({ track, className }: VideoTileProps) {
 
   useEffect(() => {
     const el = videoRef.current;
-    if (!el) return;
+    if (!el || typeof track.attach !== "function") return;
     track.attach(el);
     return () => { track.detach(el); };
   }, [track]);
