@@ -12,10 +12,15 @@ import (
 type Service struct {
 	repo        *Repository
 	presenceSvc *presence.Service
+	notifier    FriendNotifier
 }
 
 func NewService(repo *Repository, presenceSvc *presence.Service) *Service {
 	return &Service{repo: repo, presenceSvc: presenceSvc}
+}
+
+func (s *Service) SetNotifier(n FriendNotifier) {
+	s.notifier = n
 }
 
 func (s *Service) SendRequest(ctx context.Context, senderID, receiverID string) (*FriendRequestResponse, error) {
@@ -44,12 +49,15 @@ func (s *Service) SendRequest(ctx context.Context, senderID, receiverID string) 
 	}
 
 	// Re-fetch with user info via ListRequests (or return minimal response)
-	reqs, err := s.repo.ListRequests(ctx, senderID)
+	reqs, err := s.repo.ListRequests(ctx, receiverID)
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range reqs {
 		if r.ID == f.ID {
+			if s.notifier != nil {
+				s.notifier.NotifyUser(receiverID, "FRIEND_REQUEST", r)
+			}
 			return &r, nil
 		}
 	}
@@ -67,7 +75,15 @@ func (s *Service) AcceptRequest(ctx context.Context, callerID, friendshipID stri
 	if f.Status != "pending" {
 		return fiber.NewError(fiber.StatusBadRequest, "request is not pending")
 	}
-	return s.repo.UpdateStatus(ctx, friendshipID, "accepted")
+	if err := s.repo.UpdateStatus(ctx, friendshipID, "accepted"); err != nil {
+		return err
+	}
+	if s.notifier != nil {
+		payload := map[string]string{"friendshipId": friendshipID}
+		s.notifier.NotifyUser(f.SenderID, "FRIEND_ACCEPT", payload)
+		s.notifier.NotifyUser(f.ReceiverID, "FRIEND_ACCEPT", payload)
+	}
+	return nil
 }
 
 func (s *Service) DeclineRequest(ctx context.Context, callerID, friendshipID string) error {
@@ -81,7 +97,15 @@ func (s *Service) DeclineRequest(ctx context.Context, callerID, friendshipID str
 	if f.Status != "pending" {
 		return fiber.NewError(fiber.StatusBadRequest, "request is not pending")
 	}
-	return s.repo.Delete(ctx, friendshipID)
+	if err := s.repo.Delete(ctx, friendshipID); err != nil {
+		return err
+	}
+	if s.notifier != nil {
+		payload := map[string]string{"friendshipId": friendshipID}
+		s.notifier.NotifyUser(f.SenderID, "FRIEND_DECLINE", payload)
+		s.notifier.NotifyUser(f.ReceiverID, "FRIEND_DECLINE", payload)
+	}
+	return nil
 }
 
 func (s *Service) RemoveFriend(ctx context.Context, callerID, friendshipID string) error {

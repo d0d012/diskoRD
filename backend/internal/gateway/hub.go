@@ -235,8 +235,13 @@ func (h *Hub) AddClientGuild(userID, guildID string) {
 	}
 }
 
-// notifyUser sends an event payload directly to all connections for a given user.
+// NotifyUser sends an event directly to all connections for a given user.
 // Does not go through Redis — single-instance delivery only.
+func (h *Hub) NotifyUser(userID, op string, data interface{}) {
+	h.notifyUser(userID, op, data)
+}
+
+// notifyUser is the internal implementation.
 func (h *Hub) notifyUser(userID, op string, data interface{}) {
 	seq := atomic.AddInt64(&h.seq, 1)
 	raw, err := json.Marshal(data)

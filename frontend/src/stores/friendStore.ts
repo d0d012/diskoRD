@@ -38,6 +38,10 @@ interface FriendStore {
   openDM: (userId: string) => Promise<DMChannel>;
   setActiveDM: (dmId: string | null) => void;
   updatePresence: (userId: string, status: "online" | "offline") => void;
+  // Gateway-driven updates
+  addRequest: (req: FriendRequest) => void;
+  onFriendAccepted: (friendshipId: string) => void;
+  onFriendDeclined: (friendshipId: string) => void;
 }
 
 export const useFriendStore = create<FriendStore>((set, get) => ({
@@ -106,6 +110,27 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
           ? { ...d, recipient: { ...d.recipient, status } }
           : d
       ),
+    }));
+  },
+
+  addRequest: (req) => {
+    set((s) => {
+      if (s.requests.some((r) => r.id === req.id)) return s;
+      return { requests: [req, ...s.requests] };
+    });
+  },
+
+  onFriendAccepted: (friendshipId) => {
+    // Remove from pending requests and re-fetch friends list
+    set((s) => ({
+      requests: s.requests.filter((r) => r.id !== friendshipId),
+    }));
+    get().fetchFriends();
+  },
+
+  onFriendDeclined: (friendshipId) => {
+    set((s) => ({
+      requests: s.requests.filter((r) => r.id !== friendshipId),
     }));
   },
 }));

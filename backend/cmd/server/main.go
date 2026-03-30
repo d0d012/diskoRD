@@ -123,6 +123,8 @@ func main() {
 	defer serverCancel()
 	go hub.Run(serverCtx)
 
+	friendService.SetNotifier(hub)
+
 	msgRepo := message.NewRepository(pool)
 	msgService := message.NewService(msgRepo, guildRepo)
 	msgService.SetPublisher(hub)

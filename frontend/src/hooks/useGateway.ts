@@ -20,13 +20,22 @@ export function useGateway() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const { addMessage, updateMessage, removeMessage, setTyping } = useMessageStore();
   const activeChannelId = useGuildStore((s) => s.activeChannelId);
+  const activeDMId = useFriendStore((s) => s.activeDMId);
   const updatePresence = useFriendStore((s) => s.updatePresence);
+  const addRequest = useFriendStore((s) => s.addRequest);
+  const onFriendAccepted = useFriendStore((s) => s.onFriendAccepted);
+  const onFriendDeclined = useFriendStore((s) => s.onFriendDeclined);
   const setPresenceStatus = usePresenceStore((s) => s.setStatus);
   const updateVoiceState = useVoiceStore((s) => s.updateVoiceState);
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seqRef = useRef(0);
+  // Refs so WS closure always sees the latest active channel without reconnecting
+  const activeChannelIdRef = useRef(activeChannelId);
+  const activeDMIdRef = useRef(activeDMId);
+  useEffect(() => { activeChannelIdRef.current = activeChannelId; }, [activeChannelId]);
+  useEffect(() => { activeDMIdRef.current = activeDMId; }, [activeDMId]);
 
   useEffect(() => {
     if (!accessToken || accessToken === "mock-token") return;
@@ -67,9 +76,11 @@ export function useGateway() {
             break;
           }
 
-          case "MESSAGE_CREATE":
-            addMessage(event.d as Message, activeChannelId);
+          case "MESSAGE_CREATE": {
+            const currentActive = activeChannelIdRef.current ?? activeDMIdRef.current;
+            addMessage(event.d as Message, currentActive);
             break;
+          }
 
           case "MESSAGE_UPDATE":
             updateMessage(event.d as Message);
@@ -97,6 +108,23 @@ export function useGateway() {
           case "VOICE_STATE_UPDATE": {
             const d = event.d as { userId: string; username: string; channelId: string; joined: boolean };
             updateVoiceState(d.channelId, { userId: d.userId, username: d.username }, d.joined);
+            break;
+          }
+
+          case "FRIEND_REQUEST": {
+            addRequest(event.d as import("../stores/friendStore").FriendRequest);
+            break;
+          }
+
+          case "FRIEND_ACCEPT": {
+            const d = event.d as { friendshipId: string };
+            onFriendAccepted(d.friendshipId);
+            break;
+          }
+
+          case "FRIEND_DECLINE": {
+            const d = event.d as { friendshipId: string };
+            onFriendDeclined(d.friendshipId);
             break;
           }
         }

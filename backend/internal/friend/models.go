@@ -43,3 +43,9 @@ type Response struct {
 	Data  any    `json:"data,omitempty"`
 	Error string `json:"error,omitempty"`
 }
+
+// FriendNotifier is implemented by the gateway hub.
+// The friend service calls this to push real-time events to users.
+type FriendNotifier interface {
+	NotifyUser(userID, op string, data interface{})
+}
