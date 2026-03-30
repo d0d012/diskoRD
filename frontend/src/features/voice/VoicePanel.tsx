@@ -18,13 +18,14 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
 
-  const { activeVoiceChannelId, isConnecting } = useVoiceStore();
+  const { activeVoiceChannelId } = useVoiceStore();
   const { channels, activeGuildId } = useGuildStore();
 
   const channel = activeGuildId
     ? (channels[activeGuildId] ?? []).find((c) => c.id === activeVoiceChannelId)
     : null;
 
+  const isConnecting = connectionState === ConnectionState.Connecting;
   const layoutMode = getLayoutMode(participants);
 
   // Clear pin when layout reverts to grid or pinned participant leaves

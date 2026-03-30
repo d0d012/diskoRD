@@ -13,7 +13,9 @@ export function VideoTile({ track, className }: VideoTileProps) {
     const el = videoRef.current;
     if (!el || typeof track.attach !== "function") return;
     track.attach(el);
-    return () => { track.detach(el); };
+    return () => {
+      if (typeof track.detach === "function") track.detach(el);
+    };
   }, [track]);
 
   return (

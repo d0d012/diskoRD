@@ -85,7 +85,11 @@ export function ParticipantTile({
         >
           {isLocal ? "You" : name}
         </span>
-        {isPinned && <span className="text-[9px]">📌</span>}
+        {isPinned && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#5865f2" style={{ flexShrink: 0 }}>
+            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2l-2-2z"/>
+          </svg>
+        )}
       </div>
 
       {/* Muted badge */}
