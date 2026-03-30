@@ -91,7 +91,7 @@ export function ParticipantTile({
       {/* Muted badge */}
       {!isMicEnabled && (
         <div
-          className={`absolute top-1.5 left-1.5 ${badgeSize} rounded-full flex items-center justify-center`}
+          className={`absolute bottom-1.5 left-1.5 ${badgeSize} rounded-full flex items-center justify-center`}
           style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
         >
           <svg width={badgeIcon} height={badgeIcon} viewBox="0 0 24 24" fill="white">
@@ -103,7 +103,7 @@ export function ParticipantTile({
       {/* Screen sharing badge */}
       {isScreenSharing && (
         <div
-          className={`absolute top-1.5 right-1.5 ${badgeSize} rounded-full flex items-center justify-center`}
+          className={`absolute bottom-1.5 right-1.5 ${badgeSize} rounded-full flex items-center justify-center`}
           style={{ backgroundColor: "var(--color-dc-brand, #5865f2)" }}
         >
           <svg width={badgeIcon} height={badgeIcon} viewBox="0 0 24 24" fill="white">
