@@ -36,6 +36,8 @@ function mkp(overrides: Partial<VoiceParticipant> = {}): VoiceParticipant {
     isLocal: false,
     cameraTrack: null,
     screenTrack: null,
+    audioTrack: null,
+    screenAudioTrack: null,
     ...overrides,
   };
 }
@@ -50,7 +52,7 @@ describe("VoicePanel layout switching", () => {
   it("renders StageLayout when any participant has a screen track", () => {
     render(
       <VoicePanel
-        participants={[mkp({ identity: "a", screenTrack: {} as any })]}
+        participants={[mkp({ identity: "a", isScreenSharing: true, screenTrack: {} as any })]}
         connectionState={ConnectionState.Connected}
       />
     );
@@ -61,7 +63,7 @@ describe("VoicePanel layout switching", () => {
   it("renders StageLayout when any participant has a camera track", () => {
     render(
       <VoicePanel
-        participants={[mkp({ identity: "a", cameraTrack: {} as any })]}
+        participants={[mkp({ identity: "a", isCameraEnabled: true, cameraTrack: {} as any })]}
         connectionState={ConnectionState.Connected}
       />
     );

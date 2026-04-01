@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { VoiceParticipant } from "../../hooks/useVoice";
+import type { VoiceTile } from "./voiceLayout";
 import { ParticipantTile } from "./ParticipantTile";
+import { BroadcastTile } from "./BroadcastTile";
 import { ControlBar } from "./ControlBar";
 
 interface FullscreenOverlayProps {
-  participant: VoiceParticipant;
+  tile: VoiceTile;
   onClose: () => void;
 }
 
-export function FullscreenOverlay({ participant, onClose }: FullscreenOverlayProps) {
+export function FullscreenOverlay({ tile, onClose }: FullscreenOverlayProps) {
+  const participant = tile.participant;
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,15 +45,19 @@ export function FullscreenOverlay({ participant, onClose }: FullscreenOverlayPro
     >
       {/* Video / avatar fills the space */}
       <div className="flex-1 relative overflow-hidden">
-        <ParticipantTile participant={participant} variant="main" />
+        {tile.type === "broadcast" ? (
+          <BroadcastTile participant={participant} variant="main" />
+        ) : (
+          <ParticipantTile participant={participant} variant="main" />
+        )}
 
-        {/* Participant name label */}
+        {/* Name label */}
         <div
           data-testid="participant-name-label"
           className="absolute bottom-4 left-4 px-2 py-1 rounded text-sm font-medium"
           style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
         >
-          {participant.name}
+          {tile.type === "broadcast" ? `${participant.name}'s Screen` : participant.name}
         </div>
 
         {/* Exit button — always visible */}

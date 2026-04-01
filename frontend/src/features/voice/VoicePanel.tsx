@@ -3,7 +3,8 @@ import { ConnectionState } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useGuildStore } from "../../stores/guildStore";
 import type { VoiceParticipant } from "../../hooks/useVoice";
-import { getLayoutMode } from "./voiceLayout";
+import { buildTiles, getLayoutMode } from "./voiceLayout";
+import type { VoiceTile } from "./voiceLayout";
 import { GridLayout } from "./GridLayout";
 import { StageLayout } from "./StageLayout";
 import { FullscreenOverlay } from "./FullscreenOverlay";
@@ -27,25 +28,26 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
 
   const isConnecting = connectionState === ConnectionState.Connecting;
   const layoutMode = getLayoutMode(participants);
+  const tiles = buildTiles(participants);
 
-  // Clear pin when layout reverts to grid or pinned participant leaves
+  // Clear pin when layout reverts to grid or pinned tile leaves
   useEffect(() => {
     if (layoutMode === "grid") {
       setPinnedId(null);
-    } else if (pinnedId && !participants.find((p) => p.identity === pinnedId)) {
+    } else if (pinnedId && !tiles.find((t) => t.id === pinnedId)) {
       setPinnedId(null);
     }
   }, [participants, layoutMode, pinnedId]);
 
-  // Clear fullscreen when that participant leaves
+  // Clear fullscreen when that tile leaves
   useEffect(() => {
-    if (fullscreenId && !participants.find((p) => p.identity === fullscreenId)) {
+    if (fullscreenId && !tiles.find((t) => t.id === fullscreenId)) {
       setFullscreenId(null);
     }
   }, [participants, fullscreenId]);
 
-  const fullscreenParticipant = fullscreenId
-    ? (participants.find((p) => p.identity === fullscreenId) ?? null)
+  const fullscreenTile: VoiceTile | null = fullscreenId
+    ? (tiles.find((t) => t.id === fullscreenId) ?? null)
     : null;
 
   const isConnected = connectionState === ConnectionState.Connected;
@@ -110,9 +112,9 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
       </div>
 
       {/* Fullscreen overlay — rendered outside layout flow */}
-      {fullscreenParticipant && (
+      {fullscreenTile && (
         <FullscreenOverlay
-          participant={fullscreenParticipant}
+          tile={fullscreenTile}
           onClose={() => setFullscreenId(null)}
         />
       )}

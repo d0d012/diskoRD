@@ -19,16 +19,22 @@ export interface VoiceParticipant {
   isLocal: boolean;
   cameraTrack: Track | null;
   screenTrack: Track | null;
+  audioTrack: Track | null;
+  screenAudioTrack: Track | null;
 }
 
 function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
   let cameraTrack: Track | null = null;
   let screenTrack: Track | null = null;
+  let audioTrack: Track | null = null;
+  let screenAudioTrack: Track | null = null;
 
   for (const pub of p.trackPublications.values()) {
     if (!pub.track) continue;
     if (pub.source === Track.Source.Camera) cameraTrack = pub.track;
     if (pub.source === Track.Source.ScreenShare) screenTrack = pub.track;
+    if (pub.source === Track.Source.Microphone) audioTrack = pub.track;
+    if (pub.source === Track.Source.ScreenShareAudio) screenAudioTrack = pub.track;
   }
 
   return {
@@ -41,6 +47,8 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
     isLocal,
     cameraTrack,
     screenTrack,
+    audioTrack,
+    screenAudioTrack,
   };
 }
 
@@ -48,14 +56,15 @@ export function useVoice() {
   const roomRef = useRef<Room | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
-
   const {
     liveKitToken,
     liveKitUrl,
     isMuted,
-    isDeafened,
     isCameraOn,
     isScreenSharing,
+    screenShareFps,
+    screenShareResolution,
+    screenShareAudio,
     onRoomDisconnected,
   } = useVoiceStore();
 
@@ -90,6 +99,8 @@ export function useVoice() {
     room.on(RoomEvent.Connected, () => {
       setConnectionState(ConnectionState.Connected);
       refreshParticipants();
+      const { isMuted } = useVoiceStore.getState();
+      room.localParticipant.setMicrophoneEnabled(!isMuted);
     });
     room.on(RoomEvent.Disconnected, () => {
       setConnectionState(ConnectionState.Disconnected);
@@ -104,8 +115,10 @@ export function useVoice() {
     room.on(RoomEvent.LocalTrackPublished, refreshParticipants);
     room.on(RoomEvent.LocalTrackUnpublished, refreshParticipants);
     room.on(RoomEvent.ActiveSpeakersChanged, refreshParticipants);
+    room.on(RoomEvent.TrackMuted, refreshParticipants);
+    room.on(RoomEvent.TrackUnmuted, refreshParticipants);
 
-    room.connect(liveKitUrl, liveKitToken, { audio: true, video: false });
+    room.connect(liveKitUrl, liveKitToken);
 
     return () => {
       room.removeAllListeners();
@@ -119,22 +132,31 @@ export function useVoice() {
     roomRef.current?.localParticipant.setMicrophoneEnabled(!isMuted);
   }, [isMuted]);
 
-  // Deafen (mute all remote audio)
-  useEffect(() => {
-    const room = roomRef.current;
-    if (!room) return;
-    room.remoteParticipants.forEach((p) => p.setVolume(isDeafened ? 0 : 1));
-  }, [isDeafened]);
 
-  // Camera
+  // Camera — fixed 720p / 30fps
   useEffect(() => {
-    roomRef.current?.localParticipant.setCameraEnabled(isCameraOn);
+    roomRef.current?.localParticipant.setCameraEnabled(isCameraOn, {
+      resolution: { width: 1280, height: 720, frameRate: 30 },
+    });
   }, [isCameraOn]);
 
-  // Screen share
+  // Screen share — uses store resolution, fps, and audio settings
   useEffect(() => {
-    roomRef.current?.localParticipant.setScreenShareEnabled(isScreenSharing);
-  }, [isScreenSharing]);
+    const resolutionMap = {
+      "720":   { width: 1280, height: 720 },
+      "1080":  { width: 1920, height: 1080 },
+      "1440":  { width: 2560, height: 1440 },
+      "source": { width: 0, height: 0 },   // 0 = let browser pick native
+    };
+    const { width, height } = resolutionMap[screenShareResolution];
+    const resolution = width
+      ? { width, height, frameRate: screenShareFps }
+      : { width: 99999, height: 99999, frameRate: screenShareFps }; // source: unconstrained
+    roomRef.current?.localParticipant.setScreenShareEnabled(isScreenSharing, {
+      audio: screenShareAudio,
+      resolution,
+    });
+  }, [isScreenSharing, screenShareFps, screenShareResolution, screenShareAudio]);
 
   return { participants, connectionState };
 }

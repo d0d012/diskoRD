@@ -1,16 +1,18 @@
 import type { VoiceParticipant } from "../../hooks/useVoice";
 import { ParticipantTile } from "./ParticipantTile";
-import { getMainParticipant } from "./voiceLayout";
+import { BroadcastTile } from "./BroadcastTile";
+import { buildTiles, getMainTile } from "./voiceLayout";
 
 interface StageLayoutProps {
   participants: VoiceParticipant[];
   pinnedId: string | null;
-  onPin: (identity: string) => void;
-  onFullscreen: (identity: string) => void;
+  onPin: (id: string) => void;
+  onFullscreen: (id: string) => void;
 }
 
 export function StageLayout({ participants, pinnedId, onPin, onFullscreen }: StageLayoutProps) {
-  const main = getMainParticipant(participants, pinnedId);
+  const tiles = buildTiles(participants);
+  const main = getMainTile(tiles, pinnedId);
 
   return (
     <div data-testid="stage-layout" className="flex h-full">
@@ -18,13 +20,23 @@ export function StageLayout({ participants, pinnedId, onPin, onFullscreen }: Sta
       <div className="flex-1 p-3 min-w-0">
         {main && (
           <div className="w-full h-full rounded-xl overflow-hidden">
-            <ParticipantTile
-              participant={main}
-              variant="main"
-              isPinned={main.identity === pinnedId}
-              onClick={() => onPin(main.identity)}
-              onDoubleClick={() => onFullscreen(main.identity)}
-            />
+            {main.type === "broadcast" ? (
+              <BroadcastTile
+                participant={main.participant}
+                variant="main"
+                isPinned={main.id === pinnedId}
+                onClick={() => onPin(main.id)}
+                onDoubleClick={() => onFullscreen(main.id)}
+              />
+            ) : (
+              <ParticipantTile
+                participant={main.participant}
+                variant="main"
+                isPinned={main.id === pinnedId}
+                onClick={() => onPin(main.id)}
+                onDoubleClick={() => onFullscreen(main.id)}
+              />
+            )}
           </div>
         )}
       </div>
@@ -34,19 +46,29 @@ export function StageLayout({ participants, pinnedId, onPin, onFullscreen }: Sta
         className="w-[120px] flex-shrink-0 flex flex-col gap-2 py-3 pr-3 overflow-y-auto"
         style={{ borderLeft: "1px solid var(--color-dc-bg-floating)" }}
       >
-        {participants.map((p) => (
+        {tiles.map((tile) => (
           <div
-            key={p.identity}
+            key={tile.id}
             style={{ aspectRatio: "16 / 9" }}
             className="rounded-lg overflow-hidden flex-shrink-0"
           >
-            <ParticipantTile
-              participant={p}
-              variant="sidebar"
-              isPinned={p.identity === pinnedId}
-              onClick={() => onPin(p.identity)}
-              onDoubleClick={() => onFullscreen(p.identity)}
-            />
+            {tile.type === "broadcast" ? (
+              <BroadcastTile
+                participant={tile.participant}
+                variant="sidebar"
+                isPinned={tile.id === pinnedId}
+                onClick={() => onPin(tile.id)}
+                onDoubleClick={() => onFullscreen(tile.id)}
+              />
+            ) : (
+              <ParticipantTile
+                participant={tile.participant}
+                variant="sidebar"
+                isPinned={tile.id === pinnedId}
+                onClick={() => onPin(tile.id)}
+                onDoubleClick={() => onFullscreen(tile.id)}
+              />
+            )}
           </div>
         ))}
       </div>

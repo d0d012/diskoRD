@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { useAuthStore } from "../../stores/authStore";
 import { PresenceDot } from "../../components/ui/PresenceDot";
+import { VoiceStatusBar } from "../voice/VoiceStatusBar";
 
 export function FriendsSidebar() {
   const { dms, activeDMId, setActiveDM, fetchDMs, requests } = useFriendStore();
@@ -92,6 +93,8 @@ export function FriendsSidebar() {
           </div>
         )}
       </div>
+
+      <VoiceStatusBar />
 
       {/* User panel */}
       <div className="h-[52px] flex items-center px-2 flex-shrink-0"

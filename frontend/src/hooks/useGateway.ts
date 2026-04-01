@@ -26,6 +26,7 @@ export function useGateway() {
   const onFriendAccepted = useFriendStore((s) => s.onFriendAccepted);
   const onFriendDeclined = useFriendStore((s) => s.onFriendDeclined);
   const setPresenceStatus = usePresenceStore((s) => s.setStatus);
+  const setPresenceStatuses = usePresenceStore((s) => s.setStatuses);
   const updateVoiceState = useVoiceStore((s) => s.updateVoiceState);
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -95,6 +96,21 @@ export function useGateway() {
           case "TYPING_START": {
             const d = event.d as { channelId: string; userId: string; username: string };
             setTyping(d.channelId, { userId: d.userId, username: d.username, at: Date.now() });
+            break;
+          }
+
+          case "READY": {
+            const d = event.d as {
+              presences: Record<string, string>;
+              voiceStates: { userId: string; username: string; channelId: string; joined: boolean }[];
+            };
+            setPresenceStatuses(d.presences);
+            for (const [userId, status] of Object.entries(d.presences)) {
+              updatePresence(userId, status as "online" | "offline");
+            }
+            for (const vs of d.voiceStates) {
+              updateVoiceState(vs.channelId, { userId: vs.userId, username: vs.username }, vs.joined);
+            }
             break;
           }
 

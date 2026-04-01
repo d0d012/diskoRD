@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { MainLayout } from "../components/layout/MainLayout";
+import { TitleBar } from "../components/layout/TitleBar";
 import { useGuildStore } from "../stores/guildStore";
 import { useFriendStore } from "../stores/friendStore";
 import { useGateway } from "../hooks/useGateway";
@@ -9,6 +10,7 @@ import { MessageInput } from "../features/message/MessageInput";
 import { FriendsPage } from "../features/friend/FriendsPage";
 import { DMConversation } from "../features/friend/DMConversation";
 import { VoicePanel } from "../features/voice/VoicePanel";
+import { GlobalVoiceAudio } from "../features/voice/GlobalVoiceAudio";
 
 function EmptyState() {
   return (
@@ -94,17 +96,23 @@ export function AppPage() {
   const isVoiceChannel = activeChannel?.type === "voice";
 
   return (
-    <MainLayout>
-      {isHome
-        ? activeDMId
-          ? <DMConversation />
-          : <FriendsPage />
-        : activeChannelId
-          ? isVoiceChannel
-            ? <VoicePanel participants={participants} connectionState={connectionState} />
-            : <ChannelView channelId={activeChannelId} />
-          : <EmptyState />
-      }
-    </MainLayout>
+    <div className="flex flex-col h-screen w-screen overflow-hidden">
+      <GlobalVoiceAudio participants={participants} />
+      <TitleBar />
+      <div className="flex-1 overflow-hidden">
+        <MainLayout>
+          {isHome
+            ? activeDMId
+              ? <DMConversation />
+              : <FriendsPage />
+            : activeChannelId
+              ? isVoiceChannel
+                ? <VoicePanel participants={participants} connectionState={connectionState} />
+                : <ChannelView channelId={activeChannelId} />
+              : <EmptyState />
+          }
+        </MainLayout>
+      </div>
+    </div>
   );
 }

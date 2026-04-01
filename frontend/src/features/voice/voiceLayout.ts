@@ -2,8 +2,25 @@ import type { VoiceParticipant } from "../../hooks/useVoice";
 
 export type LayoutMode = "grid" | "stage";
 
+/** A renderable tile — either a participant tile or a broadcast (screen share) tile */
+export type VoiceTile =
+  | { type: "participant"; participant: VoiceParticipant; id: string }
+  | { type: "broadcast"; participant: VoiceParticipant; id: string };
+
+/** Expand participants into tiles — screensharers produce two tiles */
+export function buildTiles(participants: VoiceParticipant[]): VoiceTile[] {
+  const tiles: VoiceTile[] = [];
+  for (const p of participants) {
+    tiles.push({ type: "participant", participant: p, id: p.identity });
+    if (p.isScreenSharing && p.screenTrack) {
+      tiles.push({ type: "broadcast", participant: p, id: `broadcast-${p.identity}` });
+    }
+  }
+  return tiles;
+}
+
 export function getLayoutMode(participants: VoiceParticipant[]): LayoutMode {
-  return participants.some(p => p.cameraTrack !== null || p.screenTrack !== null)
+  return participants.some((p) => p.isCameraEnabled || p.isScreenSharing)
     ? "stage"
     : "grid";
 }
@@ -14,20 +31,25 @@ export function getGridColumns(count: number): number {
   return 3;
 }
 
-export function getMainParticipant(
-  participants: VoiceParticipant[],
+export function getMainTile(
+  tiles: VoiceTile[],
   pinnedId: string | null
-): VoiceParticipant | null {
-  if (!participants.length) return null;
+): VoiceTile | null {
+  if (!tiles.length) return null;
   if (pinnedId) {
-    const pinned = participants.find(p => p.identity === pinnedId);
+    const pinned = tiles.find((t) => t.id === pinnedId);
     if (pinned) return pinned;
   }
-  const screensharer = participants.find(p => p.screenTrack !== null);
-  if (screensharer) return screensharer;
-  const camera = participants.find(p => p.cameraTrack !== null);
+  // Prefer broadcast tiles (screen share)
+  const broadcast = tiles.find((t) => t.type === "broadcast");
+  if (broadcast) return broadcast;
+  // Then camera
+  const camera = tiles.find(
+    (t) => t.type === "participant" && t.participant.isCameraEnabled && t.participant.cameraTrack
+  );
   if (camera) return camera;
-  const speaker = participants.find(p => p.isSpeaking);
+  // Then speaker
+  const speaker = tiles.find((t) => t.participant.isSpeaking);
   if (speaker) return speaker;
-  return participants[0];
+  return tiles[0];
 }

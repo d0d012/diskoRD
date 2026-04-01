@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -266,6 +267,117 @@ func (h *Hub) notifyUser(userID, op string, data interface{}) {
 func (h *Hub) PublishToDM(user1ID, user2ID, op string, data interface{}) {
 	h.notifyUser(user1ID, op, data)
 	h.notifyUser(user2ID, op, data)
+}
+
+// sendReadyEvent sends the current presence and voice state snapshot to a newly connected client.
+func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
+	var guildIDs []string
+	for gid := range client.guilds {
+		guildIDs = append(guildIDs, gid)
+	}
+	if len(guildIDs) == 0 {
+		return
+	}
+
+	// 1. Get all member user IDs across the client's guilds
+	rows, err := h.db.Query(ctx,
+		`SELECT DISTINCT user_id FROM guild_members WHERE guild_id = ANY($1)`,
+		guildIDs)
+	if err != nil {
+		return
+	}
+	var memberIDs []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			memberIDs = append(memberIDs, id)
+		}
+	}
+	rows.Close()
+
+	// 2. Batch-fetch presence statuses
+	presences := h.presence.GetStatuses(ctx, memberIDs)
+
+	// 3. Get all voice channels in the client's guilds
+	rows2, err := h.db.Query(ctx,
+		`SELECT id FROM channels WHERE guild_id = ANY($1) AND type = 'voice'`,
+		guildIDs)
+	if err != nil {
+		return
+	}
+	var voiceChannelIDs []string
+	for rows2.Next() {
+		var id string
+		if rows2.Scan(&id) == nil {
+			voiceChannelIDs = append(voiceChannelIDs, id)
+		}
+	}
+	rows2.Close()
+
+	// 4. Get active voice participants (userId → channelId) from Redis
+	voiceUserChannel := make(map[string]string)
+	for _, chID := range voiceChannelIDs {
+		members, err := h.rdb.SMembers(ctx, fmt.Sprintf("voice_state:%s", chID)).Result()
+		if err != nil {
+			continue
+		}
+		for _, uid := range members {
+			voiceUserChannel[uid] = chID
+		}
+	}
+
+	type VoiceStateEntry struct {
+		UserID    string `json:"userId"`
+		Username  string `json:"username"`
+		ChannelID string `json:"channelId"`
+		Joined    bool   `json:"joined"`
+	}
+	var voiceStates []VoiceStateEntry
+
+	if len(voiceUserChannel) > 0 {
+		ids := make([]string, 0, len(voiceUserChannel))
+		for uid := range voiceUserChannel {
+			ids = append(ids, uid)
+		}
+		rows3, err := h.db.Query(ctx,
+			`SELECT id, username FROM users WHERE id = ANY($1)`, ids)
+		if err == nil {
+			for rows3.Next() {
+				var uid, uname string
+				if rows3.Scan(&uid, &uname) == nil {
+					voiceStates = append(voiceStates, VoiceStateEntry{
+						UserID:    uid,
+						Username:  uname,
+						ChannelID: voiceUserChannel[uid],
+						Joined:    true,
+					})
+				}
+			}
+			rows3.Close()
+		}
+	}
+
+	if voiceStates == nil {
+		voiceStates = []VoiceStateEntry{}
+	}
+
+	// 5. Send READY event
+	seq := atomic.LoadInt64(&h.seq)
+	raw, err := json.Marshal(map[string]interface{}{
+		"presences":   presences,
+		"voiceStates": voiceStates,
+	})
+	if err != nil {
+		return
+	}
+	payload, err := json.Marshal(Event{Op: "READY", D: raw, S: seq})
+	if err != nil {
+		return
+	}
+	select {
+	case client.send <- payload:
+	default:
+	}
 }
 
 // broadcastPresence sends a PRESENCE_UPDATE event to all guild members and DM partners of the given user.

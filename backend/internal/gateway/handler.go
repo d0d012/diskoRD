@@ -67,6 +67,9 @@ func (h *Handler) ServeWS(c *fiberws.Conn) {
 	})
 	client.send <- hello
 
+	// Send READY event with current presence and voice state snapshot
+	h.hub.sendReadyEvent(context.Background(), client)
+
 	go client.WritePump()
 	client.ReadPump() // blocks until connection closes
 }

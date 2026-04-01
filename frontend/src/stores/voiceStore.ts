@@ -19,6 +19,10 @@ interface VoiceStore {
   isDeafened: boolean;
   isCameraOn: boolean;
   isScreenSharing: boolean;
+  screenShareFps: 15 | 30 | 60;
+  screenShareResolution: "720" | "1080" | "1440" | "source";
+  screenShareAudio: boolean;
+  remoteVolumes: Record<string, number>; // userId → 0–1, affects only local listener
 
   // Participants per channel from gateway VOICE_STATE_UPDATE (for sidebar display)
   voiceParticipants: Record<string, VoiceGatewayParticipant[]>;
@@ -30,6 +34,10 @@ interface VoiceStore {
   setDeafened: (v: boolean) => void;
   setCameraOn: (v: boolean) => void;
   setScreenSharing: (v: boolean) => void;
+  setScreenShareFps: (fps: 15 | 30 | 60) => void;
+  setScreenShareResolution: (r: "720" | "1080" | "1440" | "source") => void;
+  setScreenShareAudio: (v: boolean) => void;
+  setRemoteVolume: (userId: string, v: number) => void;
   onRoomDisconnected: () => void;
 
   // Gateway-driven
@@ -46,9 +54,17 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   isDeafened: false,
   isCameraOn: false,
   isScreenSharing: false,
+  screenShareFps: 30,
+  screenShareResolution: "1080",
+  screenShareAudio: false,
+  remoteVolumes: {},
   voiceParticipants: {},
 
   joinVoice: async (channelId, guildId) => {
+    const { activeVoiceChannelId } = get();
+    if (activeVoiceChannelId && activeVoiceChannelId !== channelId) {
+      await api.delete(`/channels/${activeVoiceChannelId}/voice/leave`).catch(() => {});
+    }
     set({ isConnecting: true });
     try {
       const { data } = await api.post(`/channels/${channelId}/voice/token`);
@@ -88,6 +104,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   setDeafened: (v) => set({ isDeafened: v }),
   setCameraOn: (v) => set({ isCameraOn: v }),
   setScreenSharing: (v) => set({ isScreenSharing: v }),
+  setScreenShareFps: (fps) => set({ screenShareFps: fps }),
+  setScreenShareResolution: (r) => set({ screenShareResolution: r }),
+  setScreenShareAudio: (v) => set({ screenShareAudio: v }),
+  setRemoteVolume: (userId, v) => set((s) => ({ remoteVolumes: { ...s.remoteVolumes, [userId]: v } })),
 
   onRoomDisconnected: () => {
     const { activeVoiceChannelId } = get();
