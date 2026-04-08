@@ -15,13 +15,18 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/auth"
+	"github.com/d0d012/diskord/internal/call"
 	"github.com/d0d012/diskord/internal/channel"
+	"github.com/d0d012/diskord/internal/linkpreview"
 	"github.com/d0d012/diskord/internal/friend"
 	"github.com/d0d012/diskord/internal/gateway"
 	"github.com/d0d012/diskord/internal/guild"
 	"github.com/d0d012/diskord/internal/invite"
 	"github.com/d0d012/diskord/internal/message"
 	"github.com/d0d012/diskord/internal/presence"
+	"github.com/d0d012/diskord/internal/reaction"
+	"github.com/d0d012/diskord/internal/role"
+	"github.com/d0d012/diskord/internal/storage"
 	"github.com/d0d012/diskord/internal/user"
 	"github.com/d0d012/diskord/internal/voice"
 	"github.com/d0d012/diskord/pkg/config"
@@ -101,17 +106,17 @@ func main() {
 	guildRepo := guild.NewRepository(pool)
 	guildService := guild.NewService(guildRepo, presenceSvc)
 	guildHandler := guild.NewHandler(guildService)
-	guild.RegisterRoutes(app, guildHandler, authMw)
+	guild.RegisterRoutes(app, guildHandler, authMw, pool)
 
 	channelRepo := channel.NewRepository(pool)
 	channelService := channel.NewService(channelRepo, guildRepo)
 	channelHandler := channel.NewHandler(channelService)
-	channel.RegisterRoutes(app, channelHandler, authMw)
+	channel.RegisterRoutes(app, channelHandler, authMw, pool)
 
 	inviteRepo := invite.NewRepository(pool)
 	inviteService := invite.NewService(inviteRepo, guildRepo)
 	inviteHandler := invite.NewHandler(inviteService)
-	invite.RegisterRoutes(app, inviteHandler, authMw)
+	invite.RegisterRoutes(app, inviteHandler, authMw, pool)
 
 	friendRepo := friend.NewRepository(pool)
 	friendService := friend.NewService(friendRepo, presenceSvc)
@@ -125,16 +130,45 @@ func main() {
 
 	friendService.SetNotifier(hub)
 
+	callSvc := call.NewService(pool, rdb, cfg.LiveKit, friendRepo)
+	callSvc.SetNotifier(hub)
+	callHandler := call.NewHandler(callSvc)
+	call.RegisterRoutes(app, callHandler, authMw)
+
+	appBaseURL := fmt.Sprintf("http://localhost:%d", cfg.App.Port)
+	if cfg.App.Env == "production" {
+		appBaseURL = ""  // nginx serves /uploads directly; relative URL is fine
+	}
+	storageSvc := storage.NewService(cfg.Storage.Path, appBaseURL)
+
 	msgRepo := message.NewRepository(pool)
 	msgService := message.NewService(msgRepo, guildRepo)
 	msgService.SetPublisher(hub)
 	msgHandler := message.NewHandler(msgService)
+	msgHandler.SetStorage(storageSvc)
 	message.RegisterRoutes(app, msgHandler, authMw)
+
+	// Serve uploaded files
+	app.Static("/uploads", cfg.Storage.Path)
 
 	voiceSvc := voice.NewService(pool, channelRepo, guildRepo, rdb, cfg.LiveKit)
 	voiceSvc.SetPublisher(hub)
 	voiceHandler := voice.NewHandler(voiceSvc)
 	voice.RegisterRoutes(app, voiceHandler, authMw)
+
+	reactionRepo := reaction.NewRepository(pool)
+	reactionService := reaction.NewService(reactionRepo, guildRepo)
+	reactionService.SetPublisher(hub)
+	reactionHandler := reaction.NewHandler(reactionService)
+	reaction.RegisterRoutes(app, reactionHandler, authMw)
+
+	roleRepo := role.NewRepository(pool)
+	roleService := role.NewService(roleRepo, guildRepo)
+	roleService.SetPublisher(hub)
+	roleHandler := role.NewHandler(roleService)
+	role.RegisterRoutes(app, roleHandler, authMw)
+
+	linkpreview.RegisterRoutes(app, authMw)
 
 	gatewayHandler := gateway.NewHandler(hub, authService)
 	gateway.RegisterRoutes(app, gatewayHandler)

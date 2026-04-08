@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
@@ -18,6 +18,11 @@ export default defineConfig({
       "/gateway": {
         target: "ws://localhost:8080",
         ws: true,
+      },
+      "/rtc": {
+        target: "ws://localhost:7880",
+        ws: true,
+        changeOrigin: true,
       },
     },
   },

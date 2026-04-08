@@ -20,13 +20,15 @@ type AuthorInfo struct {
 }
 
 type MessageResponse struct {
-	ID        string     `json:"id"`
-	ChannelID string     `json:"channelId"`
-	GuildID   string     `json:"guildId"`
-	Author    AuthorInfo `json:"author"`
-	Content   string     `json:"content"`
-	CreatedAt time.Time  `json:"createdAt"`
-	EditedAt  *time.Time `json:"editedAt,omitempty"`
+	ID          string     `json:"id"`
+	ChannelID   string     `json:"channelId"`
+	GuildID     string     `json:"guildId"`
+	Author      AuthorInfo `json:"author"`
+	Content     string     `json:"content"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	EditedAt    *time.Time `json:"editedAt,omitempty"`
+	Mentions    []string   `json:"mentions,omitempty"`
+	Attachments []string   `json:"attachments,omitempty"` // public URLs
 }
 
 type CreateMessageRequest struct {

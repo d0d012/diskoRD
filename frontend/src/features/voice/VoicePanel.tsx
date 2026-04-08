@@ -18,6 +18,7 @@ interface VoicePanelProps {
 export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
+  const [manualLayout, setManualLayout] = useState<"grid" | "stage" | null>(null);
 
   const { activeVoiceChannelId } = useVoiceStore();
   const { channels, activeGuildId } = useGuildStore();
@@ -27,17 +28,18 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
     : null;
 
   const isConnecting = connectionState === ConnectionState.Connecting;
-  const layoutMode = getLayoutMode(participants);
+  const autoLayout = getLayoutMode(participants);
+  const layoutMode = manualLayout ?? autoLayout;
   const tiles = buildTiles(participants);
 
-  // Clear pin when layout reverts to grid or pinned tile leaves
+  // Clear pin when layout is grid or pinned tile leaves
   useEffect(() => {
     if (layoutMode === "grid") {
       setPinnedId(null);
     } else if (pinnedId && !tiles.find((t) => t.id === pinnedId)) {
       setPinnedId(null);
     }
-  }, [participants, layoutMode, pinnedId]);
+  }, [participants, layoutMode, pinnedId, tiles]);
 
   // Clear fullscreen when that tile leaves
   useEffect(() => {
@@ -84,6 +86,46 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
             Connected
           </span>
         )}
+
+        {/* Layout toggle — right side of header */}
+        <div className="ml-auto flex items-center gap-1">
+          {/* Grid view */}
+          <button
+            onClick={() => setManualLayout(layoutMode === "grid" ? null : "grid")}
+            title="Grid view"
+            className="p-1.5 rounded transition-colors"
+            style={{
+              backgroundColor: layoutMode === "grid" ? "var(--color-dc-bg-modifier-selected)" : "transparent",
+              color: layoutMode === "grid" ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
+            }}
+            onMouseEnter={(e) => { if (layoutMode !== "grid") e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
+            onMouseLeave={(e) => { if (layoutMode !== "grid") e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            {/* 2x2 grid icon */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/>
+            </svg>
+          </button>
+
+          {/* Focus/Stage view */}
+          <button
+            onClick={() => setManualLayout(layoutMode === "stage" ? null : "stage")}
+            title="Focus view"
+            className="p-1.5 rounded transition-colors"
+            style={{
+              backgroundColor: layoutMode === "stage" ? "var(--color-dc-bg-modifier-selected)" : "transparent",
+              color: layoutMode === "stage" ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
+            }}
+            onMouseEnter={(e) => { if (layoutMode !== "stage") e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
+            onMouseLeave={(e) => { if (layoutMode !== "stage") e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            {/* Large + sidebar icon */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 3h13v13H3zm14 0h4v4h-4zm0 5h4v4h-4zm0 5h4v4h-4zM3 17h13v4H3z" opacity="0"/>
+              <path d="M3 3h13v14H3V3zm15 0h3v4h-3V3zm0 5h3v4h-3V8zm0 5h3v4h-3v-4z"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Content area */}

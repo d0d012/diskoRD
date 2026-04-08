@@ -3,8 +3,10 @@ import { useGuildStore } from "../../stores/guildStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useNotificationStore, type UserStatus } from "../../stores/notificationStore";
 import { InviteModal } from "../../features/guild/InviteModal";
 import { CreateChannelModal } from "../../features/channel/CreateChannelModal";
+import { ServerSettingsModal } from "../../features/guild/ServerSettingsModal";
 import { VoiceStatusBar } from "../../features/voice/VoiceStatusBar";
 import { VolumeMenu } from "../../features/voice/VolumeMenu";
 import type { Channel } from "../../types";
@@ -17,11 +19,14 @@ interface ChannelItemProps {
   active: boolean;
   isOwner: boolean;
   unread: boolean;
+  mentionCount: number;
   onClick: () => void;
 }
 
-function ChannelItem({ channel, guildId, active, isOwner, unread, onClick }: ChannelItemProps) {
+function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, onClick }: ChannelItemProps) {
   const { renameChannel, deleteChannel } = useGuildStore();
+  const { toggleMuteChannel, isChannelMuted } = useNotificationStore();
+  const muted = isChannelMuted(channel.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(channel.name);
   const [deleteError, setDeleteError] = useState("");
@@ -141,41 +146,75 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, onClick }: Cha
         )}
         <span className={`truncate flex-1 ${unread && !active ? "font-semibold" : ""}`}>{channel.name}</span>
 
-        {/* Action icons — visible on hover, owner only */}
-        {isOwner && (
-          <div className="hidden group-hover:flex items-center gap-0.5 ml-auto">
-            {/* Edit */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setDraft(channel.name); setEditing(true); }}
-              className="p-0.5 rounded transition-colors"
-              title="Edit Channel"
-              style={{ color: "var(--color-dc-interactive-normal)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-            </button>
-            {/* Delete */}
-            <button
-              onClick={handleDelete}
-              className="p-0.5 rounded transition-colors"
-              title="Delete Channel"
-              style={{ color: "var(--color-dc-interactive-normal)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-red)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6M14 11v6"/>
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
-            </button>
-          </div>
+        {/* Mention badge (right side, hidden on hover) */}
+        {mentionCount > 0 && !active && (
+          <span
+            className="group-hover:hidden flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-xs font-bold text-white flex items-center justify-center"
+            style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
+          >
+            {mentionCount > 99 ? "99+" : mentionCount}
+          </span>
         )}
+        {unread && !active && mentionCount === 0 && (
+          <span className="group-hover:hidden w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--color-dc-header-primary)" }} />
+        )}
+
+        {/* Action icons — visible on hover */}
+        <div className="hidden group-hover:flex items-center gap-0.5 ml-auto">
+          {/* Mute toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleMuteChannel(channel.id); }}
+            className="p-0.5 rounded transition-colors"
+            title={muted ? "Unmute Channel" : "Mute Channel"}
+            style={{ color: muted ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-normal)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = muted ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = muted ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-normal)")}
+          >
+            {muted ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5zm13.5 3c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71z"/>
+              </svg>
+            )}
+          </button>
+          {isOwner && (
+            <>
+              {/* Edit */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setDraft(channel.name); setEditing(true); }}
+                className="p-0.5 rounded transition-colors"
+                title="Edit Channel"
+                style={{ color: "var(--color-dc-interactive-normal)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              {/* Delete */}
+              <button
+                onClick={handleDelete}
+                className="p-0.5 rounded transition-colors"
+                title="Delete Channel"
+                style={{ color: "var(--color-dc-interactive-normal)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-red)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
         </div>
       </div>
       {deleteError && (
@@ -358,48 +397,102 @@ function CategoryHeader({
 
 // ── User panel ───────────────────────────────────────────────────────────────
 
+const STATUS_META: Record<UserStatus, { label: string; color: string }> = {
+  online: { label: "Online",           color: "var(--color-dc-online, #23a55a)" },
+  away:   { label: "Away",             color: "var(--color-dc-idle, #f0b232)"   },
+  dnd:    { label: "Do Not Disturb",   color: "var(--color-dc-red, #ed4245)"    },
+};
+
 function UserPanel() {
   const { user, logout } = useAuthStore();
+  const { status, setStatus } = useNotificationStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
 
   return (
-    <div
-      className="flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors"
-      title={user?.displayName ?? user?.username ?? ""}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}
-    >
-      <div className="relative flex-shrink-0">
+    <div ref={ref} className="relative">
+      <div
+        className="flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors"
+        title={user?.displayName ?? user?.username ?? ""}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}
+      >
+        {/* Avatar + status dot (clickable) */}
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-          style={{ backgroundColor: "var(--color-dc-brand)" }}
+          className="relative flex-shrink-0 cursor-pointer"
+          title="Change status"
+          onClick={() => setOpen((o) => !o)}
         >
-          {user?.username?.[0]?.toUpperCase() ?? "?"}
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+            style={{ backgroundColor: "var(--color-dc-brand)" }}
+          >
+            {user?.username?.[0]?.toUpperCase() ?? "?"}
+          </div>
+          <div
+            className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
+            style={{ backgroundColor: STATUS_META[status].color, borderColor: "var(--color-dc-bg-tertiary)" }}
+          />
         </div>
+
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--color-dc-header-primary)" }}>
+            {user?.username ?? "…"}
+          </span>
+          <span className="text-xs leading-tight" style={{ color: STATUS_META[status].color }}>
+            {STATUS_META[status].label}
+          </span>
+        </div>
+
+        <div className="ml-auto">
+          <button
+            onClick={() => logout()}
+            className="p-1 rounded transition-colors"
+            title="Log Out"
+            style={{ color: "var(--color-dc-interactive-normal)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.477.477 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Status dropdown */}
+      {open && (
         <div
-          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
-          style={{ backgroundColor: "var(--color-dc-online)", borderColor: "var(--color-dc-bg-secondary)" }}
-        />
-      </div>
-      <div className="flex flex-col min-w-0">
-        <span className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--color-dc-header-primary)" }}>
-          {user?.username ?? "…"}
-        </span>
-        <span className="text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>Online</span>
-      </div>
-      <div className="ml-auto">
-        <button
-          onClick={() => logout()}
-          className="p-1 rounded transition-colors"
-          title="Log Out"
-          style={{ color: "var(--color-dc-interactive-normal)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+          className="absolute bottom-full left-0 mb-1 w-48 rounded-lg py-1 shadow-xl z-50"
+          style={{ backgroundColor: "var(--color-dc-bg-floating, #18191c)", border: "1px solid var(--color-dc-bg-modifier-hover)" }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.477.477 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-          </svg>
-        </button>
-      </div>
+          {(["online", "away", "dnd"] as UserStatus[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => { setStatus(s); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left"
+              style={{
+                backgroundColor: status === s ? "var(--color-dc-bg-modifier-selected)" : "transparent",
+                color: "var(--color-dc-text-normal)",
+              }}
+              onMouseEnter={(e) => { if (status !== s) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
+              onMouseLeave={(e) => { if (status !== s) e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_META[s].color }} />
+              {STATUS_META[s].label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -410,8 +503,10 @@ export function ChannelSidebar() {
   const { guilds, activeGuildId, channels, activeChannelId, setActiveChannel } = useGuildStore();
   const { user } = useAuthStore();
   const unreadChannels = useMessageStore((s) => s.unreadChannels);
+  const mentionCounts = useMessageStore((s) => s.mentionCounts);
   const { activeVoiceChannelId, joinVoice } = useVoiceStore();
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showServerSettings, setShowServerSettings] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice" | null>(null);
 
   const activeGuild = guilds.find((g) => g.id === activeGuildId);
@@ -437,19 +532,33 @@ export function ChannelSidebar() {
             {activeGuild?.name ?? "Direct Messages"}
           </span>
           {activeGuild && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowInviteModal(true); }}
-              className="flex-shrink-0 p-1 rounded transition-colors"
-              title="Invite People"
-              style={{ color: "var(--color-dc-interactive-normal)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zm-4-6a6 6 0 1 0 0 12A6 6 0 0 0 11 6z"/>
-                <path d="M21 11h-2v-2h-2v2h-2v2h2v2h2v-2h2z"/>
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowInviteModal(true); }}
+                className="flex-shrink-0 p-1 rounded transition-colors"
+                title="Invite People"
+                style={{ color: "var(--color-dc-interactive-normal)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zm-4-6a6 6 0 1 0 0 12A6 6 0 0 0 11 6z"/>
+                  <path d="M21 11h-2v-2h-2v2h-2v2h2v2h2v-2h2z"/>
+                </svg>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowServerSettings(true); }}
+                className="flex-shrink-0 p-1 rounded transition-colors"
+                title="Server Settings"
+                style={{ color: "var(--color-dc-interactive-normal)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
@@ -470,6 +579,7 @@ export function ChannelSidebar() {
                   active={activeChannelId === ch.id}
                   isOwner={isOwner}
                   unread={!!unreadChannels[ch.id]}
+                  mentionCount={mentionCounts[ch.id] ?? 0}
                   onClick={() => setActiveChannel(ch.id)}
                 />
               ))}
@@ -546,6 +656,15 @@ export function ChannelSidebar() {
           guildId={activeGuildId}
           defaultType={createChannelType}
           onClose={() => setCreateChannelType(null)}
+        />
+      )}
+
+      {showServerSettings && activeGuild && (
+        <ServerSettingsModal
+          guildId={activeGuild.id}
+          guildName={activeGuild.name}
+          isOwner={isOwner}
+          onClose={() => setShowServerSettings(false)}
         />
       )}
     </>

@@ -31,6 +31,15 @@ export function getGridColumns(count: number): number {
   return 3;
 }
 
+export function getMainParticipant(
+  participants: VoiceParticipant[],
+  pinnedId: string | null
+): VoiceParticipant | null {
+  const tiles = buildTiles(participants);
+  const tile = getMainTile(tiles, pinnedId);
+  return tile ? tile.participant : null;
+}
+
 export function getMainTile(
   tiles: VoiceTile[],
   pinnedId: string | null

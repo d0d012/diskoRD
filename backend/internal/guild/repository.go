@@ -147,6 +147,20 @@ func (r *Repository) AddMember(ctx context.Context, guildID, userID, role string
 	return nil
 }
 
+func (r *Repository) UpdateMemberRole(ctx context.Context, guildID, userID, role string) error {
+	tag, err := r.db.Exec(ctx,
+		`UPDATE guild_members SET role = $1 WHERE guild_id = $2 AND user_id = $3`,
+		role, guildID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("guild.Repository.UpdateMemberRole: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fiber.NewError(fiber.StatusNotFound, "member not found")
+	}
+	return nil
+}
+
 func (r *Repository) GetChannelsByGuild(ctx context.Context, guildID string) ([]Channel, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, guild_id, name, type, position, created_at, updated_at

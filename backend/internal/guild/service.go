@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/presence"
+	"github.com/d0d012/diskord/pkg/middleware"
 )
 
 type Service struct {
@@ -127,6 +128,39 @@ func (s *Service) KickMember(ctx context.Context, callerID, guildID, targetID st
 	}
 
 	return s.repo.RemoveMember(ctx, guildID, targetID)
+}
+
+func (s *Service) UpdateMemberRole(ctx context.Context, guildID, callerID, targetID, newRole string) error {
+	callerRole, err := s.repo.GetMemberRole(ctx, guildID, callerID)
+	if err != nil {
+		return err
+	}
+	targetRole, err := s.repo.GetMemberRole(ctx, guildID, targetID)
+	if err != nil {
+		return err
+	}
+
+	callerLevel := middleware.RoleLevel(callerRole)
+	targetLevel := middleware.RoleLevel(targetRole)
+	newLevel := middleware.RoleLevel(newRole)
+
+	// Owner cannot be demoted by anyone else
+	if targetRole == "owner" && callerID != targetID {
+		return fiber.NewError(fiber.StatusForbidden, "cannot change the owner's role")
+	}
+	// Cannot assign owner role
+	if newRole == "owner" {
+		return fiber.NewError(fiber.StatusForbidden, "cannot assign owner role")
+	}
+	// Caller must outrank both the target and the new role
+	if callerLevel <= targetLevel {
+		return fiber.NewError(fiber.StatusForbidden, "insufficient permissions to change this member's role")
+	}
+	if callerLevel <= newLevel {
+		return fiber.NewError(fiber.StatusForbidden, "cannot assign a role equal to or higher than your own")
+	}
+
+	return s.repo.UpdateMemberRole(ctx, guildID, targetID, newRole)
 }
 
 func (s *Service) ListByUser(ctx context.Context, userID string) ([]GuildListItem, error) {

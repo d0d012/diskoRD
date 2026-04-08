@@ -1,24 +1,37 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { useMessageStore } from "./messageStore";
-import type { Guild, Channel } from "../types";
+import type { Guild, Channel, GuildRole } from "../types";
 
 interface GuildStore {
   guilds: Guild[];
   activeGuildId: string | null;
   channels: Record<string, Channel[]>;
   activeChannelId: string | null;
+  roles: Record<string, GuildRole[]>; // guildId → roles sorted by position desc
   setGuilds: (guilds: Guild[]) => void;
   setActiveGuild: (guildId: string | null) => void;
   setChannels: (guildId: string, channels: Channel[]) => void;
   setActiveChannel: (channelId: string) => void;
   fetchGuilds: () => Promise<void>;
   createGuild: (name: string) => Promise<Guild & { channels: Channel[] }>;
+  deleteGuild: (guildId: string) => Promise<void>;
   fetchChannels: (guildId: string) => Promise<Channel[]>;
   createInvite: (guildId: string) => Promise<string>;
   createChannel: (guildId: string, name: string, type: "text" | "voice") => Promise<Channel>;
   deleteChannel: (channelId: string, guildId: string) => Promise<void>;
   renameChannel: (channelId: string, guildId: string, name: string) => Promise<void>;
+  // Roles
+  fetchRoles: (guildId: string) => Promise<void>;
+  createRole: (guildId: string, name: string, color: string, hoist: boolean) => Promise<GuildRole>;
+  updateRole: (guildId: string, roleId: string, patch: Partial<{ name: string; color: string; position: number; hoist: boolean }>) => Promise<void>;
+  deleteRole: (guildId: string, roleId: string) => Promise<void>;
+  reorderRoles: (guildId: string, updates: { id: string; position: number }[]) => Promise<void>;
+  assignRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
+  removeRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
+  // Real-time updates from gateway
+  upsertRole: (guildId: string, role: GuildRole) => void;
+  removeRoleById: (guildId: string, roleId: string) => void;
 }
 
 export const useGuildStore = create<GuildStore>((set, get) => ({
@@ -26,6 +39,7 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   activeGuildId: null,
   channels: {},
   activeChannelId: null,
+  roles: {},
 
   setGuilds: (guilds) => set({ guilds }),
 
@@ -81,6 +95,21 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
     return guild;
   },
 
+  deleteGuild: async (guildId: string) => {
+    await api.delete(`/guilds/${guildId}`);
+    set((s) => {
+      const { [guildId]: _removed, ...remainingChannels } = s.channels;
+      const { [guildId]: _removedRoles, ...remainingRoles } = s.roles;
+      return {
+        guilds: s.guilds.filter((g) => g.id !== guildId),
+        activeGuildId: s.activeGuildId === guildId ? null : s.activeGuildId,
+        activeChannelId: s.activeGuildId === guildId ? null : s.activeChannelId,
+        channels: remainingChannels,
+        roles: remainingRoles,
+      };
+    });
+  },
+
   fetchChannels: async (guildId: string) => {
     try {
       const { data } = await api.get(`/guilds/${guildId}/channels`);
@@ -131,6 +160,82 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
         [guildId]: (s.channels[guildId] ?? []).map((c) =>
           c.id === channelId ? { ...c, name: updated.name } : c
         ),
+      },
+    }));
+  },
+
+  fetchRoles: async (guildId: string) => {
+    const { data } = await api.get(`/guilds/${guildId}/roles`);
+    const roles: GuildRole[] = data.data ?? [];
+    set((s) => ({ roles: { ...s.roles, [guildId]: roles } }));
+  },
+
+  createRole: async (guildId: string, name: string, color: string, hoist: boolean) => {
+    const { data } = await api.post(`/guilds/${guildId}/roles`, { name, color, hoist });
+    const role: GuildRole = data.data;
+    set((s) => ({
+      roles: { ...s.roles, [guildId]: [...(s.roles[guildId] ?? []), role] },
+    }));
+    return role;
+  },
+
+  updateRole: async (guildId: string, roleId: string, patch) => {
+    const { data } = await api.patch(`/guilds/${guildId}/roles/${roleId}`, patch);
+    const updated: GuildRole = data.data;
+    set((s) => ({
+      roles: {
+        ...s.roles,
+        [guildId]: (s.roles[guildId] ?? []).map((r) => r.id === roleId ? { ...r, ...updated } : r),
+      },
+    }));
+  },
+
+  deleteRole: async (guildId: string, roleId: string) => {
+    await api.delete(`/guilds/${guildId}/roles/${roleId}`);
+    set((s) => ({
+      roles: {
+        ...s.roles,
+        [guildId]: (s.roles[guildId] ?? []).filter((r) => r.id !== roleId),
+      },
+    }));
+  },
+
+  reorderRoles: async (guildId: string, updates) => {
+    await api.put(`/guilds/${guildId}/roles/reorder`, { roles: updates });
+    set((s) => {
+      const existing = s.roles[guildId] ?? [];
+      const posMap = Object.fromEntries(updates.map((u) => [u.id, u.position]));
+      const reordered = existing
+        .map((r) => posMap[r.id] !== undefined ? { ...r, position: posMap[r.id] } : r)
+        .sort((a, b) => b.position - a.position);
+      return { roles: { ...s.roles, [guildId]: reordered } };
+    });
+  },
+
+  assignRole: async (guildId: string, userId: string, roleId: string) => {
+    await api.put(`/guilds/${guildId}/members/${userId}/roles/${roleId}`);
+  },
+
+  removeRole: async (guildId: string, userId: string, roleId: string) => {
+    await api.delete(`/guilds/${guildId}/members/${userId}/roles/${roleId}`);
+  },
+
+  upsertRole: (guildId: string, role: GuildRole) => {
+    set((s) => {
+      const existing = s.roles[guildId] ?? [];
+      const idx = existing.findIndex((r) => r.id === role.id);
+      const updated = idx >= 0
+        ? existing.map((r) => r.id === role.id ? role : r)
+        : [...existing, role];
+      return { roles: { ...s.roles, [guildId]: updated.sort((a, b) => b.position - a.position) } };
+    });
+  },
+
+  removeRoleById: (guildId: string, roleId: string) => {
+    set((s) => ({
+      roles: {
+        ...s.roles,
+        [guildId]: (s.roles[guildId] ?? []).filter((r) => r.id !== roleId),
       },
     }));
   },

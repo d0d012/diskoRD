@@ -117,7 +117,10 @@ func (s *Service) JoinVoice(ctx context.Context, userID, channelID string) (*Voi
 		})
 	}
 
-	wsURL := fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
+	wsURL := s.cfg.PublicURL
+	if wsURL == "" {
+		wsURL = fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
+	}
 	return &VoiceTokenResponse{Token: token, URL: wsURL}, nil
 }
 

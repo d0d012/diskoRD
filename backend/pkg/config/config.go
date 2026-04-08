@@ -60,6 +60,7 @@ type LiveKitConfig struct {
 	Port      int
 	APIKey    string
 	APISecret string
+	PublicURL string // e.g. wss://diskord.ahmertezcan.com — overrides ws://Host:Port for clients
 }
 
 type TurnConfig struct {
@@ -102,6 +103,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("LIVEKIT_PORT", 7880)
 	viper.SetDefault("LIVEKIT_API_KEY", "devkey")
 	viper.SetDefault("LIVEKIT_API_SECRET", "devsecret")
+	viper.SetDefault("LIVEKIT_PUBLIC_URL", "")
 
 	viper.SetDefault("TURN_HOST", "localhost")
 	viper.SetDefault("TURN_PORT", 3478)
@@ -152,6 +154,7 @@ func Load() (*Config, error) {
 			Port:      viper.GetInt("LIVEKIT_PORT"),
 			APIKey:    viper.GetString("LIVEKIT_API_KEY"),
 			APISecret: viper.GetString("LIVEKIT_API_SECRET"),
+			PublicURL: viper.GetString("LIVEKIT_PUBLIC_URL"),
 		},
 		Turn: TurnConfig{
 			Host:     viper.GetString("TURN_HOST"),

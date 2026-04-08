@@ -5,12 +5,19 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/d0d012/diskord/internal/storage"
 )
 
 var validate = validator.New()
 
 type Handler struct {
-	svc *Service
+	svc        *Service
+	storageSvc *storage.Service
+}
+
+func (h *Handler) SetStorage(s *storage.Service) {
+	h.storageSvc = s
 }
 
 func NewHandler(svc *Service) *Handler {
@@ -86,4 +93,47 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": "ok"})
+}
+
+func (h *Handler) Upload(c *fiber.Ctx) error {
+	if h.storageSvc == nil {
+		return fiber.NewError(fiber.StatusNotImplemented, "storage not configured")
+	}
+
+	userID := c.Locals("userID").(string)
+	channelID := c.Params("id")
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "file is required")
+	}
+	if file.Size > storage.MaxFileSize {
+		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "file exceeds 8MB limit")
+	}
+
+	mimeType := file.Header.Get("Content-Type")
+	f, err := file.Open()
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to read file")
+	}
+	defer f.Close()
+
+	// Create the message first to get an ID, then save file under that ID
+	caption := c.FormValue("caption", "")
+	msg, err := h.svc.Send(c.Context(), userID, channelID, CreateMessageRequest{Content: caption})
+	if err != nil {
+		return err
+	}
+
+	url, err := h.storageSvc.Save(mimeType, file.Filename, msg.ID, f)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	msg.Attachments = []string{url}
+
+	// Re-publish the message with attachment
+	h.svc.PublishWithAttachment(c.Context(), msg)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": msg})
 }

@@ -3,11 +3,27 @@ package message
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/d0d012/diskord/internal/guild"
 )
+
+var mentionRe = regexp.MustCompile(`@(\w+)`)
+
+func parseMentionUsernames(content string) []string {
+	matches := mentionRe.FindAllStringSubmatch(content, -1)
+	seen := make(map[string]bool)
+	var usernames []string
+	for _, m := range matches {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			usernames = append(usernames, m[1])
+		}
+	}
+	return usernames
+}
 
 type Service struct {
 	repo      *Repository
@@ -52,6 +68,7 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 		if err != nil {
 			return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
 		}
+		s.resolveMentions(ctx, msg)
 		if s.pub != nil {
 			s.pub.PublishToDM(userID, recipientID, "MESSAGE_CREATE", msg)
 		}
@@ -66,10 +83,44 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
 	}
 	msg.GuildID = cc.GuildID
+	s.resolveMentions(ctx, msg)
 	if s.pub != nil {
 		s.pub.PublishToGuild(cc.GuildID, "MESSAGE_CREATE", msg)
 	}
 	return msg, nil
+}
+
+func (s *Service) PublishWithAttachment(ctx context.Context, msg *MessageResponse) {
+	if s.pub == nil {
+		return
+	}
+	cc, err := s.repo.GetChannelContext(ctx, msg.ChannelID)
+	if err != nil {
+		return
+	}
+	if cc.IsDM {
+		recipientID := cc.DMUserB
+		if msg.Author.ID == cc.DMUserB {
+			recipientID = cc.DMUserA
+		}
+		s.pub.PublishToDM(msg.Author.ID, recipientID, "MESSAGE_CREATE", msg)
+	} else {
+		s.pub.PublishToGuild(msg.GuildID, "MESSAGE_CREATE", msg)
+	}
+}
+
+func (s *Service) resolveMentions(ctx context.Context, msg *MessageResponse) {
+	usernames := parseMentionUsernames(msg.Content)
+	if len(usernames) == 0 {
+		return
+	}
+	idMap, err := s.repo.GetUserIDsByUsernames(ctx, usernames)
+	if err != nil {
+		return
+	}
+	for _, id := range idMap {
+		msg.Mentions = append(msg.Mentions, id)
+	}
 }
 
 func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *string, limit int) (*MessagesPage, error) {

@@ -13,6 +13,8 @@ function mkp(overrides: Partial<VoiceParticipant> = {}): VoiceParticipant {
     isLocal: false,
     cameraTrack: null,
     screenTrack: null,
+    audioTrack: null,
+    screenAudioTrack: null,
     ...overrides,
   };
 }

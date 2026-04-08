@@ -1,6 +1,8 @@
 import { useState, useRef } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 
+const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
+
 interface Props {
   channelId: string;
   guildId: string;
@@ -11,8 +13,10 @@ interface Props {
 export function MessageInput({ channelId, guildId, channelName, onTyping }: Props) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
-  const { sendMessage, typingUsers } = useMessageStore();
+  const [uploadError, setUploadError] = useState("");
+  const { sendMessage, uploadImage, typingUsers } = useMessageStore();
   const typingThrottleRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const typing = (typingUsers[channelId] ?? []).filter(
     (u) => Date.now() - u.at < 5000
@@ -34,7 +38,31 @@ export function MessageInput({ channelId, guildId, channelName, onTyping }: Prop
     try {
       await sendMessage(channelId, trimmed);
     } catch {
-      setContent(trimmed); // restore on failure
+      setContent(trimmed);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = "";
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadError("File exceeds 8MB limit.");
+      setTimeout(() => setUploadError(""), 3000);
+      return;
+    }
+
+    setSending(true);
+    setUploadError("");
+    try {
+      await uploadImage(channelId, file);
+    } catch {
+      setUploadError("Upload failed.");
+      setTimeout(() => setUploadError(""), 3000);
     } finally {
       setSending(false);
     }
@@ -66,6 +94,30 @@ export function MessageInput({ channelId, guildId, channelName, onTyping }: Prop
         className="flex items-end gap-2 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}
       >
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED}
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* Upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending}
+          className="flex-shrink-0 p-1 rounded transition-colors mb-0.5"
+          title="Upload image"
+          style={{ color: "var(--color-dc-interactive-normal)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+        </button>
+
         <textarea
           rows={1}
           className="flex-1 bg-transparent text-sm outline-none resize-none max-h-36 overflow-y-auto leading-5"
@@ -95,6 +147,11 @@ export function MessageInput({ channelId, guildId, channelName, onTyping }: Prop
           </svg>
         </button>
       </div>
+
+      {/* Upload error */}
+      {uploadError && (
+        <p className="text-xs px-1 pt-0.5" style={{ color: "var(--color-dc-red, #ed4245)" }}>{uploadError}</p>
+      )}
 
       {/* Typing indicator */}
       <div className="h-5 px-1 pt-1">

@@ -84,14 +84,28 @@ func (g *Guild) ToListItem() GuildListItem {
 	}
 }
 
+// RoleRef is a lightweight role reference embedded in MemberResponse.
+type RoleRef struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	Position int    `json:"position"`
+	Hoist    bool   `json:"hoist"`
+}
+
 type MemberResponse struct {
 	ID          string    `json:"id"`
 	Username    string    `json:"username"`
 	DisplayName *string   `json:"displayName,omitempty"`
 	AvatarURL   *string   `json:"avatarUrl,omitempty"`
 	Role        string    `json:"role"`
+	Roles       []RoleRef `json:"roles"`
 	JoinedAt    time.Time `json:"joinedAt"`
 	Status      string    `json:"status"` // presence: online | offline
+}
+
+type UpdateMemberRoleRequest struct {
+	Role string `json:"role" validate:"required,oneof=admin moderator member"`
 }
 
 type Response struct {

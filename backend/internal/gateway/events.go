@@ -14,6 +14,20 @@ const (
 	OpGuildMemberRemove = "GUILD_MEMBER_REMOVE"
 	OpPresenceUpdate  = "PRESENCE_UPDATE"
 	OpVoiceStateUpdate = "VOICE_STATE_UPDATE"
+	OpReactionAdd      = "REACTION_ADD"
+	OpReactionRemove   = "REACTION_REMOVE"
+	OpRoleCreate       = "ROLE_CREATE"
+	OpRoleUpdate       = "ROLE_UPDATE"
+	OpRoleDelete       = "ROLE_DELETE"
+	OpRoleReorder      = "ROLE_REORDER"
+	OpMemberRoleAdd    = "MEMBER_ROLE_ADD"
+	OpMemberRoleRemove = "MEMBER_ROLE_REMOVE"
+
+	// DM call signaling
+	OpCallInvite  = "CALL_INVITE"
+	OpCallAccept  = "CALL_ACCEPT"
+	OpCallDecline = "CALL_DECLINE"
+	OpCallEnd     = "CALL_END"
 )
 
 // Event is what clients send and receive over WebSocket.
@@ -29,12 +43,4 @@ type routableEvent struct {
 	D       json.RawMessage `json:"d,omitempty"`
 	S       int64           `json:"s"`
 	GuildID string          `json:"guildId"`
-}
-
-func newEvent(op string, seq int64, data interface{}) ([]byte, error) {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(Event{Op: op, D: raw, S: seq})
 }

@@ -41,11 +41,15 @@ export interface Channel {
 export interface Message {
   id: string;
   channelId: string;
+  guildId?: string;
   author: User;
   content: string;
   createdAt: string;
   editedAt?: string;
   deletedAt?: string;
+  reactions?: { emoji: string; count: number; selfReacted: boolean }[];
+  mentions?: string[];
+  attachments?: string[]; // public image URLs
 }
 
 export interface GuildMember {
@@ -53,4 +57,24 @@ export interface GuildMember {
   user: User;
   role: "owner" | "admin" | "member";
   joinedAt: string;
+}
+
+export interface GuildRole {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  hoist: boolean;
+  memberCount?: number;
+}
+
+export interface Member {
+  id: string;
+  username: string;
+  displayName?: string;
+  avatarUrl?: string;
+  role: string;
+  roles: GuildRole[];
+  joinedAt: string;
+  status: string;
 }

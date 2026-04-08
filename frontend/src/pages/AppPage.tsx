@@ -11,6 +11,9 @@ import { FriendsPage } from "../features/friend/FriendsPage";
 import { DMConversation } from "../features/friend/DMConversation";
 import { VoicePanel } from "../features/voice/VoicePanel";
 import { GlobalVoiceAudio } from "../features/voice/GlobalVoiceAudio";
+import { NotificationToastContainer } from "../features/notification/NotificationToast";
+import { IncomingCallOverlay } from "../features/call/IncomingCallOverlay";
+import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
 
 function EmptyState() {
   return (
@@ -86,6 +89,10 @@ export function AppPage() {
 
   useEffect(() => {
     fetchGuilds();
+    // Request OS notification permission once on load
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
   }, []);
 
   const isHome = activeGuildId === null;
@@ -98,6 +105,9 @@ export function AppPage() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <GlobalVoiceAudio participants={participants} />
+      <NotificationToastContainer />
+      <IncomingCallOverlay />
+      <OutgoingCallOverlay />
       <TitleBar />
       <div className="flex-1 overflow-hidden">
         <MainLayout>

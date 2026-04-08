@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import { useAuthStore } from "./authStore";
 import type { Message } from "../types";
 
 interface TypingUser {
@@ -13,15 +14,20 @@ interface MessageStore {
   hasMore: Record<string, boolean>;
   typingUsers: Record<string, TypingUser[]>;
   unreadChannels: Record<string, boolean>; // channelId → has unread
+  mentionCounts: Record<string, number>;   // channelId → mention count
 
   fetchMessages: (channelId: string, beforeId?: string) => Promise<void>;
   prependMessages: (channelId: string, msgs: Message[], hasMore: boolean) => void;
-  addMessage: (msg: Message, activeChannelId: string | null) => void;
+  addMessage: (msg: Message, activeChannelId: string | null, currentUserId?: string) => void;
   updateMessage: (msg: Message) => void;
   removeMessage: (messageId: string, channelId: string) => void;
   sendMessage: (channelId: string, content: string) => Promise<void>;
+  uploadImage: (channelId: string, file: File, caption?: string) => Promise<void>;
   editMessage: (messageId: string, channelId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string, channelId: string) => Promise<void>;
+  addReaction: (messageId: string, channelId: string, reaction: { emoji: string; count: number; selfReacted: boolean }) => void;
+  removeReaction: (messageId: string, channelId: string, emoji: string, userId: string) => void;
+  toggleReaction: (messageId: string, channelId: string, emoji: string) => Promise<void>;
   setTyping: (channelId: string, user: TypingUser) => void;
   clearTyping: (channelId: string, userId: string) => void;
   markRead: (channelId: string) => void;
@@ -33,6 +39,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   hasMore: {},
   typingUsers: {},
   unreadChannels: {},
+  mentionCounts: {},
 
   fetchMessages: async (channelId, beforeId) => {
     const params: Record<string, string> = { limit: "50" };
@@ -67,15 +74,23 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     }));
   },
 
-  addMessage: (msg, activeChannelId) => {
+  addMessage: (msg, activeChannelId, currentUserId) => {
     set((s) => {
       const existing = s.messages[msg.channelId] ?? [];
       if (existing.some((m) => m.id === msg.id)) return s;
 
-      // Mark unread if the message is in a channel the user isn't looking at
-      const unread = msg.channelId !== activeChannelId
+      const isActive = msg.channelId === activeChannelId;
+
+      // Mark unread if not in the active channel
+      const unread = !isActive
         ? { ...s.unreadChannels, [msg.channelId]: true }
         : s.unreadChannels;
+
+      // Track mention count
+      const isMentioned = !isActive && !!currentUserId && (msg.mentions ?? []).includes(currentUserId);
+      const mentionCounts = isMentioned
+        ? { ...s.mentionCounts, [msg.channelId]: (s.mentionCounts[msg.channelId] ?? 0) + 1 }
+        : s.mentionCounts;
 
       // Clear typing for the message author
       const typing = (s.typingUsers[msg.channelId] ?? []).filter(
@@ -85,6 +100,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
       return {
         messages: { ...s.messages, [msg.channelId]: [...existing, msg] },
         unreadChannels: unread,
+        mentionCounts,
         typingUsers: { ...s.typingUsers, [msg.channelId]: typing },
       };
     });
@@ -120,6 +136,15 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     await api.post(`/channels/${channelId}/messages`, { content });
   },
 
+  uploadImage: async (channelId, file, caption = "") => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("caption", caption);
+    await api.post(`/channels/${channelId}/upload`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
   editMessage: async (messageId, _channelId, content) => {
     await api.patch(`/messages/${messageId}`, { content });
   },
@@ -127,6 +152,86 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   deleteMessage: async (messageId, channelId) => {
     await api.delete(`/messages/${messageId}`);
     get().removeMessage(messageId, channelId);
+  },
+
+  addReaction: (messageId, channelId, reaction) => {
+    set((s) => {
+      const msgs = s.messages[channelId];
+      if (!msgs) return s;
+      return {
+        messages: {
+          ...s.messages,
+          [channelId]: msgs.map((m) => {
+            if (m.id !== messageId) return m;
+            const existingReactions = m.reactions ?? [];
+            const existing = existingReactions.find(r => r.emoji === reaction.emoji);
+            if (existing) {
+              return {
+                ...m,
+                reactions: existingReactions.map(r => r.emoji === reaction.emoji ? { ...r, count: reaction.count, selfReacted: r.selfReacted || reaction.selfReacted } : r)
+              };
+            }
+            return {
+              ...m,
+              reactions: [...existingReactions, reaction].sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji))
+            };
+          }),
+        },
+      };
+    });
+  },
+
+  removeReaction: (messageId, channelId, emoji, userId) => {
+    const { user } = useAuthStore.getState();
+    const isSelf = user?.id === userId;
+
+    set((s) => {
+      const msgs = s.messages[channelId];
+      if (!msgs) return s;
+      return {
+        messages: {
+          ...s.messages,
+          [channelId]: msgs.map((m) => {
+            if (m.id !== messageId) return m;
+            const existingReactions = m.reactions ?? [];
+            return {
+              ...m,
+              reactions: existingReactions.map(r => {
+                if (r.emoji === emoji) {
+                  return { ...r, count: Math.max(0, r.count - 1), selfReacted: isSelf ? false : r.selfReacted };
+                }
+                return r;
+              }).filter(r => r.count > 0)
+            };
+          }),
+        },
+      };
+    });
+  },
+
+  toggleReaction: async (messageId, channelId, emoji) => {
+    const msgs = get().messages[channelId];
+    if (!msgs) return;
+    const msg = msgs.find(m => m.id === messageId);
+    if (!msg) return;
+
+    const existing = (msg.reactions ?? []).find(r => r.emoji === emoji);
+    const hasReacted = existing?.selfReacted;
+
+    try {
+      if (hasReacted) {
+        // Optimistic update
+        get().removeReaction(messageId, channelId, emoji, useAuthStore.getState().user!.id);
+        await api.delete(`/messages/${messageId}/reactions/${emoji}`);
+      } else {
+        // Optimistic update
+        get().addReaction(messageId, channelId, { emoji, count: (existing?.count ?? 0) + 1, selfReacted: true });
+        await api.put(`/messages/${messageId}/reactions/${emoji}`);
+      }
+    } catch (e) {
+      // Revert optimism implicitly ignored for simplicity, typically would refresh or undo
+      console.error("Failed to toggle reaction", e);
+    }
   },
 
   setTyping: (channelId, user) => {
@@ -164,10 +269,12 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
   markRead: (channelId) => {
     set((s) => {
-      if (!s.unreadChannels[channelId]) return s;
-      const updated = { ...s.unreadChannels };
-      delete updated[channelId];
-      return { unreadChannels: updated };
+      if (!s.unreadChannels[channelId] && !s.mentionCounts[channelId]) return s;
+      const unread = { ...s.unreadChannels };
+      const mentions = { ...s.mentionCounts };
+      delete unread[channelId];
+      delete mentions[channelId];
+      return { unreadChannels: unread, mentionCounts: mentions };
     });
   },
 

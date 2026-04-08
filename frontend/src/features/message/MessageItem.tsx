@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Message } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
+import { AddReactionButton } from "./AddReactionButton";
+import { MessageContent } from "./MessageContent";
 
 interface Props {
   message: Message;
@@ -35,7 +37,7 @@ function Avatar({ username }: { username: string }) {
 
 export function MessageItem({ message, isGrouped }: Props) {
   const user = useAuthStore((s) => s.user);
-  const { editMessage, deleteMessage } = useMessageStore();
+  const { editMessage, deleteMessage, toggleReaction } = useMessageStore();
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [hovered, setHovered] = useState(false);
@@ -141,16 +143,53 @@ export function MessageItem({ message, isGrouped }: Props) {
             </p>
           </div>
         ) : (
-          <p
-            className="text-sm whitespace-pre-wrap break-words"
-            style={{ color: "var(--color-dc-text-normal)" }}
-          >
-            {message.content}
-          </p>
-        )}
-      </div>
+            <MessageContent content={message.content} attachments={message.attachments} />
+          )}
 
-      {/* Action toolbar */}
+          {/* Reactions */}
+          {(message.reactions && message.reactions.length > 0) ? (
+            <div className="flex flex-wrap gap-1 mt-1 items-center">
+              {message.reactions.map((r) => (
+                <button
+                  key={r.emoji}
+                  onClick={() => toggleReaction(message.id, message.channelId, r.emoji)}
+                  className="flex items-center gap-1 px-2 py-0.5 mb-1 rounded-full text-xs font-medium cursor-pointer transition-colors"
+                  style={{
+                    backgroundColor: r.selfReacted ? "rgba(88,101,242,0.15)" : "var(--color-dc-bg-tertiary)",
+                    border: `1px solid ${r.selfReacted ? "#5865f2" : "var(--color-dc-bg-floating)"}`,
+                    color: r.selfReacted ? "var(--color-dc-brand)" : "var(--color-dc-text-normal)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!r.selfReacted) {
+                      e.currentTarget.style.backgroundColor = "var(--color-dc-background-modifier-hover)";
+                      e.currentTarget.style.border = "1px solid var(--color-dc-text-muted)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!r.selfReacted) {
+                      e.currentTarget.style.backgroundColor = "var(--color-dc-bg-tertiary)";
+                      e.currentTarget.style.border = "1px solid var(--color-dc-bg-floating)";
+                    }
+                  }}
+                >
+                  <span>{r.emoji}</span>
+                  <span className="font-semibold">{r.count}</span>
+                </button>
+              ))}
+              <div className="mb-1">
+                <AddReactionButton messageId={message.id} channelId={message.channelId} />
+              </div>
+            </div>
+          ) : (
+            hovered && !editing && (
+              <div className="mt-1">
+                <AddReactionButton messageId={message.id} channelId={message.channelId} />
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Action toolbar */}
       {hovered && !editing && isOwn && (
         <div
           className="absolute right-4 top-1 flex items-center gap-1 rounded px-1 py-0.5 shadow-md"

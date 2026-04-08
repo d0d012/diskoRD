@@ -14,7 +14,7 @@ interface AuthStore {
 
 function loadUser(): User | null {
   try {
-    const raw = sessionStorage.getItem("user");
+    const raw = localStorage.getItem("user") ?? sessionStorage.getItem("user");
     return raw ? (JSON.parse(raw) as User) : null;
   } catch {
     return null;
@@ -38,25 +38,36 @@ export const useAuthStore = create<AuthStore>((set) => ({
         status: "online",
         createdAt: new Date().toISOString(),
       };
-      sessionStorage.setItem("access_token", "mock-token");
+      localStorage.setItem("access_token", "mock-token");
+      localStorage.setItem("user", JSON.stringify(mockUser));
       set({ user: mockUser, accessToken: "mock-token", isLoading: false });
       return;
     }
 
-    const { data } = await api.post("/auth/login", { email, password });
-    sessionStorage.setItem("access_token", data.data.accessToken);
-    sessionStorage.setItem("user", JSON.stringify(data.data.user));
-    localStorage.setItem("refresh_token", data.data.refreshToken);
-    set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
+    try {
+      const { data } = await api.post("/auth/login", { email, password });
+      localStorage.setItem("access_token", data.data.accessToken);
+      localStorage.setItem("user", JSON.stringify(data.data.user));
+      localStorage.setItem("refresh_token", data.data.refreshToken);
+      set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
   },
 
   register: async (email, displayName, username, password) => {
     set({ isLoading: true });
-    const { data } = await api.post("/auth/register", { email, displayName, username, password });
-    sessionStorage.setItem("access_token", data.data.accessToken);
-    sessionStorage.setItem("user", JSON.stringify(data.data.user));
-    localStorage.setItem("refresh_token", data.data.refreshToken);
-    set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
+    try {
+      const { data } = await api.post("/auth/register", { email, displayName, username, password });
+      sessionStorage.setItem("access_token", data.data.accessToken);
+      sessionStorage.setItem("user", JSON.stringify(data.data.user));
+      localStorage.setItem("refresh_token", data.data.refreshToken);
+      set({ user: data.data.user, accessToken: data.data.accessToken, isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
   },
 
   logout: async () => {
@@ -66,6 +77,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("user");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     localStorage.removeItem("refresh_token");
     set({ user: null, accessToken: null });
   },

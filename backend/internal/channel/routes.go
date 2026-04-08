@@ -1,10 +1,15 @@
 package channel
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-func RegisterRoutes(app *fiber.App, h *Handler, authMiddleware fiber.Handler) {
+	"github.com/d0d012/diskord/pkg/middleware"
+)
+
+func RegisterRoutes(app *fiber.App, h *Handler, authMiddleware fiber.Handler, db *pgxpool.Pool) {
 	guilds := app.Group("/guilds", authMiddleware)
-	guilds.Post("/:id/channels", h.CreateChannel)
+	guilds.Post("/:id/channels", middleware.RequireRole(db, "moderator"), h.CreateChannel)
 	guilds.Get("/:id/channels", h.ListChannels)
 
 	channels := app.Group("/channels", authMiddleware)

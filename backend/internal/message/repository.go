@@ -218,6 +218,30 @@ func (r *Repository) SoftDelete(ctx context.Context, messageID string) error {
 	return nil
 }
 
+// GetUserIDsByUsernames resolves @mention usernames to user IDs.
+func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []string) (map[string]string, error) {
+	if len(usernames) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT id, username FROM users WHERE username = ANY($1)`, usernames,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("message.Repository.GetUserIDsByUsernames: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string, len(usernames))
+	for rows.Next() {
+		var id, username string
+		if err := rows.Scan(&id, &username); err != nil {
+			return nil, fmt.Errorf("message.Repository.GetUserIDsByUsernames: scan: %w", err)
+		}
+		result[username] = id
+	}
+	return result, nil
+}
+
 // GetAuthorAndGuild returns the author_id and guild_id for a message.
 func (r *Repository) GetAuthorAndGuild(ctx context.Context, messageID string) (authorID, guildID string, err error) {
 	err = r.db.QueryRow(ctx, `

@@ -26,8 +26,45 @@ func (r *Repository) ListMembers(ctx context.Context, guildID string) ([]MemberR
 		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
 			return nil, fmt.Errorf("guild.Repository.ListMembers: scan: %w", err)
 		}
+		m.Roles = []RoleRef{}
 		members = append(members, m)
 	}
+	rows.Close()
+
+	if len(members) == 0 {
+		return members, nil
+	}
+
+	// Batch-fetch all custom roles for members in this guild
+	roleRows, err := r.db.Query(ctx,
+		`SELECT mr.user_id, gr.id, gr.name, gr.color, gr.position, gr.hoist
+		 FROM member_roles mr
+		 JOIN guild_roles gr ON gr.id = mr.role_id
+		 WHERE mr.guild_id = $1
+		 ORDER BY gr.position DESC`, guildID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("guild.Repository.ListMembers: fetch roles: %w", err)
+	}
+	defer roleRows.Close()
+
+	// Map userID → roles
+	roleMap := make(map[string][]RoleRef)
+	for roleRows.Next() {
+		var userID string
+		var ro RoleRef
+		if err := roleRows.Scan(&userID, &ro.ID, &ro.Name, &ro.Color, &ro.Position, &ro.Hoist); err != nil {
+			return nil, fmt.Errorf("guild.Repository.ListMembers: scan role: %w", err)
+		}
+		roleMap[userID] = append(roleMap[userID], ro)
+	}
+
+	for i, m := range members {
+		if roles, ok := roleMap[m.ID]; ok {
+			members[i].Roles = roles
+		}
+	}
+
 	return members, nil
 }
 

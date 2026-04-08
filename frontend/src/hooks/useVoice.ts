@@ -6,7 +6,9 @@ import {
   Participant,
   RemoteParticipant,
   ConnectionState,
+  type TrackPublication,
 } from "livekit-client";
+import { playSound } from "../lib/sounds";
 import { useVoiceStore } from "../stores/voiceStore";
 
 export interface VoiceParticipant {
@@ -115,8 +117,14 @@ export function useVoice() {
     room.on(RoomEvent.LocalTrackPublished, refreshParticipants);
     room.on(RoomEvent.LocalTrackUnpublished, refreshParticipants);
     room.on(RoomEvent.ActiveSpeakersChanged, refreshParticipants);
-    room.on(RoomEvent.TrackMuted, refreshParticipants);
-    room.on(RoomEvent.TrackUnmuted, refreshParticipants);
+    room.on(RoomEvent.TrackMuted, (pub: TrackPublication) => {
+      if (pub.source === Track.Source.Microphone) playSound("mute");
+      refreshParticipants();
+    });
+    room.on(RoomEvent.TrackUnmuted, (pub: TrackPublication) => {
+      if (pub.source === Track.Source.Microphone) playSound("unmute");
+      refreshParticipants();
+    });
 
     room.connect(liveKitUrl, liveKitToken);
 
