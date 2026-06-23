@@ -6,9 +6,11 @@ import {
   ConnectionState,
   Participant,
   RemoteParticipant,
+  LocalAudioTrack,
 } from "livekit-client";
 import { useCallStore } from "../../stores/callStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ParticipantTile } from "../voice/ParticipantTile";
 import { FullscreenOverlay } from "../voice/FullscreenOverlay";
 import { buildTiles } from "../voice/voiceLayout";
@@ -44,9 +46,11 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 
 export function DMCallPanel() {
   const { state, call, endCall } = useCallStore();
-  const { isMuted, setMuted } = useVoiceStore();
+  const { isMuted, setMuted, isNoiseCancellationEnabled } = useVoiceStore();
+  const { processStream, isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
 
   const roomRef = useRef<Room | null>(null);
+  const ncCleanupRef = useRef<(() => void) | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [connState, setConnState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [fullscreenTile, setFullscreenTile] = useState<VoiceTile | null>(null);
@@ -79,17 +83,28 @@ export function DMCallPanel() {
       setParticipants([]);
     });
 
-    room.connect(call.url, call.token).then(() => {
-      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+    room.connect(call.url, call.token).then(async () => {
+      try {
+        const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        ncCleanupRef.current = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room.localParticipant.publishTrack(livekitTrack);
+      } catch {
+        room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+      }
       refresh();
     });
 
     return () => {
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
       room.disconnect();
       roomRef.current = null;
       setParticipants([]);
     };
-  }, [state, call?.token, call?.url, refresh]);
+  }, [state, call?.token, call?.url, refresh, processStream]);
 
   // Sync mute state
   useEffect(() => {
@@ -97,6 +112,44 @@ export function DMCallPanel() {
     if (!room || state !== "in-call") return;
     room.localParticipant.setMicrophoneEnabled(!isMuted).catch(() => {});
   }, [isMuted, state]);
+
+  // NC toggle mid-call — rewire the mic pipeline when NC enabled state changes
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+
+    let cancelled = false;
+    let rawStream: MediaStream | null = null;
+
+    async function rewireMic() {
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
+
+      const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
+      }
+
+      try {
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { rawStream.getTracks().forEach(t => t.stop()); return; }
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
+        ncCleanupRef.current = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room!.localParticipant.publishTrack(livekitTrack);
+        const { isMuted } = useVoiceStore.getState();
+        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+      } catch {
+        rawStream?.getTracks().forEach(t => t.stop());
+        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted).catch(() => {});
+      }
+    }
+
+    rewireMic();
+    return () => { cancelled = true; };
+  }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state !== "in-call" || !call) return null;
 
@@ -153,6 +206,29 @@ export function DMCallPanel() {
                   <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
                 </svg>
               )}
+            </button>
+
+            {/* Noise Cancellation */}
+            <button
+              onClick={toggleNC}
+              className="p-1 rounded transition-colors"
+              title={isNCEnabled ? "Noise cancellation on" : "Noise cancellation off"}
+              style={{
+                color: isNCEnabled
+                  ? "var(--color-dc-interactive-active, #00b0f4)"
+                  : "var(--color-dc-interactive-normal)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-dc-bg-modifier-hover)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
             </button>
 
             {/* End call */}

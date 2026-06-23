@@ -10,6 +10,14 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-delete",
+    "store:allow-clear",
+    "store:allow-load",
+    "store:allow-save",
+    "updater:allow-check",
+    "updater:allow-download-and-install"
   ]
 }

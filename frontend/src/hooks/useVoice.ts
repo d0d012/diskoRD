@@ -3,6 +3,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  LocalAudioTrack,
   Participant,
   RemoteParticipant,
   ConnectionState,
@@ -10,10 +11,11 @@ import {
 } from "livekit-client";
 import { playSound } from "../lib/sounds";
 import { useVoiceStore } from "../stores/voiceStore";
+import { useNoiseCancellation } from "./useNoiseCancellation";
 
 export interface VoiceParticipant {
-  identity: string;   // userId
-  name: string;       // username
+  identity: string;
+  name: string;
   isSpeaking: boolean;
   isMicEnabled: boolean;
   isCameraEnabled: boolean;
@@ -56,8 +58,11 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 
 export function useVoice() {
   const roomRef = useRef<Room | null>(null);
+  const ncCleanupRef = useRef<(() => void) | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
-  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(
+    ConnectionState.Disconnected
+  );
   const {
     liveKitToken,
     liveKitUrl,
@@ -68,12 +73,13 @@ export function useVoice() {
     screenShareResolution,
     screenShareAudio,
     onRoomDisconnected,
+    isNoiseCancellationEnabled,
   } = useVoiceStore();
+  const { processStream } = useNoiseCancellation();
 
   const refreshParticipants = useCallback(() => {
     const room = roomRef.current;
     if (!room) return;
-
     const list: VoiceParticipant[] = [
       buildParticipant(room.localParticipant, true),
     ];
@@ -90,6 +96,8 @@ export function useVoice() {
         roomRef.current.disconnect();
         roomRef.current = null;
       }
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
       setParticipants([]);
       setConnectionState(ConnectionState.Disconnected);
       return;
@@ -98,18 +106,45 @@ export function useVoice() {
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
 
-    room.on(RoomEvent.Connected, () => {
+    room.on(RoomEvent.Connected, async () => {
       setConnectionState(ConnectionState.Connected);
       refreshParticipants();
       const { isMuted } = useVoiceStore.getState();
-      room.localParticipant.setMicrophoneEnabled(!isMuted);
+
+      let rawStream: MediaStream | null = null;
+      try {
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const { stream: processedStream, cleanup } =
+          await processStream(rawStream);
+        ncCleanupRef.current = cleanup;
+
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(
+          processedTrack,
+          undefined,
+          false
+        );
+        await room.localParticipant.publishTrack(livekitTrack);
+        if (isMuted) {
+          await room.localParticipant.setMicrophoneEnabled(false);
+        }
+      } catch {
+        rawStream?.getTracks().forEach((t) => t.stop());
+        // Fall back to LiveKit's built-in mic handling
+        room.localParticipant.setMicrophoneEnabled(!isMuted);
+      }
     });
+
     room.on(RoomEvent.Disconnected, () => {
       setConnectionState(ConnectionState.Disconnected);
       setParticipants([]);
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
       onRoomDisconnected();
     });
-    room.on(RoomEvent.Reconnecting, () => setConnectionState(ConnectionState.Reconnecting));
+    room.on(RoomEvent.Reconnecting, () =>
+      setConnectionState(ConnectionState.Reconnecting)
+    );
     room.on(RoomEvent.ParticipantConnected, refreshParticipants);
     room.on(RoomEvent.ParticipantDisconnected, refreshParticipants);
     room.on(RoomEvent.TrackSubscribed, refreshParticipants);
@@ -132,6 +167,8 @@ export function useVoice() {
       room.removeAllListeners();
       room.disconnect();
       roomRef.current = null;
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
     };
   }, [liveKitToken, liveKitUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -140,6 +177,45 @@ export function useVoice() {
     roomRef.current?.localParticipant.setMicrophoneEnabled(!isMuted);
   }, [isMuted]);
 
+  // NC toggle mid-call — rewire the mic pipeline when NC enabled state changes
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+
+    let cancelled = false;
+    let rawStream: MediaStream | null = null;
+
+    async function rewireMic() {
+      // Clean up previous NC processing
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
+
+      // Unpublish existing mic track
+      const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
+      }
+
+      try {
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { rawStream.getTracks().forEach(t => t.stop()); return; }
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
+        ncCleanupRef.current = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room!.localParticipant.publishTrack(livekitTrack);
+        const { isMuted } = useVoiceStore.getState();
+        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+      } catch {
+        rawStream?.getTracks().forEach(t => t.stop());
+        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted);
+      }
+    }
+
+    rewireMic();
+    return () => { cancelled = true; };
+  }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Camera — fixed 720p / 30fps
   useEffect(() => {
@@ -151,15 +227,15 @@ export function useVoice() {
   // Screen share — uses store resolution, fps, and audio settings
   useEffect(() => {
     const resolutionMap = {
-      "720":   { width: 1280, height: 720 },
-      "1080":  { width: 1920, height: 1080 },
-      "1440":  { width: 2560, height: 1440 },
-      "source": { width: 0, height: 0 },   // 0 = let browser pick native
+      "720": { width: 1280, height: 720 },
+      "1080": { width: 1920, height: 1080 },
+      "1440": { width: 2560, height: 1440 },
+      source: { width: 0, height: 0 },
     };
     const { width, height } = resolutionMap[screenShareResolution];
     const resolution = width
       ? { width, height, frameRate: screenShareFps }
-      : { width: 99999, height: 99999, frameRate: screenShareFps }; // source: unconstrained
+      : { width: 99999, height: 99999, frameRate: screenShareFps };
     roomRef.current?.localParticipant.setScreenShareEnabled(isScreenSharing, {
       audio: screenShareAudio,
       resolution,
