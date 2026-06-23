@@ -46,10 +46,11 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 
 export function DMCallPanel() {
   const { state, call, endCall } = useCallStore();
-  const { isMuted, setMuted } = useVoiceStore();
+  const { isMuted, setMuted, isNoiseCancellationEnabled } = useVoiceStore();
   const { processStream, isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
 
   const roomRef = useRef<Room | null>(null);
+  const ncCleanupRef = useRef<(() => void) | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [connState, setConnState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [fullscreenTile, setFullscreenTile] = useState<VoiceTile | null>(null);
@@ -86,8 +87,7 @@ export function DMCallPanel() {
       try {
         const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const { stream: processedStream, cleanup } = await processStream(rawStream);
-        // Store cleanup so it runs when the component unmounts
-        (roomRef.current as Room & { _ncCleanup?: () => void })._ncCleanup = cleanup;
+        ncCleanupRef.current = cleanup;
         const processedTrack = processedStream.getAudioTracks()[0];
         const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
         await room.localParticipant.publishTrack(livekitTrack);
@@ -98,8 +98,8 @@ export function DMCallPanel() {
     });
 
     return () => {
-      const r = roomRef.current as (Room & { _ncCleanup?: () => void }) | null;
-      r?._ncCleanup?.();
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
       room.disconnect();
       roomRef.current = null;
       setParticipants([]);
@@ -112,6 +112,44 @@ export function DMCallPanel() {
     if (!room || state !== "in-call") return;
     room.localParticipant.setMicrophoneEnabled(!isMuted).catch(() => {});
   }, [isMuted, state]);
+
+  // NC toggle mid-call — rewire the mic pipeline when NC enabled state changes
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+
+    let cancelled = false;
+    let rawStream: MediaStream | null = null;
+
+    async function rewireMic() {
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
+
+      const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
+      }
+
+      try {
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { rawStream.getTracks().forEach(t => t.stop()); return; }
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
+        ncCleanupRef.current = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room!.localParticipant.publishTrack(livekitTrack);
+        const { isMuted } = useVoiceStore.getState();
+        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+      } catch {
+        rawStream?.getTracks().forEach(t => t.stop());
+        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted).catch(() => {});
+      }
+    }
+
+    rewireMic();
+    return () => { cancelled = true; };
+  }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state !== "in-call" || !call) return null;
 

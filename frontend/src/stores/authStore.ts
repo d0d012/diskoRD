@@ -52,7 +52,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
           set({ user, accessToken: newToken, isInitialized: true });
           return;
         } catch {
-          await storage.clear();
+          await storage.remove("access_token");
+          await storage.remove("refresh_token");
+          await storage.remove("user");
         }
       }
     } catch {
@@ -119,7 +121,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
     if (refreshToken) {
       await api.post("/auth/logout", { refreshToken }).catch(() => {});
     }
-    await storage.clear();
+    await storage.remove("access_token");
+    await storage.remove("refresh_token");
+    await storage.remove("user");
     setToken(null);
     set({ user: null, accessToken: null });
   },

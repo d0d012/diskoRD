@@ -73,6 +73,7 @@ export function useVoice() {
     screenShareResolution,
     screenShareAudio,
     onRoomDisconnected,
+    isNoiseCancellationEnabled,
   } = useVoiceStore();
   const { processStream } = useNoiseCancellation();
 
@@ -175,6 +176,46 @@ export function useVoice() {
   useEffect(() => {
     roomRef.current?.localParticipant.setMicrophoneEnabled(!isMuted);
   }, [isMuted]);
+
+  // NC toggle mid-call — rewire the mic pipeline when NC enabled state changes
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+
+    let cancelled = false;
+    let rawStream: MediaStream | null = null;
+
+    async function rewireMic() {
+      // Clean up previous NC processing
+      ncCleanupRef.current?.();
+      ncCleanupRef.current = null;
+
+      // Unpublish existing mic track
+      const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
+      }
+
+      try {
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { rawStream.getTracks().forEach(t => t.stop()); return; }
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
+        ncCleanupRef.current = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room!.localParticipant.publishTrack(livekitTrack);
+        const { isMuted } = useVoiceStore.getState();
+        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+      } catch {
+        rawStream?.getTracks().forEach(t => t.stop());
+        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted);
+      }
+    }
+
+    rewireMic();
+    return () => { cancelled = true; };
+  }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Camera — fixed 720p / 30fps
   useEffect(() => {
