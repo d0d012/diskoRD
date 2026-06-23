@@ -6,9 +6,11 @@ import {
   ConnectionState,
   Participant,
   RemoteParticipant,
+  LocalAudioTrack,
 } from "livekit-client";
 import { useCallStore } from "../../stores/callStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ParticipantTile } from "../voice/ParticipantTile";
 import { FullscreenOverlay } from "../voice/FullscreenOverlay";
 import { buildTiles } from "../voice/voiceLayout";
@@ -45,6 +47,7 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 export function DMCallPanel() {
   const { state, call, endCall } = useCallStore();
   const { isMuted, setMuted } = useVoiceStore();
+  const { processStream } = useNoiseCancellation();
 
   const roomRef = useRef<Room | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
@@ -79,17 +82,29 @@ export function DMCallPanel() {
       setParticipants([]);
     });
 
-    room.connect(call.url, call.token).then(() => {
-      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+    room.connect(call.url, call.token).then(async () => {
+      try {
+        const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        // Store cleanup so it runs when the component unmounts
+        (roomRef.current as Room & { _ncCleanup?: () => void })._ncCleanup = cleanup;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+        await room.localParticipant.publishTrack(livekitTrack);
+      } catch {
+        room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+      }
       refresh();
     });
 
     return () => {
+      const r = roomRef.current as (Room & { _ncCleanup?: () => void }) | null;
+      r?._ncCleanup?.();
       room.disconnect();
       roomRef.current = null;
       setParticipants([]);
     };
-  }, [state, call?.token, call?.url, refresh]);
+  }, [state, call?.token, call?.url, refresh, processStream]);
 
   // Sync mute state
   useEffect(() => {
