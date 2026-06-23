@@ -47,7 +47,7 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 export function DMCallPanel() {
   const { state, call, endCall } = useCallStore();
   const { isMuted, setMuted } = useVoiceStore();
-  const { processStream } = useNoiseCancellation();
+  const { processStream, isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
 
   const roomRef = useRef<Room | null>(null);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
@@ -168,6 +168,29 @@ export function DMCallPanel() {
                   <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
                 </svg>
               )}
+            </button>
+
+            {/* Noise Cancellation */}
+            <button
+              onClick={toggleNC}
+              className="p-1 rounded transition-colors"
+              title={isNCEnabled ? "Noise cancellation on" : "Noise cancellation off"}
+              style={{
+                color: isNCEnabled
+                  ? "var(--color-dc-interactive-active, #00b0f4)"
+                  : "var(--color-dc-interactive-normal)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-dc-bg-modifier-hover)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
             </button>
 
             {/* End call */}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ScreenShareModal } from "./ScreenShareModal";
 
 interface ControlBarProps {
@@ -45,6 +46,7 @@ export function ControlBar({ floating = false }: ControlBarProps) {
   const [showModal, setShowModal] = useState(false);
   const { isMuted, isDeafened, isCameraOn, isScreenSharing, setMuted, setDeafened, setCameraOn, setScreenSharing, leaveVoice } =
     useVoiceStore();
+  const { isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
 
   return (
     <>
@@ -100,6 +102,25 @@ export function ControlBar({ floating = false }: ControlBarProps) {
             <path d="M20 3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h7v2H9v2h6v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 13H4V5h16v11z"/>
             {isScreenSharing && <circle cx="12" cy="11" r="3" fill="currentColor"/>}
           </svg>
+        </ControlBtn>
+
+        {/* Noise Cancellation */}
+        <ControlBtn
+          active={isNCEnabled}
+          onClick={toggleNC}
+          title={isNCEnabled ? "Noise cancellation on" : "Noise cancellation off"}
+          floating={floating}
+        >
+          {isNCEnabled ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              <path d="M2 2l20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          )}
         </ControlBtn>
 
         {/* Disconnect */}
