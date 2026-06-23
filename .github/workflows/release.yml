@@ -41,7 +41,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: frontend
-          tauriScript: npm run tauri:build
+          tauriScript: npx tauri
           tagName: ${{ github.ref_name }}
           releaseName: diskoRD ${{ github.ref_name }}
           releaseBody: "Self-updating release — install once and the app updates itself."

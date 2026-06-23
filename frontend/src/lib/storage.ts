@@ -1,12 +1,13 @@
 const isTauri = () =>
-  typeof window !== "undefined" && !!(window as Record<string, unknown>)["__TAURI_INTERNALS__"];
+  typeof window !== "undefined" &&
+  !!((window as unknown) as Record<string, unknown>)["__TAURI_INTERNALS__"];
 
 let _store: import("@tauri-apps/plugin-store").Store | null = null;
 
 async function tauriStore() {
   if (!_store) {
-    const { Store } = await import("@tauri-apps/plugin-store");
-    _store = await Store.load("diskord.json", { autoSave: true });
+    const { load } = await import("@tauri-apps/plugin-store");
+    _store = await load("diskord.json", { defaults: {}, autoSave: true });
   }
   return _store;
 }
