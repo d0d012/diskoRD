@@ -89,7 +89,7 @@ export function useNoiseCancellation() {
   const loadRNNoise = useCallback(async (): Promise<RNNoiseEmscriptenModule> => {
     if (!modRef.current) {
       modRef.current = import("@jitsi/rnnoise-wasm").then(
-        (mod) => mod.default()
+        ({ createRNNWasmModule }) => createRNNWasmModule()
       );
     }
     return modRef.current;

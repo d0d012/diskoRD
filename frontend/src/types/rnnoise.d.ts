@@ -8,6 +8,6 @@ declare module "@jitsi/rnnoise-wasm" {
     _malloc(size: number): number;
     _free(ptr: number): void;
   }
-  const createModule: () => Promise<RNNoiseEmscriptenModule>;
-  export default createModule;
+  export function createRNNWasmModule(): Promise<RNNoiseEmscriptenModule>;
+  export function createRNNWasmModuleSync(): RNNoiseEmscriptenModule;
 }
