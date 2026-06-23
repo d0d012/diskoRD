@@ -6,6 +6,7 @@ import { AppPage } from "./pages/AppPage";
 import { InvitePage } from "./pages/InvitePage";
 import { useAuthStore } from "./stores/authStore";
 import { useUpdater } from "./hooks/useUpdater";
+import { useNoiseCancellation } from "./hooks/useNoiseCancellation";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
@@ -72,9 +73,11 @@ function UpdateToast({
 export function App() {
   const { initialize, isInitialized } = useAuthStore();
   const { updateReady, updateVersion, restartApp } = useUpdater();
+  const { loadPersistedPreference } = useNoiseCancellation();
 
   useEffect(() => {
     initialize();
+    loadPersistedPreference();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isInitialized) {
