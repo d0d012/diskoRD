@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -21,6 +22,39 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function App() {
+  const { initialize, isInitialized } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isInitialized) {
+    return (
+      <div
+        style={{
+          width: "100vw",
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "var(--color-dc-bg-primary, #313338)",
+        }}
+      >
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "3px solid #5865f2",
+            borderTopColor: "transparent",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>
