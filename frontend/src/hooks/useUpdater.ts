@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 function isTauri() {
-  return !!(window as Record<string, unknown>)["__TAURI_INTERNALS__"];
+  return !!((window as unknown) as Record<string, unknown>)["__TAURI_INTERNALS__"];
 }
 
 export function useUpdater() {

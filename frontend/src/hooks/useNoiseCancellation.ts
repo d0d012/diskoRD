@@ -88,11 +88,8 @@ export function useNoiseCancellation() {
 
   const loadRNNoise = useCallback(async (): Promise<RNNoiseEmscriptenModule> => {
     if (!modRef.current) {
-      // @jitsi/rnnoise-wasm exports { createRNNWasmModule, createRNNWasmModuleSync }
-      // createRNNWasmModule() returns an object with a .ready Promise that resolves
-      // to the fully initialised Emscripten Module.
       modRef.current = import("@jitsi/rnnoise-wasm").then(
-        ({ createRNNWasmModule }) => createRNNWasmModule().ready as Promise<RNNoiseEmscriptenModule>
+        (mod) => mod.default()
       );
     }
     return modRef.current;

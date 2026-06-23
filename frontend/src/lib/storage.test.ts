@@ -2,14 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock @tauri-apps/plugin-store before importing storage
 vi.mock("@tauri-apps/plugin-store", () => ({
-  Store: {
-    load: vi.fn().mockResolvedValue({
-      get: vi.fn().mockResolvedValue(null),
-      set: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
-      clear: vi.fn().mockResolvedValue(undefined),
-    }),
-  },
+  load: vi.fn().mockResolvedValue({
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+    clear: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 import { storage } from "./storage";
@@ -18,7 +16,7 @@ describe("storage (browser fallback)", () => {
   beforeEach(() => {
     localStorage.clear();
     // Ensure we're not in Tauri context
-    delete (window as Record<string, unknown>)["__TAURI_INTERNALS__"];
+    delete ((window as unknown) as Record<string, unknown>)["__TAURI_INTERNALS__"];
   });
 
   it("returns null for missing key", async () => {
