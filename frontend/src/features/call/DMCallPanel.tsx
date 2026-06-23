@@ -126,9 +126,6 @@ export function DMCallPanel() {
       ncCleanupRef.current = null;
 
       const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
-      if (micPub?.track) {
-        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
-      }
 
       try {
         rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -137,13 +134,14 @@ export function DMCallPanel() {
         if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
         ncCleanupRef.current = cleanup;
         const processedTrack = processedStream.getAudioTracks()[0];
-        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
-        await room!.localParticipant.publishTrack(livekitTrack);
-        const { isMuted } = useVoiceStore.getState();
-        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+        if (micPub?.track) {
+          await (micPub.track as LocalAudioTrack).replaceTrack(processedTrack);
+        } else {
+          const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+          await room!.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
+        }
       } catch {
         rawStream?.getTracks().forEach(t => t.stop());
-        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted).catch(() => {});
       }
     }
 
