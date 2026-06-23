@@ -40,6 +40,10 @@ interface VoiceStore {
   setRemoteVolume: (userId: string, v: number) => void;
   onRoomDisconnected: () => void;
 
+  // Noise cancellation
+  isNoiseCancellationEnabled: boolean;
+  setNoiseCancellationEnabled: (enabled: boolean) => void;
+
   // Gateway-driven
   updateVoiceState: (channelId: string, participant: VoiceGatewayParticipant, joined: boolean) => void;
 }
@@ -59,6 +63,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   screenShareAudio: false,
   remoteVolumes: {},
   voiceParticipants: {},
+  isNoiseCancellationEnabled: false,
 
   joinVoice: async (channelId, guildId) => {
     const { activeVoiceChannelId } = get();
@@ -108,6 +113,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   setScreenShareResolution: (r) => set({ screenShareResolution: r }),
   setScreenShareAudio: (v) => set({ screenShareAudio: v }),
   setRemoteVolume: (userId, v) => set((s) => ({ remoteVolumes: { ...s.remoteVolumes, [userId]: v } })),
+  setNoiseCancellationEnabled: (enabled: boolean) => set({ isNoiseCancellationEnabled: enabled }),
 
   onRoomDisconnected: () => {
     const { activeVoiceChannelId } = get();

@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    exclude: ["rnnoise-wasm"],
+  },
+  assetsInclude: ["**/*.wasm"],
   test: {
     environment: "jsdom",
     globals: true,
