@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    exclude: ["rnnoise-wasm"],
+    exclude: ["@jitsi/rnnoise-wasm"],
   },
   assetsInclude: ["**/*.wasm"],
   test: {

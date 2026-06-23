@@ -2,10 +2,22 @@ import { useCallback, useRef } from "react";
 import { useVoiceStore } from "../stores/voiceStore";
 import { storage } from "../lib/storage";
 
-interface RNNoiseModule {
-  newState: () => unknown;
-  processFrame: (state: unknown, frame: Float32Array) => number;
-  deleteState: (state: unknown) => void;
+// The @jitsi/rnnoise-wasm module exposes raw Emscripten WASM bindings.
+// After calling createRNNWasmModule(), wait for .ready to get the Module, which
+// exposes: _rnnoise_create(), _rnnoise_init(st), _rnnoise_destroy(st),
+//          _rnnoise_process_frame(st, ptr) where ptr is a HEAPF32 pointer,
+//          _malloc(bytes), _free(ptr), HEAPF32.
+// _rnnoise_process_frame writes denoised audio back into ptr in-place and
+// returns a float VAD probability (unused here).
+
+interface RNNoiseEmscriptenModule {
+  _rnnoise_create: () => number;
+  _rnnoise_init: (state: number) => void;
+  _rnnoise_destroy: (state: number) => void;
+  _rnnoise_process_frame: (state: number, ptr: number) => number;
+  _malloc: (bytes: number) => number;
+  _free: (ptr: number) => void;
+  HEAPF32: Float32Array;
 }
 
 const FRAME_SIZE = 480;
@@ -13,9 +25,14 @@ const SAMPLE_RATE = 48000;
 
 async function applyRNNoise(
   rawStream: MediaStream,
-  rnnoise: RNNoiseModule
+  mod: RNNoiseEmscriptenModule
 ): Promise<{ stream: MediaStream; cleanup: () => void }> {
-  const state = rnnoise.newState();
+  const state = mod._rnnoise_create();
+  mod._rnnoise_init(state);
+
+  // Allocate a persistent WASM-side buffer for one frame (480 float32 = 1920 bytes)
+  const ptr = mod._malloc(FRAME_SIZE * 4);
+
   const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
   const source = ctx.createMediaStreamSource(rawStream);
   // 512 is the smallest power-of-2 buffer, closest to the 480-sample RNNoise frame
@@ -36,9 +53,13 @@ async function applyRNNoise(
     let offset = 0;
 
     while (offset + FRAME_SIZE <= combined.length) {
-      const frame = combined.slice(offset, offset + FRAME_SIZE);
-      rnnoise.processFrame(state, frame);
-      processed.set(frame, offset);
+      const frame = combined.subarray(offset, offset + FRAME_SIZE);
+      // Copy frame into WASM heap
+      mod.HEAPF32.set(frame, ptr >> 2);
+      // Process in-place; result written back to WASM heap
+      mod._rnnoise_process_frame(state, ptr);
+      // Copy result out of WASM heap
+      processed.set(mod.HEAPF32.subarray(ptr >> 2, (ptr >> 2) + FRAME_SIZE), offset);
       offset += FRAME_SIZE;
     }
 
@@ -53,7 +74,8 @@ async function applyRNNoise(
     processor.disconnect();
     source.disconnect();
     ctx.close();
-    rnnoise.deleteState(state);
+    mod._rnnoise_destroy(state);
+    mod._free(ptr);
   };
 
   return { stream: dest.stream, cleanup };
@@ -62,16 +84,18 @@ async function applyRNNoise(
 export function useNoiseCancellation() {
   const { isNoiseCancellationEnabled, setNoiseCancellationEnabled } =
     useVoiceStore();
-  const rnnoiseRef = useRef<RNNoiseModule | null>(null);
+  const modRef = useRef<RNNoiseEmscriptenModule | null>(null);
 
-  const loadRNNoise = useCallback(async (): Promise<RNNoiseModule> => {
-    if (!rnnoiseRef.current) {
-      // rnnoise-wasm exports a factory function as default;
-      // handle both ESM and CJS export patterns.
-      const factory = await import("rnnoise-wasm");
-      rnnoiseRef.current = await ((factory as { default?: () => Promise<RNNoiseModule> }).default ?? (factory as unknown as () => Promise<RNNoiseModule>))();
+  const loadRNNoise = useCallback(async (): Promise<RNNoiseEmscriptenModule> => {
+    if (!modRef.current) {
+      // @jitsi/rnnoise-wasm exports { createRNNWasmModule, createRNNWasmModuleSync }
+      // createRNNWasmModule() returns an object with a .ready Promise that resolves
+      // to the fully initialised Emscripten Module.
+      const { createRNNWasmModule } = await import("@jitsi/rnnoise-wasm");
+      const instance = createRNNWasmModule();
+      modRef.current = (await instance.ready) as RNNoiseEmscriptenModule;
     }
-    return rnnoiseRef.current!;
+    return modRef.current!;
   }, []);
 
   const processStream = useCallback(
@@ -82,11 +106,11 @@ export function useNoiseCancellation() {
         return { stream: raw, cleanup: () => {} };
       }
       try {
-        const rnnoise = await loadRNNoise();
-        return applyRNNoise(raw, rnnoise);
+        const mod = await loadRNNoise();
+        return applyRNNoise(raw, mod);
       } catch {
-        // rnnoise-wasm unavailable (e.g. security placeholder); pass stream through
-        console.warn("useNoiseCancellation: rnnoise-wasm failed to load, passing stream through");
+        // @jitsi/rnnoise-wasm failed to load (e.g. WASM not supported); pass stream through
+        console.warn("useNoiseCancellation: @jitsi/rnnoise-wasm failed to load, passing stream through");
         return { stream: raw, cleanup: () => {} };
       }
     },
