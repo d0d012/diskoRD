@@ -84,18 +84,18 @@ async function applyRNNoise(
 export function useNoiseCancellation() {
   const { isNoiseCancellationEnabled, setNoiseCancellationEnabled } =
     useVoiceStore();
-  const modRef = useRef<RNNoiseEmscriptenModule | null>(null);
+  const modRef = useRef<Promise<RNNoiseEmscriptenModule> | null>(null);
 
   const loadRNNoise = useCallback(async (): Promise<RNNoiseEmscriptenModule> => {
     if (!modRef.current) {
       // @jitsi/rnnoise-wasm exports { createRNNWasmModule, createRNNWasmModuleSync }
       // createRNNWasmModule() returns an object with a .ready Promise that resolves
       // to the fully initialised Emscripten Module.
-      const { createRNNWasmModule } = await import("@jitsi/rnnoise-wasm");
-      const instance = createRNNWasmModule();
-      modRef.current = (await instance.ready) as RNNoiseEmscriptenModule;
+      modRef.current = import("@jitsi/rnnoise-wasm").then(
+        ({ createRNNWasmModule }) => createRNNWasmModule().ready as Promise<RNNoiseEmscriptenModule>
+      );
     }
-    return modRef.current!;
+    return modRef.current;
   }, []);
 
   const processStream = useCallback(
