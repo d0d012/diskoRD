@@ -124,7 +124,7 @@ export function useVoice() {
           undefined,
           false
         );
-        await room.localParticipant.publishTrack(livekitTrack);
+        await room.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
         if (isMuted) {
           await room.localParticipant.setMicrophoneEnabled(false);
         }
