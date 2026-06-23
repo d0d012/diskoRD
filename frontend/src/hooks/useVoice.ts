@@ -110,10 +110,9 @@ export function useVoice() {
       refreshParticipants();
       const { isMuted } = useVoiceStore.getState();
 
+      let rawStream: MediaStream | null = null;
       try {
-        const rawStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const { stream: processedStream, cleanup } =
           await processStream(rawStream);
         ncCleanupRef.current = cleanup;
@@ -129,6 +128,7 @@ export function useVoice() {
           await room.localParticipant.setMicrophoneEnabled(false);
         }
       } catch {
+        rawStream?.getTracks().forEach((t) => t.stop());
         // Fall back to LiveKit's built-in mic handling
         room.localParticipant.setMicrophoneEnabled(!isMuted);
       }
