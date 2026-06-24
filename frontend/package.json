@@ -13,7 +13,6 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@jitsi/rnnoise-wasm": "^0.2.1",
     "@tailwindcss/postcss": "^4.2.1",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/cli": "^2.10.1",
@@ -22,6 +21,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "autoprefixer": "^10.4.27",
     "axios": "^1.13.6",
+    "fastenhancer-web": "^0.1.1",
     "livekit-client": "^2.18.0",
     "postcss": "^8.5.8",
     "react": "^19.2.4",
@@ -48,6 +48,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.0",
+    "vite-plugin-wasm": "^3.6.0",
     "vitest": "^4.1.2"
   }
 }

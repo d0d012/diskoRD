@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ScreenShareModal } from "./ScreenShareModal";
@@ -44,9 +44,41 @@ function ControlBtn({
 
 export function ControlBar({ floating = false }: ControlBarProps) {
   const [showModal, setShowModal] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const monitorCleanupRef = useRef<(() => void) | null>(null);
+  const monitorLoadingRef = useRef(false);
   const { isMuted, isDeafened, isCameraOn, isScreenSharing, setMuted, setDeafened, setCameraOn, setScreenSharing, leaveVoice } =
     useVoiceStore();
-  const { isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
+  const { isEnabled: isNCEnabled, toggle: toggleNC, processStream } = useNoiseCancellation();
+
+  async function toggleMonitor() {
+    if (isMonitoring) {
+      monitorCleanupRef.current?.();
+      monitorCleanupRef.current = null;
+      setIsMonitoring(false);
+      return;
+    }
+    if (monitorLoadingRef.current) return;
+    monitorLoadingRef.current = true;
+    try {
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const { stream, cleanup: ncCleanup } = await processStream(rawStream);
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(ctx.destination);
+      monitorCleanupRef.current = () => {
+        source.disconnect();
+        ctx.close();
+        ncCleanup();
+        rawStream.getTracks().forEach(t => t.stop());
+      };
+      setIsMonitoring(true);
+    } catch {
+      // ignore
+    } finally {
+      monitorLoadingRef.current = false;
+    }
+  }
 
   return (
     <>
@@ -118,6 +150,18 @@ export function ControlBar({ floating = false }: ControlBarProps) {
             <path d="M12 12 Q13 4 14 12 Q15 20 16 12"/>
             <path d="M16 12 Q17 6 18 12 Q19 18 20 12"/>
             <path d="M20 12h2"/>
+          </svg>
+        </ControlBtn>
+
+        {/* Mic monitor — hear your own processed audio */}
+        <ControlBtn
+          active={isMonitoring}
+          onClick={toggleMonitor}
+          title={isMonitoring ? "Stop monitoring mic" : "Hear your mic (test NC)"}
+          floating={floating}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
           </svg>
         </ControlBtn>
 
