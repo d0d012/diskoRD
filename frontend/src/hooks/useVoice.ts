@@ -124,7 +124,7 @@ export function useVoice() {
           undefined,
           false
         );
-        await room.localParticipant.publishTrack(livekitTrack);
+        await room.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
         if (isMuted) {
           await room.localParticipant.setMicrophoneEnabled(false);
         }
@@ -186,15 +186,10 @@ export function useVoice() {
     let rawStream: MediaStream | null = null;
 
     async function rewireMic() {
-      // Clean up previous NC processing
       ncCleanupRef.current?.();
       ncCleanupRef.current = null;
 
-      // Unpublish existing mic track
       const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
-      if (micPub?.track) {
-        await room!.localParticipant.unpublishTrack(micPub.track as LocalAudioTrack);
-      }
 
       try {
         rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -203,13 +198,14 @@ export function useVoice() {
         if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
         ncCleanupRef.current = cleanup;
         const processedTrack = processedStream.getAudioTracks()[0];
-        const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
-        await room!.localParticipant.publishTrack(livekitTrack);
-        const { isMuted } = useVoiceStore.getState();
-        if (isMuted) await room!.localParticipant.setMicrophoneEnabled(false);
+        if (micPub?.track) {
+          await (micPub.track as LocalAudioTrack).replaceTrack(processedTrack);
+        } else {
+          const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
+          await room!.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
+        }
       } catch {
         rawStream?.getTracks().forEach(t => t.stop());
-        room!.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted);
       }
     }
 

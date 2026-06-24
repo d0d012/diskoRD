@@ -1,99 +1,45 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
+import { loadModel, type LoadedModel } from "fastenhancer-web";
 import { useVoiceStore } from "../stores/voiceStore";
 import { storage } from "../lib/storage";
 
-// The @jitsi/rnnoise-wasm module exposes raw Emscripten WASM bindings.
-// After calling createRNNWasmModule(), wait for .ready to get the Module, which
-// exposes: _rnnoise_create(), _rnnoise_init(st), _rnnoise_destroy(st),
-//          _rnnoise_process_frame(st, ptr) where ptr is a HEAPF32 pointer,
-//          _malloc(bytes), _free(ptr), HEAPF32.
-// _rnnoise_process_frame writes denoised audio back into ptr in-place and
-// returns a float VAD probability (unused here).
+// Noise cancellation via FastEnhancer (ICASSP 2026) — a neural speech
+// enhancer running client-side in an AudioWorklet (WASM SIMD, scalar
+// fallback). Far stronger than RNNoise at non-stationary noise (fans,
+// breathing, mouth sounds). The WASM + weights are embedded in the package
+// (zero-config, nothing to self-host), so it works offline in Tauri.
+//
+// "small" is the highest-quality model (~780KB, ~3.9ms/frame).
+const MODEL_SIZE = "small" as const;
 
-interface RNNoiseEmscriptenModule {
-  _rnnoise_create: () => number;
-  _rnnoise_init: (state: number) => void;
-  _rnnoise_destroy: (state: number) => void;
-  _rnnoise_process_frame: (state: number, ptr: number) => number;
-  _malloc: (bytes: number) => number;
-  _free: (ptr: number) => void;
-  HEAPF32: Float32Array;
+// loadModel() caches per-args internally, but keep a module-level handle so we
+// never even re-enter it.
+let modelPromise: Promise<LoadedModel> | null = null;
+function getModel(): Promise<LoadedModel> {
+  if (!modelPromise) modelPromise = loadModel(MODEL_SIZE);
+  return modelPromise;
 }
 
-const FRAME_SIZE = 480;
-const SAMPLE_RATE = 48000;
-
-async function applyRNNoise(
-  rawStream: MediaStream,
-  mod: RNNoiseEmscriptenModule
+async function applyFastEnhancer(
+  rawStream: MediaStream
 ): Promise<{ stream: MediaStream; cleanup: () => void }> {
-  const state = mod._rnnoise_create();
-  mod._rnnoise_init(state);
+  const model = await getModel();
 
-  // Allocate a persistent WASM-side buffer for one frame (480 float32 = 1920 bytes)
-  const ptr = mod._malloc(FRAME_SIZE * 4);
+  const denoiser = await model.createStreamDenoiser(rawStream, {
+    onWarning: (m) => console.warn("[NC] FastEnhancer warning:", m),
+    onAutoBypass: (enabled) =>
+      console.warn("[NC] FastEnhancer auto-bypass:", enabled),
+  });
 
-  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
-  const source = ctx.createMediaStreamSource(rawStream);
-  // 512 is the smallest power-of-2 buffer, closest to the 480-sample RNNoise frame
-  const processor = ctx.createScriptProcessor(512, 1, 1);
-  const dest = ctx.createMediaStreamDestination();
-
-  let leftover = new Float32Array(0);
-
-  processor.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0);
-    const output = e.outputBuffer.getChannelData(0);
-
-    const combined = new Float32Array(leftover.length + input.length);
-    combined.set(leftover);
-    combined.set(input, leftover.length);
-
-    const processed = new Float32Array(combined.length);
-    let offset = 0;
-
-    while (offset + FRAME_SIZE <= combined.length) {
-      const frame = combined.subarray(offset, offset + FRAME_SIZE);
-      // Copy frame into WASM heap
-      mod.HEAPF32.set(frame, ptr >> 2);
-      // Process in-place; result written back to WASM heap
-      mod._rnnoise_process_frame(state, ptr);
-      // Copy result out of WASM heap
-      processed.set(mod.HEAPF32.subarray(ptr >> 2, (ptr >> 2) + FRAME_SIZE), offset);
-      offset += FRAME_SIZE;
-    }
-
-    leftover = combined.slice(offset);
-    output.set(processed.subarray(0, output.length));
+  return {
+    stream: denoiser.outputStream,
+    cleanup: () => denoiser.destroy(),
   };
-
-  source.connect(processor);
-  processor.connect(dest);
-
-  const cleanup = () => {
-    processor.disconnect();
-    source.disconnect();
-    ctx.close();
-    mod._rnnoise_destroy(state);
-    mod._free(ptr);
-  };
-
-  return { stream: dest.stream, cleanup };
 }
 
 export function useNoiseCancellation() {
   const { isNoiseCancellationEnabled, setNoiseCancellationEnabled } =
     useVoiceStore();
-  const modRef = useRef<Promise<RNNoiseEmscriptenModule> | null>(null);
-
-  const loadRNNoise = useCallback(async (): Promise<RNNoiseEmscriptenModule> => {
-    if (!modRef.current) {
-      modRef.current = import("@jitsi/rnnoise-wasm").then(
-        (mod) => mod.default()
-      );
-    }
-    return modRef.current;
-  }, []);
 
   const processStream = useCallback(
     async (
@@ -103,15 +49,13 @@ export function useNoiseCancellation() {
         return { stream: raw, cleanup: () => {} };
       }
       try {
-        const mod = await loadRNNoise();
-        return applyRNNoise(raw, mod);
-      } catch {
-        // @jitsi/rnnoise-wasm failed to load (e.g. WASM not supported); pass stream through
-        console.warn("useNoiseCancellation: @jitsi/rnnoise-wasm failed to load, passing stream through");
+        return await applyFastEnhancer(raw);
+      } catch (e) {
+        console.error("[NC] Failed to apply FastEnhancer:", e);
         return { stream: raw, cleanup: () => {} };
       }
     },
-    [isNoiseCancellationEnabled, loadRNNoise]
+    [isNoiseCancellationEnabled]
   );
 
   const toggle = useCallback(async () => {
