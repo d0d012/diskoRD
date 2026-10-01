@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useGuildStore } from "../../stores/guildStore";
 import { useAuthStore } from "../../stores/authStore";
+import { parseInviteCode, goToInvite } from "../../lib/inviteLinks";
 
 interface CreateGuildModalProps {
   onClose: () => void;
@@ -12,7 +13,15 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
   const [name, setName] = useState(`${user?.username ?? "User"}'s server`);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [inviteInput, setInviteInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const inviteCode = parseInviteCode(inviteInput);
+  const handleJoin = () => {
+    if (!inviteCode) return;
+    onClose();
+    goToInvite(inviteCode);
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -129,6 +138,34 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
             </span>
             .
           </p>
+
+          <div className="mb-5 pt-4" style={{ borderTop: "1px solid var(--color-dc-bg-floating)" }}>
+            <label
+              className="block text-xs font-bold uppercase tracking-wide mb-2"
+              style={{ color: "var(--color-dc-header-secondary)" }}
+            >
+              Have an invite already?
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inviteInput}
+                onChange={(e) => setInviteInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                placeholder="Paste an invite link or code"
+                className="flex-1 px-3 py-2 rounded text-sm outline-none"
+                style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
+              />
+              <button
+                onClick={handleJoin}
+                disabled={!inviteCode}
+                className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-dc-brand)" }}
+              >
+                Join
+              </button>
+            </div>
+          </div>
 
           <div className="flex justify-between items-center">
             <button

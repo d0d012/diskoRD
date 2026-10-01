@@ -3,12 +3,10 @@ import { useCallStore } from "../../stores/callStore";
 import { MessageList } from "../message/MessageList";
 import { MessageInput } from "../message/MessageInput";
 import { PresenceDot } from "../../components/ui/PresenceDot";
-import { DMCallPanel } from "../call/DMCallPanel";
-import { useGateway } from "../../hooks/useGateway";
+import { sendGatewayTyping } from "../../hooks/useGateway";
 
 export function DMConversation() {
   const { dms, activeDMId } = useFriendStore();
-  const { sendTyping } = useGateway();
   const { state: callState, call, initiateCall } = useCallStore();
 
   const dm = dms.find((d) => d.id === activeDMId);
@@ -62,16 +60,13 @@ export function DMConversation() {
         )}
       </div>
 
-      {/* Compact call panel — shown above chat when in-call in this DM */}
-      {inCallHere && <DMCallPanel />}
-
       <MessageList channelId={dm.id} channelName={dm.recipient.username} />
 
       <MessageInput
         channelId={dm.id}
         guildId=""
         channelName={dm.recipient.username}
-        onTyping={sendTyping}
+        onTyping={sendGatewayTyping}
       />
     </div>
   );

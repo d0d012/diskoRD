@@ -1,12 +1,15 @@
 import { useEffect } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useMessageStore } from "../../stores/messageStore";
 import { PresenceDot } from "../../components/ui/PresenceDot";
 import { VoiceStatusBar } from "../voice/VoiceStatusBar";
 
 export function FriendsSidebar() {
   const { dms, activeDMId, setActiveDM, fetchDMs, requests } = useFriendStore();
   const { user, logout } = useAuthStore();
+  const unreadCounts = useMessageStore((s) => s.unreadCounts);
+  const markRead = useMessageStore((s) => s.markRead);
   const pendingCount = requests.filter((r) => r.direction === "incoming").length;
 
   useEffect(() => {
@@ -63,7 +66,10 @@ export function FriendsSidebar() {
             {dms.map((dm) => (
               <button
                 key={dm.id}
-                onClick={() => setActiveDM(dm.id)}
+                onClick={() => {
+                  setActiveDM(dm.id);
+                  markRead(dm.id);
+                }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors"
                 style={{
                   backgroundColor: activeDMId === dm.id ? "var(--color-dc-bg-modifier-selected)" : "transparent",
@@ -87,7 +93,15 @@ export function FriendsSidebar() {
                   </div>
                   <PresenceDot status={dm.recipient.status} size={10} borderColor="var(--color-dc-bg-secondary)" />
                 </div>
-                <span className="truncate font-medium">{dm.recipient.username}</span>
+                <span className="truncate font-medium flex-1 text-left">{dm.recipient.username}</span>
+                {unreadCounts[dm.id] > 0 && activeDMId !== dm.id && (
+                  <span
+                    className="min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white text-xs"
+                    style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px" }}
+                  >
+                    {unreadCounts[dm.id] > 99 ? "99+" : unreadCounts[dm.id]}
+                  </span>
+                )}
               </button>
             ))}
           </div>

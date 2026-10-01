@@ -149,10 +149,22 @@ export function MembersPanel() {
 
   useEffect(() => {
     if (!activeGuildId) return;
-    api.get(`/guilds/${activeGuildId}/members`)
-      .then(({ data }) => setMembers(data.data ?? []))
-      .catch(() => {});
-    fetchRoles(activeGuildId);
+
+    function refreshMembers() {
+      api.get(`/guilds/${activeGuildId}/members`)
+        .then(({ data }) => setMembers(data.data ?? []))
+        .catch(() => {});
+      fetchRoles(activeGuildId!);
+    }
+
+    function handleMembersChanged(event: Event) {
+      const detail = (event as CustomEvent<{ guildId?: string }>).detail;
+      if (!detail?.guildId || detail.guildId === activeGuildId) refreshMembers();
+    }
+
+    refreshMembers();
+    window.addEventListener("diskord:guild-members-changed", handleMembersChanged);
+    return () => window.removeEventListener("diskord:guild-members-changed", handleMembersChanged);
   }, [activeGuildId]);
 
   if (!activeGuildId) return null;

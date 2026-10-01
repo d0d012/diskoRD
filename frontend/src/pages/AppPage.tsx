@@ -3,7 +3,7 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { TitleBar } from "../components/layout/TitleBar";
 import { useGuildStore } from "../stores/guildStore";
 import { useFriendStore } from "../stores/friendStore";
-import { useGateway } from "../hooks/useGateway";
+import { sendGatewayTyping, useGateway } from "../hooks/useGateway";
 import { useVoice } from "../hooks/useVoice";
 import { MessageList } from "../features/message/MessageList";
 import { MessageInput } from "../features/message/MessageInput";
@@ -14,6 +14,7 @@ import { GlobalVoiceAudio } from "../features/voice/GlobalVoiceAudio";
 import { NotificationToastContainer } from "../features/notification/NotificationToast";
 import { IncomingCallOverlay } from "../features/call/IncomingCallOverlay";
 import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
+import { DMCallPanel } from "../features/call/DMCallPanel";
 
 function EmptyState() {
   return (
@@ -44,7 +45,6 @@ function EmptyState() {
 
 function ChannelView({ channelId }: { channelId: string }) {
   const { channels, activeGuildId } = useGuildStore();
-  const { sendTyping } = useGateway();
   const guildChannels = activeGuildId ? (channels[activeGuildId] ?? []) : [];
   const channel = guildChannels.find((c) => c.id === channelId);
   const channelName = channel?.name ?? channelId;
@@ -73,7 +73,7 @@ function ChannelView({ channelId }: { channelId: string }) {
         channelId={channelId}
         guildId={activeGuildId ?? ""}
         channelName={channelName}
-        onTyping={sendTyping}
+        onTyping={sendGatewayTyping}
       />
     </div>
   );
@@ -108,6 +108,7 @@ export function AppPage() {
       <NotificationToastContainer />
       <IncomingCallOverlay />
       <OutgoingCallOverlay />
+      <DMCallPanel />
       <TitleBar />
       <div className="flex-1 overflow-hidden">
         <MainLayout>

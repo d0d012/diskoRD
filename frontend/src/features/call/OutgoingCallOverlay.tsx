@@ -1,7 +1,15 @@
+import { useEffect } from "react";
 import { useCallStore } from "../../stores/callStore";
+import { startLoop, stopLoop } from "../../lib/sounds";
 
 export function OutgoingCallOverlay() {
   const { state, call, cancelCall } = useCallStore();
+
+  useEffect(() => {
+    if (state !== "calling") return;
+    startLoop("call", 0.3);
+    return stopLoop;
+  }, [state]);
 
   if (state !== "calling" || !call) return null;
 

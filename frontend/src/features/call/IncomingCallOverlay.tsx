@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useCallStore } from "../../stores/callStore";
-import { playSound } from "../../lib/sounds";
+import { startLoop, stopLoop } from "../../lib/sounds";
 
 export function IncomingCallOverlay() {
   const { state, call, acceptCall, declineCall } = useCallStore();
 
   useEffect(() => {
     if (state !== "ringing") return;
-    playSound("notification");
+    startLoop("call");
+    return stopLoop;
   }, [state]);
 
   if (state !== "ringing" || !call) return null;

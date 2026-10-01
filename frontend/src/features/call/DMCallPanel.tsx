@@ -9,6 +9,9 @@ import {
   LocalAudioTrack,
 } from "livekit-client";
 import { useCallStore } from "../../stores/callStore";
+import { useAuthStore } from "../../stores/authStore";
+import { apiBaseURL } from "../../lib/api";
+import { GlobalVoiceAudio } from "../voice/GlobalVoiceAudio";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ParticipantTile } from "../voice/ParticipantTile";
@@ -45,7 +48,7 @@ function buildParticipant(p: Participant, isLocal: boolean): VoiceParticipant {
 }
 
 export function DMCallPanel() {
-  const { state, call, endCall } = useCallStore();
+  const { state, call, endCall, keepalive, notice, setNotice } = useCallStore();
   const { isMuted, setMuted, isNoiseCancellationEnabled } = useVoiceStore();
   const { processStream, isEnabled: isNCEnabled, toggle: toggleNC } = useNoiseCancellation();
 
@@ -63,16 +66,72 @@ export function DMCallPanel() {
     setParticipants(list);
   }, []);
 
+  // Auto-dismiss notices (errors, "No answer", …)
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [notice, setNotice]);
+
+  // Keep the server-side call alive; the server reaps calls whose clients vanished.
+  const channelId = call?.channelId;
+  useEffect(() => {
+    if (state !== "in-call" || !channelId) return;
+    const t = setInterval(() => void keepalive(channelId), 30_000);
+    return () => clearInterval(t);
+  }, [state, channelId, keepalive]);
+
+  // Closing the window mid-call: tell the server so the other side isn't left alone.
+  useEffect(() => {
+    if (state !== "in-call" || !channelId) return;
+    function onPageHide() {
+      const token = useAuthStore.getState().accessToken;
+      if (!token) return;
+      void fetch(`${apiBaseURL}/dms/${channelId}/call/end`, {
+        method: "POST",
+        keepalive: true,
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [state, channelId]);
+
   // Connect when in-call
   useEffect(() => {
     if (state !== "in-call" || !call?.token || !call?.url) return;
 
+    let cancelled = false;
+    let hadRemote = false;
+    let aloneTimer: ReturnType<typeof setTimeout> | null = null;
+    const callChannelId = call.channelId;
+
     const room = new Room();
     roomRef.current = room;
 
+    // If the other person drops out of the room for good, hang up.
+    function checkAlone() {
+      if (aloneTimer) clearTimeout(aloneTimer);
+      aloneTimer = null;
+      if (hadRemote && room.remoteParticipants.size === 0) {
+        aloneTimer = setTimeout(() => {
+          if (!cancelled && room.remoteParticipants.size === 0) {
+            useCallStore.getState().endCall(callChannelId);
+          }
+        }, 5000);
+      }
+    }
+
     room.on(RoomEvent.ConnectionStateChanged, (s: ConnectionState) => setConnState(s));
-    room.on(RoomEvent.ParticipantConnected, refresh);
-    room.on(RoomEvent.ParticipantDisconnected, refresh);
+    room.on(RoomEvent.ParticipantConnected, () => {
+      hadRemote = true;
+      checkAlone();
+      refresh();
+    });
+    room.on(RoomEvent.ParticipantDisconnected, () => {
+      checkAlone();
+      refresh();
+    });
     room.on(RoomEvent.TrackSubscribed, refresh);
     room.on(RoomEvent.TrackUnsubscribed, refresh);
     room.on(RoomEvent.TrackMuted, refresh);
@@ -84,27 +143,39 @@ export function DMCallPanel() {
     });
 
     room.connect(call.url, call.token).then(async () => {
+      if (cancelled) { room.disconnect(); return; }
+      if (room.remoteParticipants.size > 0) hadRemote = true;
       try {
         const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { rawStream.getTracks().forEach((t) => t.stop()); return; }
         const { stream: processedStream, cleanup } = await processStream(rawStream);
+        if (cancelled) { cleanup(); rawStream.getTracks().forEach((t) => t.stop()); return; }
         ncCleanupRef.current = cleanup;
         const processedTrack = processedStream.getAudioTracks()[0];
         const livekitTrack = new LocalAudioTrack(processedTrack, undefined, false);
         await room.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
       } catch {
-        room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+        room.localParticipant.setMicrophoneEnabled(true).catch(() => {
+          useCallStore.getState().setNotice("Couldn't access your microphone");
+        });
       }
       refresh();
+    }).catch(() => {
+      if (cancelled) return;
+      useCallStore.getState().setNotice("Couldn't connect to the call");
+      useCallStore.getState().endCall(callChannelId);
     });
 
     return () => {
+      cancelled = true;
+      if (aloneTimer) clearTimeout(aloneTimer);
       ncCleanupRef.current?.();
       ncCleanupRef.current = null;
       room.disconnect();
       roomRef.current = null;
       setParticipants([]);
     };
-  }, [state, call?.token, call?.url, refresh, processStream]);
+  }, [state, call?.token, call?.url, refresh, processStream]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync mute state
   useEffect(() => {
@@ -149,7 +220,17 @@ export function DMCallPanel() {
     return () => { cancelled = true; };
   }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (state !== "in-call" || !call) return null;
+  const noticeToast = notice ? (
+    <div
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-2 rounded-md text-sm font-medium shadow-lg"
+      style={{ backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-header-primary)" }}
+      role="status"
+    >
+      {notice}
+    </div>
+  ) : null;
+
+  if (state !== "in-call" || !call) return noticeToast;
 
   const tiles = buildTiles(participants);
   const isConnecting = connState === ConnectionState.Connecting || connState === ConnectionState.Reconnecting;
@@ -160,13 +241,16 @@ export function DMCallPanel() {
 
   return (
     <>
+      {noticeToast}
+      <GlobalVoiceAudio participants={participants} />
       {fullscreenTile && (
         <FullscreenOverlay tile={fullscreenTile} onClose={() => setFullscreenTile(null)} />
       )}
 
       <div
-        className="flex flex-col border-b flex-shrink-0"
+        className="fixed bottom-4 right-4 z-[9000] flex flex-col rounded-lg overflow-hidden shadow-2xl border"
         style={{
+          width: 340,
           backgroundColor: "var(--color-dc-bg-secondary)",
           borderColor: "var(--color-dc-bg-floating)",
           minHeight: 160,
@@ -181,7 +265,7 @@ export function DMCallPanel() {
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "#23a55a" }} />
             <span className="text-xs font-medium" style={{ color: "var(--color-dc-header-primary)" }}>
-              {isConnecting ? "Connecting…" : "Voice Connected"}
+              {isConnecting ? "Connecting…" : `In call with ${call.recipientName}`}
             </span>
           </div>
 

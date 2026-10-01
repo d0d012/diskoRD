@@ -18,6 +18,7 @@
     "store:allow-load",
     "store:allow-save",
     "updater:allow-check",
-    "updater:allow-download-and-install"
+    "updater:allow-download-and-install",
+    "deep-link:default"
   ]
 }

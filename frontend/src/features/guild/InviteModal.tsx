@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGuildStore } from "../../stores/guildStore";
+import { buildInviteUrl } from "../../lib/inviteLinks";
 
 interface InviteModalProps {
   guildId: string;
@@ -26,7 +27,7 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
       });
   }, [guildId]);
 
-  const inviteUrl = code ? `${window.location.origin}/invite/${code}` : "";
+  const inviteUrl = code ? buildInviteUrl(code) : "";
 
   const handleCopy = () => {
     if (!inviteUrl) return;

@@ -11,6 +11,13 @@ vi.mock("../lib/api", () => ({
     get: vi.fn(),
     patch: vi.fn(),
   },
+  setToken: vi.fn(),
+  setSessionHandlers: vi.fn(),
+  refreshSession: vi.fn(),
+  isTokenFresh: vi.fn(),
+  startSessionKeeper: vi.fn(),
+  stopSessionKeeper: vi.fn(),
+  SessionExpiredError: class SessionExpiredError extends Error {},
 }));
 
 describe("messageStore reactions", () => {

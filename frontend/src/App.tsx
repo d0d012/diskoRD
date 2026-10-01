@@ -7,6 +7,7 @@ import { InvitePage } from "./pages/InvitePage";
 import { useAuthStore } from "./stores/authStore";
 import { useUpdater } from "./hooks/useUpdater";
 import { useNoiseCancellation } from "./hooks/useNoiseCancellation";
+import { useDeepLinks } from "./hooks/useDeepLinks";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
@@ -74,6 +75,7 @@ export function App() {
   const { initialize, isInitialized } = useAuthStore();
   const { updateReady, updateVersion, restartApp } = useUpdater();
   const { loadPersistedPreference } = useNoiseCancellation();
+  useDeepLinks();
 
   useEffect(() => {
     initialize();

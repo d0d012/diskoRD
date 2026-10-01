@@ -9,14 +9,21 @@ interface Props {
   onClose: () => void;
 }
 
-type NavSection = "roles" | "danger";
+type NavSection = "overview" | "roles" | "danger";
 
 export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Props) {
-  const [activeSection, setActiveSection] = useState<NavSection>("roles");
+  const [activeSection, setActiveSection] = useState<NavSection>("overview");
+  const [name, setName] = useState(guildName);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const { deleteGuild } = useGuildStore();
+  const { deleteGuild, updateGuild } = useGuildStore();
+
+  useEffect(() => {
+    setName(guildName);
+  }, [guildName]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -28,6 +35,21 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, showConfirm]);
+
+  async function handleSaveOverview() {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === guildName || saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await updateGuild(guildId, { name: trimmed });
+    } catch {
+      setSaveError("Failed to update server. Please try again.");
+      setName(guildName);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleDeleteConfirm() {
     setDeleting(true);
@@ -53,8 +75,14 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
           {guildName}
         </p>
 
-        {/* User Management section */}
+        {/* Server Management section */}
         <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
+          Server Management
+        </p>
+        <NavItem label="Overview" active={activeSection === "overview"} onClick={() => setActiveSection("overview")} />
+
+        {/* User Management section */}
+        <p className="px-3 mt-4 mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
           User Management
         </p>
         <NavItem label="Roles" active={activeSection === "roles"} onClick={() => setActiveSection("roles")} />
@@ -78,7 +106,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-5 flex-shrink-0 border-b" style={{ borderColor: "var(--color-dc-bg-floating)" }}>
           <h2 className="text-lg font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
-            {activeSection === "roles" ? "Roles" : "Delete Server"}
+            {activeSection === "overview" ? "Overview" : activeSection === "roles" ? "Roles" : "Delete Server"}
           </h2>
           <button
             onClick={onClose}
@@ -95,6 +123,34 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
 
         {/* Panel content */}
         <div className="flex-1 overflow-hidden">
+          {activeSection === "overview" && (
+            <div className="p-8 max-w-lg">
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-dc-text-muted)" }}>
+                Server Name
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={!isOwner || saving}
+                className="w-full px-3 py-2 rounded text-sm outline-none mb-3"
+                style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
+              />
+              {saveError && <p className="text-sm mb-3" style={{ color: "var(--color-dc-red, #ed4245)" }}>{saveError}</p>}
+              {isOwner ? (
+                <button
+                  onClick={handleSaveOverview}
+                  disabled={saving || !name.trim() || name.trim() === guildName}
+                  className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-dc-brand)" }}
+                >
+                  {saving ? "Saving…" : "Save Changes"}
+                </button>
+              ) : (
+                <p className="text-sm" style={{ color: "var(--color-dc-text-muted)" }}>Only the server owner can update server settings.</p>
+              )}
+            </div>
+          )}
+
           {activeSection === "roles" && <RolesSettings guildId={guildId} />}
 
           {activeSection === "danger" && isOwner && (

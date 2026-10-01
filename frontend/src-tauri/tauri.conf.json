@@ -40,7 +40,8 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
@@ -48,6 +49,13 @@
       "endpoints": [
         "https://github.com/d0d012/diskoRD/releases/latest/download/latest.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "diskord"
+        ]
+      }
     }
   }
 }

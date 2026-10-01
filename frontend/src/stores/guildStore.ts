@@ -15,6 +15,7 @@ interface GuildStore {
   setActiveChannel: (channelId: string) => void;
   fetchGuilds: () => Promise<void>;
   createGuild: (name: string) => Promise<Guild & { channels: Channel[] }>;
+  updateGuild: (guildId: string, patch: Partial<Pick<Guild, "name" | "iconUrl">>) => Promise<Guild>;
   deleteGuild: (guildId: string) => Promise<void>;
   fetchChannels: (guildId: string) => Promise<Channel[]>;
   createInvite: (guildId: string) => Promise<string>;
@@ -30,6 +31,10 @@ interface GuildStore {
   assignRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
   removeRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
   // Real-time updates from gateway
+  upsertGuild: (guild: Guild) => void;
+  removeGuildById: (guildId: string) => void;
+  upsertChannel: (channel: Channel) => void;
+  removeChannelById: (guildId: string, channelId: string) => void;
   upsertRole: (guildId: string, role: GuildRole) => void;
   removeRoleById: (guildId: string, roleId: string) => void;
 }
@@ -95,6 +100,13 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
     return guild;
   },
 
+  updateGuild: async (guildId: string, patch) => {
+    const { data } = await api.patch(`/guilds/${guildId}`, patch);
+    const guild: Guild = data.data;
+    get().upsertGuild(guild);
+    return guild;
+  },
+
   deleteGuild: async (guildId: string) => {
     await api.delete(`/guilds/${guildId}`);
     set((s) => {
@@ -129,12 +141,8 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   createChannel: async (guildId: string, name: string, type: "text" | "voice") => {
     const { data } = await api.post(`/guilds/${guildId}/channels`, { name, type });
     const channel: Channel = data.data;
-    set((s) => ({
-      channels: {
-        ...s.channels,
-        [guildId]: [...(s.channels[guildId] ?? []), channel],
-      },
-    }));
+    // The CHANNEL_CREATE gateway event may already have added it — upsert, don't append.
+    get().upsertChannel(channel);
     return channel;
   },
 
@@ -218,6 +226,61 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
 
   removeRole: async (guildId: string, userId: string, roleId: string) => {
     await api.delete(`/guilds/${guildId}/members/${userId}/roles/${roleId}`);
+  },
+
+  upsertGuild: (guild: Guild) => {
+    set((s) => {
+      const idx = s.guilds.findIndex((g) => g.id === guild.id);
+      const guilds = idx >= 0
+        ? s.guilds.map((g) => g.id === guild.id ? { ...g, ...guild } : g)
+        : [guild, ...s.guilds];
+      return { guilds };
+    });
+  },
+
+  removeGuildById: (guildId: string) => {
+    set((s) => {
+      for (const channel of s.channels[guildId] ?? []) {
+        useMessageStore.getState().clearChannel(channel.id);
+      }
+      const { [guildId]: _removedChannels, ...remainingChannels } = s.channels;
+      const { [guildId]: _removedRoles, ...remainingRoles } = s.roles;
+      return {
+        guilds: s.guilds.filter((g) => g.id !== guildId),
+        activeGuildId: s.activeGuildId === guildId ? null : s.activeGuildId,
+        activeChannelId: s.activeGuildId === guildId ? null : s.activeChannelId,
+        channels: remainingChannels,
+        roles: remainingRoles,
+      };
+    });
+  },
+
+  upsertChannel: (channel: Channel) => {
+    set((s) => {
+      const existing = s.channels[channel.guildId] ?? [];
+      const idx = existing.findIndex((c) => c.id === channel.id);
+      const updated = idx >= 0
+        ? existing.map((c) => c.id === channel.id ? channel : c)
+        : [...existing, channel];
+      return {
+        channels: {
+          ...s.channels,
+          [channel.guildId]: updated.sort((a, b) => a.position - b.position),
+        },
+      };
+    });
+  },
+
+  removeChannelById: (guildId: string, channelId: string) => {
+    set((s) => {
+      const updated = (s.channels[guildId] ?? []).filter((c) => c.id !== channelId);
+      return {
+        channels: { ...s.channels, [guildId]: updated },
+        activeChannelId: s.activeChannelId === channelId
+          ? (updated.find((c) => c.type === "text")?.id ?? null)
+          : s.activeChannelId,
+      };
+    });
   },
 
   upsertRole: (guildId: string, role: GuildRole) => {

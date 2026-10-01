@@ -42,6 +42,7 @@ interface FriendStore {
   addRequest: (req: FriendRequest) => void;
   onFriendAccepted: (friendshipId: string) => void;
   onFriendDeclined: (friendshipId: string) => void;
+  onFriendRemoved: (userId?: string) => void;
 }
 
 export const useFriendStore = create<FriendStore>((set, get) => ({
@@ -82,7 +83,7 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
 
   removeFriend: async (friendshipId) => {
     await api.delete(`/friends/${friendshipId}`);
-    set((s) => ({ friends: s.friends.filter((f) => f.id !== friendshipId) }));
+    get().fetchFriends();
   },
 
   openDM: async (userId) => {
@@ -131,6 +132,16 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
   onFriendDeclined: (friendshipId) => {
     set((s) => ({
       requests: s.requests.filter((r) => r.id !== friendshipId),
+    }));
+  },
+
+  onFriendRemoved: (userId) => {
+    if (!userId) {
+      get().fetchFriends();
+      return;
+    }
+    set((s) => ({
+      friends: s.friends.filter((f) => f.id !== userId),
     }));
   },
 }));

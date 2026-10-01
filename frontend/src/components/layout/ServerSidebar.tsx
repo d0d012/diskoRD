@@ -1,21 +1,24 @@
 import { useState } from "react";
 import { useGuildStore } from "../../stores/guildStore";
+import { useMessageStore } from "../../stores/messageStore";
 import { CreateGuildModal } from "../../features/guild/CreateGuildModal";
 import type { Guild } from "../../types";
 
 interface ServerIconProps {
   guild: Guild;
   active: boolean;
+  unread: boolean;
+  mentionCount: number;
   onClick: () => void;
 }
 
-function ServerIcon({ guild, active, onClick }: ServerIconProps) {
+function ServerIcon({ guild, active, unread, mentionCount, onClick }: ServerIconProps) {
   return (
     <div className="relative flex items-center mb-2 group" onClick={onClick}>
       {/* Active indicator pill */}
       <div
         className={`absolute -left-3 w-1 rounded-r-full bg-white transition-all duration-200 ${
-          active ? "h-10" : "h-0 group-hover:h-5"
+          active ? "h-10" : unread ? "h-2 group-hover:h-5" : "h-0 group-hover:h-5"
         }`}
       />
       <div
@@ -38,6 +41,15 @@ function ServerIcon({ guild, active, onClick }: ServerIconProps) {
           </span>
         )}
       </div>
+      {/* Mention badge */}
+      {mentionCount > 0 && !active && (
+        <div
+          className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white font-bold pointer-events-none"
+          style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", border: "2px solid var(--color-dc-bg-tertiary)" }}
+        >
+          {mentionCount > 99 ? "99+" : mentionCount}
+        </div>
+      )}
       {/* Tooltip */}
       <div
         className="absolute left-16 z-50 px-3 py-1.5 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap text-sm font-semibold"
@@ -92,6 +104,17 @@ function HomeButton({ active, onClick }: { active: boolean; onClick: () => void 
 export function ServerSidebar() {
   const { guilds, activeGuildId, setActiveGuild } = useGuildStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const unreadChannels = useMessageStore((s) => s.unreadChannels);
+  const mentionCounts = useMessageStore((s) => s.mentionCounts);
+  const channelGuilds = useMessageStore((s) => s.channelGuilds);
+
+  // Aggregate per-channel unread/mention state up to the guild.
+  const guildUnread: Record<string, boolean> = {};
+  const guildMentions: Record<string, number> = {};
+  for (const [channelId, guildId] of Object.entries(channelGuilds)) {
+    if (unreadChannels[channelId]) guildUnread[guildId] = true;
+    if (mentionCounts[channelId]) guildMentions[guildId] = (guildMentions[guildId] ?? 0) + mentionCounts[channelId];
+  }
 
   return (
     <>
@@ -106,6 +129,8 @@ export function ServerSidebar() {
             key={guild.id}
             guild={guild}
             active={activeGuildId === guild.id}
+            unread={!!guildUnread[guild.id]}
+            mentionCount={guildMentions[guild.id] ?? 0}
             onClick={() => setActiveGuild(guild.id)}
           />
         ))}

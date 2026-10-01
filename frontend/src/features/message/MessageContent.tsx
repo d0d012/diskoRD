@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { parseInviteCode, goToInvite } from "../../lib/inviteLinks";
+
+/** Invite links open inside the app instead of a browser tab. */
+function openInApp(e: React.MouseEvent, url: string) {
+  const code = parseInviteCode(url);
+  if (code && /^https?:/i.test(url)) {
+    e.preventDefault();
+    goToInvite(code);
+  }
+}
 
 // ── URL detection helpers ───────────────────────────────────────────────────
 
@@ -52,6 +62,7 @@ function LinkPreview({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => openInApp(e, url)}
       className="flex mt-2 rounded-lg overflow-hidden max-w-sm no-underline hover:opacity-90 transition-opacity"
       style={{ border: "1px solid var(--color-dc-bg-floating)", backgroundColor: "var(--color-dc-bg-secondary)", textDecoration: "none" }}
     >
@@ -193,6 +204,7 @@ export function MessageContent({ content, attachments }: Props) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={(e) => openInApp(e, url)}
           style={{ color: "var(--color-dc-text-link, #00b0f4)" }}
           className="hover:underline"
         >

@@ -10,7 +10,8 @@ interface FieldError {
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-const [errors, setErrors] = useState<FieldError>({});
+const [rememberMe, setRememberMe] = useState(true);
+  const [errors, setErrors] = useState<FieldError>({});
   const [shaking, setShaking] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ const [errors, setErrors] = useState<FieldError>({});
     }
 
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, rememberMe);
       navigate(returnTo);
     } catch {
       setErrors({ password: "Invalid email or password." });
@@ -120,6 +121,15 @@ const [errors, setErrors] = useState<FieldError>({});
                 }}
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--color-dc-header-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              Keep me logged in
+            </label>
 
             <button
               type="submit"

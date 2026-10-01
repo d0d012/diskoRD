@@ -14,6 +14,8 @@ interface MessageStore {
   hasMore: Record<string, boolean>;
   typingUsers: Record<string, TypingUser[]>;
   unreadChannels: Record<string, boolean>; // channelId → has unread
+  unreadCounts: Record<string, number>;    // channelId → unread message count
+  channelGuilds: Record<string, string>;   // channelId → guildId (learned from incoming messages)
   mentionCounts: Record<string, number>;   // channelId → mention count
 
   fetchMessages: (channelId: string, beforeId?: string) => Promise<void>;
@@ -39,6 +41,8 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   hasMore: {},
   typingUsers: {},
   unreadChannels: {},
+  unreadCounts: {},
+  channelGuilds: {},
   mentionCounts: {},
 
   fetchMessages: async (channelId, beforeId) => {
@@ -77,17 +81,30 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   addMessage: (msg, activeChannelId, currentUserId) => {
     set((s) => {
       const existing = s.messages[msg.channelId] ?? [];
-      if (existing.some((m) => m.id === msg.id)) return s;
+      if (existing.some((m) => m.id === msg.id)) {
+        return {
+          messages: {
+            ...s.messages,
+            [msg.channelId]: existing.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+          },
+        };
+      }
 
       const isActive = msg.channelId === activeChannelId;
 
-      // Mark unread if not in the active channel
-      const unread = !isActive
+      const isOwnMessage = !!currentUserId && msg.author?.id === currentUserId;
+
+      // Mark unread if not in the active channel and not authored by the current user
+      const shouldMarkUnread = !isActive && !isOwnMessage;
+      const unread = shouldMarkUnread
         ? { ...s.unreadChannels, [msg.channelId]: true }
         : s.unreadChannels;
+      const unreadCounts = shouldMarkUnread
+        ? { ...s.unreadCounts, [msg.channelId]: (s.unreadCounts[msg.channelId] ?? 0) + 1 }
+        : s.unreadCounts;
 
       // Track mention count
-      const isMentioned = !isActive && !!currentUserId && (msg.mentions ?? []).includes(currentUserId);
+      const isMentioned = shouldMarkUnread && !!currentUserId && (msg.mentions ?? []).includes(currentUserId);
       const mentionCounts = isMentioned
         ? { ...s.mentionCounts, [msg.channelId]: (s.mentionCounts[msg.channelId] ?? 0) + 1 }
         : s.mentionCounts;
@@ -97,9 +114,16 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         (u) => u.userId !== msg.author?.id
       );
 
+      const channelGuilds =
+        msg.guildId && s.channelGuilds[msg.channelId] !== msg.guildId
+          ? { ...s.channelGuilds, [msg.channelId]: msg.guildId }
+          : s.channelGuilds;
+
       return {
+        channelGuilds,
         messages: { ...s.messages, [msg.channelId]: [...existing, msg] },
         unreadChannels: unread,
+        unreadCounts,
         mentionCounts,
         typingUsers: { ...s.typingUsers, [msg.channelId]: typing },
       };
@@ -269,12 +293,14 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
   markRead: (channelId) => {
     set((s) => {
-      if (!s.unreadChannels[channelId] && !s.mentionCounts[channelId]) return s;
+      if (!s.unreadChannels[channelId] && !s.unreadCounts[channelId] && !s.mentionCounts[channelId]) return s;
       const unread = { ...s.unreadChannels };
+      const unreadCounts = { ...s.unreadCounts };
       const mentions = { ...s.mentionCounts };
       delete unread[channelId];
+      delete unreadCounts[channelId];
       delete mentions[channelId];
-      return { unreadChannels: unread, mentionCounts: mentions };
+      return { unreadChannels: unread, unreadCounts, mentionCounts: mentions };
     });
   },
 

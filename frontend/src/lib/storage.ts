@@ -26,6 +26,7 @@ export const storage = {
     if (isTauri()) {
       const s = await tauriStore();
       await s.set(key, value);
+      await s.save(); // flush immediately — refresh tokens are single-use
     } else {
       localStorage.setItem(key, value);
     }
@@ -35,6 +36,7 @@ export const storage = {
     if (isTauri()) {
       const s = await tauriStore();
       await s.delete(key);
+      await s.save();
     } else {
       localStorage.removeItem(key);
     }
@@ -44,6 +46,7 @@ export const storage = {
     if (isTauri()) {
       const s = await tauriStore();
       await s.clear();
+      await s.save();
     } else {
       localStorage.clear();
     }

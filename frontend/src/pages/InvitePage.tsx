@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useGuildStore } from "../stores/guildStore";
 import type { Guild, Channel } from "../types";
+import { isTauri } from "../lib/inviteLinks";
 
 export function InvitePage() {
   const { code } = useParams<{ code: string }>();
@@ -100,6 +101,16 @@ export function InvitePage() {
           >
             {loading ? "Joining…" : "Accept Invite"}
           </button>
+
+          {!isTauri() && (
+            <a
+              href={`diskord://invite/${code}`}
+              className="mt-3 block w-full py-2.5 rounded font-semibold text-base no-underline"
+              style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}
+            >
+              Open in diskoRD app
+            </a>
+          )}
 
           <button
             onClick={() => navigate("/app")}

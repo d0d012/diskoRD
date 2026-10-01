@@ -12,8 +12,10 @@ export function useUpdater() {
     if (!isTauri()) return;
 
     let cancelled = false;
+    let installed = false;
 
     async function checkForUpdate() {
+      if (installed) return;
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
@@ -21,14 +23,17 @@ export function useUpdater() {
         setUpdateVersion(update.version ?? null);
 
         await update.downloadAndInstall();
+        installed = true;
         if (!cancelled) setUpdateReady(true);
       } catch {
         // Silently ignore — update check failures should never surface to users
       }
     }
 
+    // Check at launch and then every 30 minutes — the app is often left open for days.
     checkForUpdate();
-    return () => { cancelled = true; };
+    const interval = setInterval(checkForUpdate, 30 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   async function restartApp() {

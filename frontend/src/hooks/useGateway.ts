@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAuthStore } from "../stores/authStore";
+import { refreshSession } from "../lib/api";
 import { useMessageStore } from "../stores/messageStore";
 import { useGuildStore } from "../stores/guildStore";
 import { useFriendStore } from "../stores/friendStore";
@@ -20,8 +21,19 @@ interface GatewayEvent {
   s: number;
 }
 
+let gatewaySocket: WebSocket | null = null;
+
+export function sendGatewayTyping(channelId: string, guildId: string) {
+  const ws = gatewaySocket;
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ op: "TYPING_START", d: { channelId, guildId } }));
+  }
+}
+
 export function useGateway() {
-  const accessToken = useAuthStore((s) => s.accessToken);
+  // Only the presence of a session matters here: token refreshes must not tear
+  // down the socket, and each (re)connect reads the freshest token itself.
+  const isAuthed = useAuthStore((s) => !!s.accessToken && s.accessToken !== "mock-token");
   const { addMessage, updateMessage, removeMessage, setTyping } = useMessageStore();
   const activeChannelId = useGuildStore((s) => s.activeChannelId);
   const activeDMId = useFriendStore((s) => s.activeDMId);
@@ -29,10 +41,10 @@ export function useGateway() {
   const addRequest = useFriendStore((s) => s.addRequest);
   const onFriendAccepted = useFriendStore((s) => s.onFriendAccepted);
   const onFriendDeclined = useFriendStore((s) => s.onFriendDeclined);
+  const onFriendRemoved = useFriendStore((s) => s.onFriendRemoved);
   const setPresenceStatus = usePresenceStore((s) => s.setStatus);
   const setPresenceStatuses = usePresenceStore((s) => s.setStatuses);
   const updateVoiceState = useVoiceStore((s) => s.updateVoiceState);
-  const wsRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seqRef = useRef(0);
@@ -43,19 +55,23 @@ export function useGateway() {
   useEffect(() => { activeDMIdRef.current = activeDMId; }, [activeDMId]);
 
   useEffect(() => {
-    if (!accessToken || accessToken === "mock-token") return;
+    if (!isAuthed) return;
 
     let destroyed = false;
+    let backoffMs = 1000;
 
     function connect() {
       if (destroyed) return;
+      const token = useAuthStore.getState().accessToken;
+      if (!token) return;
 
-      const url = `${WS_URL}?token=${encodeURIComponent(accessToken!)}`;
+      const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
-      wsRef.current = ws;
+      gatewaySocket = ws;
 
       ws.onopen = () => {
         // Connection established — HELLO event will set heartbeat interval
+        backoffMs = 1000;
       };
 
       ws.onmessage = (evt) => {
@@ -85,6 +101,14 @@ export function useGateway() {
             const currentActive = activeChannelIdRef.current ?? activeDMIdRef.current;
             const msg = event.d as Message;
             const currentUser = useAuthStore.getState().user;
+
+            if (!msg.guildId) {
+              const { dms, fetchDMs } = useFriendStore.getState();
+              if (!dms.some((dm) => dm.id === msg.channelId)) {
+                void fetchDMs();
+              }
+            }
+
             addMessage(msg, currentActive, currentUser?.id);
 
             // ── Notification logic ─────────────────────────────────────────
@@ -161,6 +185,45 @@ export function useGateway() {
             break;
           }
 
+          case "CHANNEL_CREATE":
+          case "CHANNEL_UPDATE": {
+            useGuildStore.getState().upsertChannel(event.d as import("../types").Channel);
+            break;
+          }
+
+          case "CHANNEL_DELETE": {
+            const d = event.d as { id: string; guildId: string };
+            useGuildStore.getState().removeChannelById(d.guildId, d.id);
+            break;
+          }
+
+          case "GUILD_UPDATE": {
+            useGuildStore.getState().upsertGuild(event.d as import("../types").Guild);
+            break;
+          }
+
+          case "GUILD_DELETE": {
+            const d = event.d as { guildId: string };
+            useGuildStore.getState().removeGuildById(d.guildId);
+            break;
+          }
+
+          case "GUILD_MEMBER_ADD":
+          case "GUILD_MEMBER_UPDATE":
+          case "GUILD_MEMBER_REMOVE": {
+            const d = event.d as { guildId: string; userId?: string };
+            const currentUser = useAuthStore.getState().user;
+            if (d.userId === currentUser?.id) {
+              if (event.op === "GUILD_MEMBER_REMOVE") {
+                useGuildStore.getState().removeGuildById(d.guildId);
+              } else {
+                useGuildStore.getState().fetchGuilds();
+              }
+            }
+            window.dispatchEvent(new CustomEvent("diskord:guild-members-changed", { detail: d }));
+            break;
+          }
+
           case "READY": {
             const d = event.d as {
               presences: Record<string, string>;
@@ -222,6 +285,12 @@ export function useGateway() {
             break;
           }
 
+          case "FRIEND_REMOVE": {
+            const d = event.d as { userId?: string };
+            onFriendRemoved(d.userId);
+            break;
+          }
+
           case "ROLE_CREATE":
           case "ROLE_UPDATE": {
             const d = event.d as import("../types").GuildRole & { guildId?: string };
@@ -247,14 +316,15 @@ export function useGateway() {
           }
 
           case "MEMBER_ROLE_ADD":
-          case "MEMBER_ROLE_REMOVE":
-            // Member list will refetch on next open; no local member cache to update
+          case "MEMBER_ROLE_REMOVE": {
+            const d = event.d as { guildId: string };
+            window.dispatchEvent(new CustomEvent("diskord:guild-members-changed", { detail: d }));
             break;
+          }
 
           case "CALL_INVITE": {
             const d = event.d as { channelId: string; callerId: string; callerName: string };
             useCallStore.getState().onIncomingCall(d.channelId, d.callerId, d.callerName);
-            playSound("notification");
             break;
           }
 
@@ -267,17 +337,40 @@ export function useGateway() {
 
           case "CALL_DECLINE":
           case "CALL_END": {
-            useCallStore.getState().onCallEnded();
-            playSound("disconnect");
+            const d = event.d as { channelId?: string };
+            const { call } = useCallStore.getState();
+            if (call && (!d.channelId || d.channelId === call.channelId)) {
+              useCallStore.getState().onCallEnded(d.channelId);
+              playSound("disconnect");
+            }
+            break;
+          }
+
+          case "CALL_TIMEOUT": {
+            const d = event.d as { channelId: string };
+            const { call } = useCallStore.getState();
+            if (call?.channelId === d.channelId) {
+              useCallStore.getState().onCallTimeout(d.channelId);
+              playSound("disconnect");
+            }
             break;
           }
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (evt) => {
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-        if (!destroyed) {
-          reconnectRef.current = setTimeout(connect, 3000);
+        if (destroyed || gatewaySocket !== ws) return;
+        const delay = backoffMs;
+        backoffMs = Math.min(backoffMs * 2, 30000);
+        const reconnect = () => {
+          reconnectRef.current = setTimeout(connect, delay);
+        };
+        // 4001 = token rejected: get a fresh one before reconnecting.
+        if (evt.code === 4001) {
+          refreshSession().then(reconnect, reconnect);
+        } else {
+          reconnect();
         }
       };
 
@@ -288,20 +381,34 @@ export function useGateway() {
 
     connect();
 
+    // Timers are throttled/frozen while backgrounded or asleep; reconnect the
+    // moment the user comes back instead of waiting out the backoff.
+    function reconnectNow() {
+      if (destroyed) return;
+      const ws = gatewaySocket;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      backoffMs = 1000;
+      connect();
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") reconnectNow();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", reconnectNow);
+    window.addEventListener("online", reconnectNow);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", reconnectNow);
+      window.removeEventListener("online", reconnectNow);
       destroyed = true;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      wsRef.current?.close();
+      gatewaySocket?.close();
+      gatewaySocket = null;
     };
-  }, [accessToken]);
+  }, [isAuthed]);
 
-  function sendTyping(channelId: string, guildId: string) {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ op: "TYPING_START", d: { channelId, guildId } }));
-    }
-  }
-
-  return { sendTyping };
+  return { sendTyping: sendGatewayTyping };
 }
