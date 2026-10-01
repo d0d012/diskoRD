@@ -134,3 +134,22 @@ func TestFormatValidationError(t *testing.T) {
 		assert.Contains(t, msg, "at least")
 	})
 }
+
+func TestParseRefreshValue(t *testing.T) {
+	tests := []struct {
+		name         string
+		in           string
+		wantID       string
+		wantRemember bool
+	}{
+		{"legacy plain id is remembered", "uuid-1", "uuid-1", true},
+		{"session suffix", "uuid-1|s", "uuid-1", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, remember := parseRefreshValue(tt.in)
+			assert.Equal(t, tt.wantID, id)
+			assert.Equal(t, tt.wantRemember, remember)
+		})
+	}
+}

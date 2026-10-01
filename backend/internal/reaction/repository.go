@@ -97,3 +97,16 @@ func (r *Repository) GetMessageContext(ctx context.Context, messageID string) (c
 	}
 	return channelID, guildID, nil
 }
+
+func (r *Repository) GetDMParticipants(ctx context.Context, channelID string) (userAID, userBID string, err error) {
+	err = r.db.QueryRow(ctx,
+		`SELECT user_a_id, user_b_id FROM dm_channels WHERE id = $1`, channelID,
+	).Scan(&userAID, &userBID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fiber.NewError(fiber.StatusNotFound, "DM channel not found")
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("reaction.Repository.GetDMParticipants: %w", err)
+	}
+	return userAID, userBID, nil
+}

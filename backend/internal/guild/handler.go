@@ -52,6 +52,29 @@ func (h *Handler) GetGuild(c *fiber.Ctx) error {
 	return c.JSON(Response{Data: result})
 }
 
+func (h *Handler) UpdateGuild(c *fiber.Ctx) error {
+	guildID := c.Params("id")
+	if guildID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "guild id is required")
+	}
+
+	var req UpdateGuildRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := h.validate.Struct(req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, formatValidationError(err))
+	}
+
+	userID := c.Locals("userID").(string)
+	result, err := h.service.Update(c.Context(), userID, guildID, req)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(Response{Data: result})
+}
+
 func (h *Handler) DeleteGuild(c *fiber.Ctx) error {
 	guildID := c.Params("id")
 	if guildID == "" {
@@ -88,6 +111,8 @@ func formatValidationError(err error) string {
 				return fe.Field() + " must be at least " + fe.Param() + " characters"
 			case "max":
 				return fe.Field() + " must be at most " + fe.Param() + " characters"
+			case "url":
+				return fe.Field() + " must be a valid URL"
 			}
 		}
 	}

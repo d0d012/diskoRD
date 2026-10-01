@@ -97,7 +97,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("JWT_ACCESS_SECRET", "dev-access-secret-change-in-production")
 	viper.SetDefault("JWT_REFRESH_SECRET", "dev-refresh-secret-change-in-production")
 	viper.SetDefault("JWT_ACCESS_EXPIRY", "15m")
-	viper.SetDefault("JWT_REFRESH_EXPIRY", "168h")
+	viper.SetDefault("JWT_REFRESH_EXPIRY", "8760h")
 
 	viper.SetDefault("LIVEKIT_HOST", "localhost")
 	viper.SetDefault("LIVEKIT_PORT", 7880)

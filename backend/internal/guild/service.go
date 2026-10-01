@@ -14,10 +14,15 @@ import (
 type Service struct {
 	repo        *Repository
 	presenceSvc *presence.Service
+	pub         EventPublisher
 }
 
 func NewService(repo *Repository, presenceSvc *presence.Service) *Service {
 	return &Service{repo: repo, presenceSvc: presenceSvc}
+}
+
+func (s *Service) SetPublisher(pub EventPublisher) {
+	s.pub = pub
 }
 
 func (s *Service) Create(ctx context.Context, userID string, req CreateGuildRequest) (*GuildResponse, error) {
@@ -76,6 +81,30 @@ func (s *Service) Get(ctx context.Context, userID, guildID string) (*GuildRespon
 	return &resp, nil
 }
 
+func (s *Service) Update(ctx context.Context, userID, guildID string, req UpdateGuildRequest) (*GuildListItem, error) {
+	if req.Name == nil && req.IconURL == nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "at least one field must be provided")
+	}
+
+	g, err := s.repo.GetGuildByID(ctx, guildID)
+	if err != nil {
+		return nil, err
+	}
+	if g.OwnerID != userID {
+		return nil, fiber.NewError(fiber.StatusForbidden, "only the guild owner can update this guild")
+	}
+
+	updated, err := s.repo.UpdateGuild(ctx, guildID, req)
+	if err != nil {
+		return nil, err
+	}
+	resp := updated.ToListItem()
+	if s.pub != nil {
+		s.pub.PublishToGuild(guildID, "GUILD_UPDATE", resp)
+	}
+	return &resp, nil
+}
+
 func (s *Service) Delete(ctx context.Context, userID, guildID string) error {
 	g, err := s.repo.GetGuildByID(ctx, guildID)
 	if err != nil {
@@ -86,7 +115,13 @@ func (s *Service) Delete(ctx context.Context, userID, guildID string) error {
 		return fiber.NewError(fiber.StatusForbidden, "only the guild owner can delete this guild")
 	}
 
-	return s.repo.DeleteGuild(ctx, guildID)
+	if err := s.repo.DeleteGuild(ctx, guildID); err != nil {
+		return err
+	}
+	if s.pub != nil {
+		s.pub.PublishToGuild(guildID, "GUILD_DELETE", map[string]string{"guildId": guildID})
+	}
+	return nil
 }
 
 func (s *Service) ListMembers(ctx context.Context, callerID, guildID string) ([]MemberResponse, error) {
@@ -127,7 +162,21 @@ func (s *Service) KickMember(ctx context.Context, callerID, guildID, targetID st
 		return fiber.NewError(fiber.StatusBadRequest, "cannot kick the guild owner")
 	}
 
-	return s.repo.RemoveMember(ctx, guildID, targetID)
+	if err := s.repo.RemoveMember(ctx, guildID, targetID); err != nil {
+		return err
+	}
+	if s.pub != nil {
+		payload := map[string]string{
+			"guildId": guildID,
+			"userId":  targetID,
+		}
+		s.pub.PublishToGuild(guildID, "GUILD_MEMBER_REMOVE", payload)
+		// Ensure the kicked user's current connection updates even if it is removed
+		// from guild routing before the guild broadcast is processed.
+		s.pub.NotifyUser(targetID, "GUILD_MEMBER_REMOVE", payload)
+		s.pub.RemoveClientGuild(targetID, guildID)
+	}
+	return nil
 }
 
 func (s *Service) UpdateMemberRole(ctx context.Context, guildID, callerID, targetID, newRole string) error {
@@ -160,7 +209,17 @@ func (s *Service) UpdateMemberRole(ctx context.Context, guildID, callerID, targe
 		return fiber.NewError(fiber.StatusForbidden, "cannot assign a role equal to or higher than your own")
 	}
 
-	return s.repo.UpdateMemberRole(ctx, guildID, targetID, newRole)
+	if err := s.repo.UpdateMemberRole(ctx, guildID, targetID, newRole); err != nil {
+		return err
+	}
+	if s.pub != nil {
+		s.pub.PublishToGuild(guildID, "GUILD_MEMBER_UPDATE", map[string]string{
+			"guildId": guildID,
+			"userId":  targetID,
+			"role":    newRole,
+		})
+	}
+	return nil
 }
 
 func (s *Service) ListByUser(ctx context.Context, userID string) ([]GuildListItem, error) {

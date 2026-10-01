@@ -48,3 +48,8 @@ type Response struct {
 	Data  any    `json:"data,omitempty"`
 	Error string `json:"error,omitempty"`
 }
+
+// EventPublisher is implemented by the gateway hub.
+type EventPublisher interface {
+	PublishToGuild(guildID, op string, data interface{})
+}

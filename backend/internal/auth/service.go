@@ -18,6 +18,22 @@ import (
 	"github.com/d0d012/diskord/pkg/config"
 )
 
+const (
+	// refreshGrace is how long a rotated refresh token stays valid after use.
+	refreshGrace = 30 * time.Second
+	// sessionRefreshTTL applies when the user did not tick "keep me logged in".
+	sessionRefreshTTL = 24 * time.Hour
+)
+
+// parseRefreshValue splits the stored value into user id and remember flag.
+// Legacy values (plain user id) are treated as remembered sessions.
+func parseRefreshValue(v string) (userID string, remember bool) {
+	if id, ok := strings.CutSuffix(v, "|s"); ok {
+		return id, false
+	}
+	return v, true
+}
+
 type Service struct {
 	repo   *Repository
 	rdb    *redis.Client
@@ -46,7 +62,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthRespo
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to create account")
 	}
 
-	return s.generateTokens(ctx, user)
+	return s.generateTokens(ctx, user, true)
 }
 
 func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, error) {
@@ -59,28 +75,32 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*AuthResponse, e
 		return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid email or password")
 	}
 
-	return s.generateTokens(ctx, user)
+	return s.generateTokens(ctx, user, req.RememberMe == nil || *req.RememberMe)
 }
 
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthResponse, error) {
 	tokenHash := hashToken(refreshToken)
-	userID, err := s.rdb.Get(ctx, "refresh:"+tokenHash).Result()
+	val, err := s.rdb.Get(ctx, "refresh:"+tokenHash).Result()
 	if err == redis.Nil {
 		return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid or expired refresh token")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("auth.Service.RefreshToken: redis get: %w", err)
 	}
+	userID, remember := parseRefreshValue(val)
 
-	// Delete old refresh token
-	s.rdb.Del(ctx, "refresh:"+tokenHash)
+	// Rotate, but keep the old token alive for a short grace window so a lost
+	// response or two racing clients don't invalidate the session.
+	if err := s.rdb.ExpireLT(ctx, "refresh:"+tokenHash, refreshGrace).Err(); err != nil {
+		log.Warn().Err(err).Msg("auth: failed to shorten old refresh token TTL")
+	}
 
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.generateTokens(ctx, user)
+	return s.generateTokens(ctx, user, remember)
 }
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
@@ -89,13 +109,13 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	return nil
 }
 
-func (s *Service) generateTokens(ctx context.Context, user *User) (*AuthResponse, error) {
+func (s *Service) generateTokens(ctx context.Context, user *User, remember bool) (*AuthResponse, error) {
 	accessToken, err := s.createAccessToken(user)
 	if err != nil {
 		return nil, fmt.Errorf("auth.Service.generateTokens: access token: %w", err)
 	}
 
-	refreshToken, err := s.createRefreshToken(ctx, user.ID)
+	refreshToken, err := s.createRefreshToken(ctx, user.ID, remember)
 	if err != nil {
 		return nil, fmt.Errorf("auth.Service.generateTokens: refresh token: %w", err)
 	}
@@ -118,7 +138,7 @@ func (s *Service) createAccessToken(user *User) (string, error) {
 	return token.SignedString([]byte(s.jwtCfg.AccessSecret))
 }
 
-func (s *Service) createRefreshToken(ctx context.Context, userID string) (string, error) {
+func (s *Service) createRefreshToken(ctx context.Context, userID string, remember bool) (string, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", err
@@ -126,7 +146,11 @@ func (s *Service) createRefreshToken(ctx context.Context, userID string) (string
 	token := hex.EncodeToString(tokenBytes)
 
 	tokenHash := hashToken(token)
-	err := s.rdb.Set(ctx, "refresh:"+tokenHash, userID, s.jwtCfg.RefreshExpiry).Err()
+	value, ttl := userID, s.jwtCfg.RefreshExpiry
+	if !remember {
+		value, ttl = userID+"|s", sessionRefreshTTL
+	}
+	err := s.rdb.Set(ctx, "refresh:"+tokenHash, value, ttl).Err()
 	if err != nil {
 		return "", fmt.Errorf("auth.Service.createRefreshToken: redis set: %w", err)
 	}

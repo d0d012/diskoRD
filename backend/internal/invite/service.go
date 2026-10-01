@@ -11,13 +11,23 @@ import (
 	"github.com/d0d012/diskord/internal/guild"
 )
 
+type GuildNotifier interface {
+	AddClientGuild(userID, guildID string)
+	PublishToGuild(guildID, op string, data interface{})
+}
+
 type Service struct {
 	repo      *Repository
 	guildRepo *guild.Repository
+	notifier  GuildNotifier
 }
 
 func NewService(repo *Repository, guildRepo *guild.Repository) *Service {
 	return &Service{repo: repo, guildRepo: guildRepo}
+}
+
+func (s *Service) SetNotifier(notifier GuildNotifier) {
+	s.notifier = notifier
 }
 
 func (s *Service) CreateInvite(ctx context.Context, guildID, creatorID string, req CreateInviteRequest) (*Invite, error) {
@@ -70,6 +80,14 @@ func (s *Service) JoinGuild(ctx context.Context, code, userID string) (*guild.Gu
 	// Increment use count (best-effort)
 	if err := s.repo.IncrementUseCount(ctx, code); err != nil {
 		log.Error().Err(err).Str("code", code).Msg("failed to increment invite use count")
+	}
+
+	if s.notifier != nil {
+		s.notifier.AddClientGuild(userID, inv.GuildID)
+		s.notifier.PublishToGuild(inv.GuildID, "GUILD_MEMBER_ADD", map[string]string{
+			"guildId": inv.GuildID,
+			"userId":  userID,
+		})
 	}
 
 	return s.guildRepo.GetGuildByID(ctx, inv.GuildID)

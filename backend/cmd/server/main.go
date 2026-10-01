@@ -17,11 +17,11 @@ import (
 	"github.com/d0d012/diskord/internal/auth"
 	"github.com/d0d012/diskord/internal/call"
 	"github.com/d0d012/diskord/internal/channel"
-	"github.com/d0d012/diskord/internal/linkpreview"
 	"github.com/d0d012/diskord/internal/friend"
 	"github.com/d0d012/diskord/internal/gateway"
 	"github.com/d0d012/diskord/internal/guild"
 	"github.com/d0d012/diskord/internal/invite"
+	"github.com/d0d012/diskord/internal/linkpreview"
 	"github.com/d0d012/diskord/internal/message"
 	"github.com/d0d012/diskord/internal/presence"
 	"github.com/d0d012/diskord/internal/reaction"
@@ -124,6 +124,9 @@ func main() {
 	friend.RegisterRoutes(app, friendHandler, authMw)
 
 	hub := gateway.NewHub(rdb, pool, presenceSvc)
+	guildService.SetPublisher(hub)
+	channelService.SetPublisher(hub)
+	inviteService.SetNotifier(hub)
 	serverCtx, serverCancel := context.WithCancel(context.Background())
 	defer serverCancel()
 	go hub.Run(serverCtx)
@@ -137,7 +140,7 @@ func main() {
 
 	appBaseURL := fmt.Sprintf("http://localhost:%d", cfg.App.Port)
 	if cfg.App.Env == "production" {
-		appBaseURL = ""  // nginx serves /uploads directly; relative URL is fine
+		appBaseURL = "" // nginx serves /uploads directly; relative URL is fine
 	}
 	storageSvc := storage.NewService(cfg.Storage.Path, appBaseURL)
 

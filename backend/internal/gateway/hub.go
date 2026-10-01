@@ -150,7 +150,7 @@ func (h *Hub) broadcastToGuild(event routableEvent) {
 
 	for _, conns := range h.clients {
 		for client := range conns {
-			if client.guilds[event.GuildID] {
+			if client.HasGuild(event.GuildID) {
 				select {
 				case client.send <- payload:
 				default:
@@ -189,11 +189,8 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 		ChannelID string `json:"channelId"`
 		GuildID   string `json:"guildId"`
 	}
-	if err := json.Unmarshal(event.D, &d); err != nil || d.GuildID == "" {
+	if err := json.Unmarshal(event.D, &d); err != nil || d.ChannelID == "" {
 		return
-	}
-	if !c.guilds[d.GuildID] {
-		return // client not in that guild
 	}
 
 	var username string
@@ -201,11 +198,34 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 		`SELECT username FROM users WHERE id = $1`, c.userID,
 	).Scan(&username)
 
-	h.PublishToGuild(d.GuildID, OpTypingStart, map[string]string{
+	payload := map[string]string{
 		"channelId": d.ChannelID,
 		"userId":    c.userID,
 		"username":  username,
-	})
+	}
+
+	if d.GuildID != "" {
+		if !c.HasGuild(d.GuildID) {
+			return // client not in that guild
+		}
+		h.PublishToGuild(d.GuildID, OpTypingStart, payload)
+		return
+	}
+
+	var userA, userB string
+	if err := h.db.QueryRow(context.Background(),
+		`SELECT user_a_id, user_b_id FROM dm_channels WHERE id = $1`, d.ChannelID,
+	).Scan(&userA, &userB); err != nil {
+		return
+	}
+	if c.userID != userA && c.userID != userB {
+		return
+	}
+	if c.userID == userA {
+		h.notifyUser(userB, OpTypingStart, payload)
+	} else {
+		h.notifyUser(userA, OpTypingStart, payload)
+	}
 }
 
 // loadUserGuilds queries the DB for all guild IDs the user belongs to.
@@ -232,7 +252,16 @@ func (h *Hub) AddClientGuild(userID, guildID string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for client := range h.clients[userID] {
-		client.guilds[guildID] = true
+		client.AddGuild(guildID)
+	}
+}
+
+// RemoveClientGuild removes a guild from a connected user's in-memory routing set.
+func (h *Hub) RemoveClientGuild(userID, guildID string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for client := range h.clients[userID] {
+		client.RemoveGuild(guildID)
 	}
 }
 
@@ -271,10 +300,7 @@ func (h *Hub) PublishToDM(user1ID, user2ID, op string, data interface{}) {
 
 // sendReadyEvent sends the current presence and voice state snapshot to a newly connected client.
 func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
-	var guildIDs []string
-	for gid := range client.guilds {
-		guildIDs = append(guildIDs, gid)
-	}
+	guildIDs := client.GuildIDs()
 	if len(guildIDs) == 0 {
 		return
 	}
@@ -387,9 +413,7 @@ func (h *Hub) broadcastPresence(userID, status string) {
 	conns := h.clients[userID]
 	var guilds []string
 	for client := range conns {
-		for guildID := range client.guilds {
-			guilds = append(guilds, guildID)
-		}
+		guilds = client.GuildIDs()
 		break // all connections share the same guild set
 	}
 	h.mu.RUnlock()

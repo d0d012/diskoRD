@@ -11,6 +11,7 @@ func RegisterRoutes(app *fiber.App, h *Handler, authMiddleware fiber.Handler, db
 	guilds := app.Group("/guilds", authMiddleware)
 	guilds.Post("/", h.CreateGuild)
 	guilds.Get("/:id", h.GetGuild)
+	guilds.Patch("/:id", h.UpdateGuild)
 	guilds.Delete("/:id", h.DeleteGuild)
 	guilds.Get("/:id/members", h.ListMembers)
 	guilds.Delete("/:id/members/:userId", middleware.RequireRole(db, "moderator"), h.KickMember)

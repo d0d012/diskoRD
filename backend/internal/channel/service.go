@@ -13,10 +13,15 @@ import (
 type Service struct {
 	repo      *Repository
 	guildRepo *guild.Repository
+	pub       EventPublisher
 }
 
 func NewService(repo *Repository, guildRepo *guild.Repository) *Service {
 	return &Service{repo: repo, guildRepo: guildRepo}
+}
+
+func (s *Service) SetPublisher(pub EventPublisher) {
+	s.pub = pub
 }
 
 func (s *Service) requireMember(ctx context.Context, guildID, userID string) error {
@@ -59,6 +64,9 @@ func (s *Service) Create(ctx context.Context, userID, guildID string, req Create
 	}
 
 	resp := ch.ToResponse()
+	if s.pub != nil {
+		s.pub.PublishToGuild(guildID, "CHANNEL_CREATE", resp)
+	}
 	return &resp, nil
 }
 
@@ -95,6 +103,9 @@ func (s *Service) Update(ctx context.Context, userID, channelID string, req Upda
 	}
 
 	resp := updated.ToResponse()
+	if s.pub != nil {
+		s.pub.PublishToGuild(ch.GuildID, "CHANNEL_UPDATE", resp)
+	}
 	return &resp, nil
 }
 
@@ -118,5 +129,15 @@ func (s *Service) Delete(ctx context.Context, userID, channelID string) error {
 		}
 	}
 
-	return s.repo.Delete(ctx, channelID)
+	if err := s.repo.Delete(ctx, channelID); err != nil {
+		return err
+	}
+
+	if s.pub != nil {
+		s.pub.PublishToGuild(ch.GuildID, "CHANNEL_DELETE", map[string]string{
+			"id":      channelID,
+			"guildId": ch.GuildID,
+		})
+	}
+	return nil
 }

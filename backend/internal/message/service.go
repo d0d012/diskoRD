@@ -167,12 +167,17 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 }
 
 func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMessageRequest) (*MessageResponse, error) {
-	authorID, guildID, err := s.repo.GetAuthorAndGuild(ctx, messageID)
+	authorID, channelID, guildID, err := s.repo.GetAuthorChannelAndGuild(ctx, messageID)
 	if err != nil {
 		return nil, err
 	}
 	if authorID != userID {
 		return nil, fiber.NewError(fiber.StatusForbidden, "only the message author can edit it")
+	}
+
+	cc, err := s.repo.GetChannelContext(ctx, channelID)
+	if err != nil {
+		return nil, err
 	}
 
 	msg, err := s.repo.Update(ctx, messageID, req.Content)
@@ -182,19 +187,31 @@ func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMe
 	msg.GuildID = guildID
 
 	if s.pub != nil {
-		s.pub.PublishToGuild(guildID, "MESSAGE_UPDATE", msg)
+		if cc.IsDM {
+			s.pub.PublishToDM(cc.DMUserA, cc.DMUserB, "MESSAGE_UPDATE", msg)
+		} else {
+			s.pub.PublishToGuild(guildID, "MESSAGE_UPDATE", msg)
+		}
 	}
 	return msg, nil
 }
 
 func (s *Service) Delete(ctx context.Context, userID, messageID string) error {
-	authorID, guildID, err := s.repo.GetAuthorAndGuild(ctx, messageID)
+	authorID, channelID, guildID, err := s.repo.GetAuthorChannelAndGuild(ctx, messageID)
 	if err != nil {
 		return err
 	}
 
-	// Author or guild owner can delete
+	cc, err := s.repo.GetChannelContext(ctx, channelID)
+	if err != nil {
+		return err
+	}
+
+	// Author or guild owner can delete. DM messages can only be deleted by their author.
 	if authorID != userID {
+		if cc.IsDM {
+			return fiber.NewError(fiber.StatusForbidden, "only the message author can delete it")
+		}
 		role, err := s.guildRepo.GetMemberRole(ctx, guildID, userID)
 		if err != nil || role != "owner" {
 			return fiber.NewError(fiber.StatusForbidden, "only the author or guild owner can delete this message")
@@ -206,11 +223,16 @@ func (s *Service) Delete(ctx context.Context, userID, messageID string) error {
 	}
 
 	if s.pub != nil {
-		s.pub.PublishToGuild(guildID, "MESSAGE_DELETE", map[string]string{
+		payload := map[string]string{
 			"id":        messageID,
-			"channelId": "",
+			"channelId": channelID,
 			"guildId":   guildID,
-		})
+		}
+		if cc.IsDM {
+			s.pub.PublishToDM(cc.DMUserA, cc.DMUserB, "MESSAGE_DELETE", payload)
+		} else {
+			s.pub.PublishToGuild(guildID, "MESSAGE_DELETE", payload)
+		}
 	}
 	return nil
 }

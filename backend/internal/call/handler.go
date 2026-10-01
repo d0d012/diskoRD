@@ -47,3 +47,12 @@ func (h *Handler) End(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"ok": true}})
 }
+
+func (h *Handler) Keepalive(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	channelID := c.Params("channelId")
+	if err := h.svc.Keepalive(c.Context(), channelID, userID); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"ok": true}})
+}

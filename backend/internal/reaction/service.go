@@ -39,12 +39,20 @@ func (s *Service) AddReaction(ctx context.Context, userID, messageID, emoji stri
 		return err
 	}
 
+	var dmUserA, dmUserB string
 	if guildID != "" {
 		if err := s.requireMember(ctx, guildID, userID); err != nil {
 			return err
 		}
 	} else {
-		// It's a DM, assume they can react for now since they have the message context
+		var err error
+		dmUserA, dmUserB, err = s.repo.GetDMParticipants(ctx, channelID)
+		if err != nil {
+			return err
+		}
+		if userID != dmUserA && userID != dmUserB {
+			return fiber.NewError(fiber.StatusForbidden, "not a participant in this DM")
+		}
 	}
 
 	inserted, err := s.repo.Add(ctx, messageID, userID, emoji)
@@ -64,7 +72,7 @@ func (s *Service) AddReaction(ctx context.Context, userID, messageID, emoji stri
 		if guildID != "" {
 			s.pub.PublishToGuild(guildID, "REACTION_ADD", event)
 		} else {
-			// DM support would be added here
+			s.pub.PublishToDM(dmUserA, dmUserB, "REACTION_ADD", event)
 		}
 	}
 
@@ -75,6 +83,22 @@ func (s *Service) RemoveReaction(ctx context.Context, userID, messageID, emoji s
 	channelID, guildID, err := s.repo.GetMessageContext(ctx, messageID)
 	if err != nil {
 		return err
+	}
+
+	var dmUserA, dmUserB string
+	if guildID != "" {
+		if err := s.requireMember(ctx, guildID, userID); err != nil {
+			return err
+		}
+	} else {
+		var err error
+		dmUserA, dmUserB, err = s.repo.GetDMParticipants(ctx, channelID)
+		if err != nil {
+			return err
+		}
+		if userID != dmUserA && userID != dmUserB {
+			return fiber.NewError(fiber.StatusForbidden, "not a participant in this DM")
+		}
 	}
 
 	deleted, err := s.repo.Remove(ctx, messageID, userID, emoji)
@@ -93,6 +117,8 @@ func (s *Service) RemoveReaction(ctx context.Context, userID, messageID, emoji s
 		}
 		if guildID != "" {
 			s.pub.PublishToGuild(guildID, "REACTION_REMOVE", event)
+		} else {
+			s.pub.PublishToDM(dmUserA, dmUserB, "REACTION_REMOVE", event)
 		}
 	}
 

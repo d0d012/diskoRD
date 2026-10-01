@@ -119,7 +119,20 @@ func (s *Service) RemoveFriend(ctx context.Context, callerID, friendshipID strin
 	if f.Status != "accepted" {
 		return fiber.NewError(fiber.StatusBadRequest, "not friends")
 	}
-	return s.repo.Delete(ctx, friendshipID)
+	if err := s.repo.Delete(ctx, friendshipID); err != nil {
+		return err
+	}
+	if s.notifier != nil {
+		s.notifier.NotifyUser(f.SenderID, "FRIEND_REMOVE", map[string]string{
+			"friendshipId": friendshipID,
+			"userId":       f.ReceiverID,
+		})
+		s.notifier.NotifyUser(f.ReceiverID, "FRIEND_REMOVE", map[string]string{
+			"friendshipId": friendshipID,
+			"userId":       f.SenderID,
+		})
+	}
+	return nil
 }
 
 func (s *Service) ListFriends(ctx context.Context, userID string) ([]FriendResponse, error) {

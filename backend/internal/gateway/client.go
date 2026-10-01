@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"sync"
 	"time"
 
 	fiberws "github.com/gofiber/websocket/v2"
@@ -16,11 +17,40 @@ const (
 
 // Client represents a single WebSocket connection.
 type Client struct {
-	hub    *Hub
-	conn   *fiberws.Conn
-	send   chan []byte
-	userID string
-	guilds map[string]bool // guildID → member
+	hub     *Hub
+	conn    *fiberws.Conn
+	send    chan []byte
+	userID  string
+	guildMu sync.RWMutex
+	guilds  map[string]bool // guildID → member
+}
+
+func (c *Client) HasGuild(guildID string) bool {
+	c.guildMu.RLock()
+	defer c.guildMu.RUnlock()
+	return c.guilds[guildID]
+}
+
+func (c *Client) AddGuild(guildID string) {
+	c.guildMu.Lock()
+	defer c.guildMu.Unlock()
+	c.guilds[guildID] = true
+}
+
+func (c *Client) RemoveGuild(guildID string) {
+	c.guildMu.Lock()
+	defer c.guildMu.Unlock()
+	delete(c.guilds, guildID)
+}
+
+func (c *Client) GuildIDs() []string {
+	c.guildMu.RLock()
+	defer c.guildMu.RUnlock()
+	ids := make([]string, 0, len(c.guilds))
+	for guildID := range c.guilds {
+		ids = append(ids, guildID)
+	}
+	return ids
 }
 
 // ReadPump pumps messages from the WebSocket to the hub.

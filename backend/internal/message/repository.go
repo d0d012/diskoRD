@@ -244,18 +244,26 @@ func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []stri
 
 // GetAuthorAndGuild returns the author_id and guild_id for a message.
 func (r *Repository) GetAuthorAndGuild(ctx context.Context, messageID string) (authorID, guildID string, err error) {
+	authorID, _, guildID, err = r.GetAuthorChannelAndGuild(ctx, messageID)
+	return authorID, guildID, err
+}
+
+// GetAuthorChannelAndGuild returns the author_id, channel_id, and guild_id for a message.
+// guildID is empty for DM channels.
+func (r *Repository) GetAuthorChannelAndGuild(ctx context.Context, messageID string) (authorID, channelID, guildID string, err error) {
 	err = r.db.QueryRow(ctx, `
 		SELECT COALESCE(m.author_id::text, ''),
+		       m.channel_id::text,
 		       COALESCE((SELECT guild_id::text FROM channels WHERE id = m.channel_id), '')
 		FROM messages m
 		WHERE m.id = $1 AND m.deleted_at IS NULL`,
 		messageID,
-	).Scan(&authorID, &guildID)
+	).Scan(&authorID, &channelID, &guildID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", fiber.NewError(fiber.StatusNotFound, "message not found")
+		return "", "", "", fiber.NewError(fiber.StatusNotFound, "message not found")
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("message.Repository.GetAuthorAndGuild: %w", err)
+		return "", "", "", fmt.Errorf("message.Repository.GetAuthorChannelAndGuild: %w", err)
 	}
-	return authorID, guildID, nil
+	return authorID, channelID, guildID, nil
 }

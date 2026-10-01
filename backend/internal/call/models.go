@@ -23,3 +23,8 @@ type CallDeclineEvent struct {
 type CallEndEvent struct {
 	ChannelID string `json:"channelId"`
 }
+
+// CallTimeoutEvent is sent to both participants when a ring goes unanswered.
+type CallTimeoutEvent struct {
+	ChannelID string `json:"channelId"`
+}

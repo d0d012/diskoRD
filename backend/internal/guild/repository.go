@@ -74,6 +74,26 @@ func (r *Repository) GetGuildByID(ctx context.Context, id string) (*Guild, error
 	return &g, nil
 }
 
+func (r *Repository) UpdateGuild(ctx context.Context, id string, req UpdateGuildRequest) (*Guild, error) {
+	var g Guild
+	err := r.db.QueryRow(ctx, `
+		UPDATE guilds
+		SET name = COALESCE($2, name),
+		    icon_url = COALESCE($3, icon_url),
+		    updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, icon_url, owner_id, created_at, updated_at`,
+		id, req.Name, req.IconURL,
+	).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fiber.NewError(fiber.StatusNotFound, "guild not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("guild.Repository.UpdateGuild: %w", err)
+	}
+	return &g, nil
+}
+
 func (r *Repository) DeleteGuild(ctx context.Context, id string) error {
 	tag, err := r.db.Exec(ctx, `DELETE FROM guilds WHERE id = $1`, id)
 	if err != nil {

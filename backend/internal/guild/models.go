@@ -32,6 +32,11 @@ type CreateGuildRequest struct {
 	Name string `json:"name" validate:"required,min=1,max=100"`
 }
 
+type UpdateGuildRequest struct {
+	Name    *string `json:"name" validate:"omitempty,min=1,max=100"`
+	IconURL *string `json:"iconUrl" validate:"omitempty,url"`
+}
+
 type GuildResponse struct {
 	ID        string            `json:"id"`
 	Name      string            `json:"name"`
@@ -49,10 +54,11 @@ type ChannelResponse struct {
 }
 
 type GuildListItem struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	IconURL *string `json:"iconUrl,omitempty"`
-	OwnerID string  `json:"ownerId"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	IconURL   *string   `json:"iconUrl,omitempty"`
+	OwnerID   string    `json:"ownerId"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 func (g *Guild) ToResponse(channels []Channel) GuildResponse {
@@ -77,10 +83,11 @@ func (g *Guild) ToResponse(channels []Channel) GuildResponse {
 
 func (g *Guild) ToListItem() GuildListItem {
 	return GuildListItem{
-		ID:      g.ID,
-		Name:    g.Name,
-		IconURL: g.IconURL,
-		OwnerID: g.OwnerID,
+		ID:        g.ID,
+		Name:      g.Name,
+		IconURL:   g.IconURL,
+		OwnerID:   g.OwnerID,
+		CreatedAt: g.CreatedAt,
 	}
 }
 
@@ -111,4 +118,11 @@ type UpdateMemberRoleRequest struct {
 type Response struct {
 	Data  any    `json:"data,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+// EventPublisher is implemented by the gateway hub.
+type EventPublisher interface {
+	PublishToGuild(guildID, op string, data interface{})
+	NotifyUser(userID, op string, data interface{})
+	RemoveClientGuild(userID, guildID string)
 }
