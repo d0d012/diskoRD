@@ -1,6 +1,8 @@
 # Phase 6 — Notifications & Polish
 
 > Prerequisite: Phase 5 complete (voice working)
+>
+> Current code status: message reactions and role management are implemented; message search and unread tracking are not implemented as standalone backend features.
 
 ## Dependency Graph
 
@@ -91,7 +93,7 @@ CREATE TABLE message_reactions (
 
 ## Task 6.4: Role Management
 
-Writes to: `backend/internal/guild/` (add role logic), `backend/migrations/`
+Writes to: `backend/internal/role/`, `backend/pkg/middleware/`, `backend/migrations/`
 
 **Goal:** Admin, moderator, member roles with permission checks.
 

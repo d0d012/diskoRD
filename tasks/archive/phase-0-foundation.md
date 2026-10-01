@@ -44,7 +44,7 @@
      pkg/config/config.go      # Viper config loader — load from .env with defaults for all vars
      migrations/
    ```
-3. Install core deps: `fiber/v2`, `viper`, `pgx/v5`, `go-redis/v9`, `zerolog`, `testify`, `golang-migrate`
+3. Install core deps: `fiber/v2`, `viper`, `pgx/v5`, `go-redis/v9`, `zerolog`, `testify`
 4. `pkg/config/config.go` should load all vars from `.env.example` via Viper with sensible defaults so the app starts without a `.env` file in development
 5. `main.go` should: load config, connect to DB, connect to Redis, start Fiber on `:8080`, have `GET /health` returning `{"data":"ok"}`
 6. Verify: `go build ./cmd/server` compiles, `go test ./...` passes
@@ -91,18 +91,19 @@
 
 **Parallel group: A** | Writes to: `infra/`
 
-**Goal:** Docker Compose that runs PostgreSQL, Redis, and Nginx.
+**Goal:** Docker Compose that runs PostgreSQL, Redis, LiveKit, and Nginx.
 
 **Steps:**
 1. Create `infra/docker-compose.yml` with:
-   - `postgres:16` — port 5432, volume for data, init with `diskord` database
-   - `redis:7` — port 6379
+   - `postgres:16` — host port 5433, volume for data, init with `diskord` database
+   - `redis:7` — host port 6380
+   - `livekit/livekit-server` — host ports 7880/7881 and UDP media range
    - `nginx` — reverse proxy config (port 80 → frontend:5173, /api → backend:8080)
 2. Create `infra/nginx/nginx.conf` with the reverse proxy rules
 3. Create `infra/nginx/dev.conf` for local development
 
 **Acceptance criteria:**
-- `docker compose -f infra/docker-compose.yml up -d` starts all 3 services
+- `docker compose -f infra/docker-compose.yml up -d` starts the local services
 - `psql` can connect to the database
 - `redis-cli ping` returns PONG
 

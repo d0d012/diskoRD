@@ -20,17 +20,17 @@
 
 **Run first** | Writes to: `infra/`
 
-**Goal:** LiveKit and Coturn running in Docker Compose.
+**Goal:** LiveKit running in local Docker Compose. Coturn is defined in production Docker Compose.
 
 **Steps:**
 1. Add `livekit-server` to `infra/docker-compose.yml`
 2. Create `infra/livekit/livekit.yaml` config
-3. Add `coturn` container with TURN/STUN config at `infra/coturn/turnserver.conf`
-4. Add LiveKit API key/secret to `.env.example`
+3. Add LiveKit API key/secret to `.env.example`
+4. For production, define coturn in `infra/docker-compose.prod.yml`
 
 **Acceptance criteria:**
 - LiveKit server accessible at configured port
-- TURN server responds to STUN binding requests
+- Production coturn service is defined in `infra/docker-compose.prod.yml`
 
 ---
 
@@ -67,7 +67,7 @@
 - `features/voice/VoiceControls.tsx` — mute, deafen, disconnect buttons
 - `hooks/useVoice.ts` — LiveKit room connection management
 
-**Dependencies:** `@livekit/components-react`, `livekit-client`
+**Dependencies:** `livekit-client`
 
 **Acceptance criteria:**
 - Can join a voice channel and hear other participants

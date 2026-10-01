@@ -16,6 +16,10 @@ frontend/dist/
 desktop/target/
 desktop/src-tauri/target/
 
+# Agent/local tooling
+.claude/
+DEV_CREDENTIALS.md
+
 # IDE
 .vscode/
 .idea/
@@ -29,3 +33,4 @@ uploads/
 
 # Docker volumes
 infra/data/
+.pi-run-logs/

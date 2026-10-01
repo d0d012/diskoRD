@@ -25,7 +25,7 @@
 
 **Parallel group: E** | Writes to: `backend/internal/presence/`
 
-**Goal:** Track online/offline/idle/dnd status via Redis with real-time broadcast.
+**Goal:** Track online/offline status via Redis with real-time broadcast.
 
 **Redis keys:**
 - `presence:{userId}` → `"online"` with 60s TTL
@@ -132,10 +132,9 @@ CREATE TABLE dm_channels (
 **Depends on: 4.1 + 4.4** | Writes to: `frontend/src/`
 
 **Components:**
-- `features/friend/FriendList.tsx` — friends with presence indicators
-- `features/friend/FriendRequestList.tsx` — pending requests with accept/decline
-- `features/friend/DMList.tsx` — DM conversations sidebar
-- `hooks/usePresence.ts` — subscribe to presence updates via gateway
+- `features/friend/FriendsPage.tsx` — friends and pending requests with presence indicators
+- `features/friend/FriendsSidebar.tsx` — DM conversations sidebar
+- Presence state is handled through the gateway hook and `presenceStore`
 - Online indicator (green dot) on user avatars throughout the app
 
 **Acceptance criteria:**

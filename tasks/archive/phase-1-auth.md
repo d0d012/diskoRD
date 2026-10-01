@@ -59,19 +59,19 @@ CREATE INDEX idx_users_username ON users(username);
 
 **Depends on: 1.1** | Writes to: `backend/internal/auth/`
 
-**Goal:** Build `internal/auth/` with register, login, token refresh, and logout. This is the **golden reference** — all future domain packages should follow this exact structure.
+**Goal:** Build `internal/auth/` with register, login, token refresh, and logout. This is the reference pattern for domain packages where the handler/service/repository split applies.
 
 **Files to create:**
 - `models.go` — RegisterRequest, LoginRequest, AuthResponse, UserResponse structs
 - `repository.go` — CreateUser, GetUserByEmail, GetUserByID
 - `service.go` — Register, Login, RefreshToken, Logout (business logic)
 - `handler.go` — HTTP handlers for each endpoint
-- `routes.go` — `func RegisterRoutes(app *fiber.App, h *Handler)`
+- `routes.go` — route registration for auth endpoints and route-specific middleware
 - `middleware.go` — JWT auth middleware that extracts userID into `c.Locals`
 - `auth_test.go` — unit tests for service + handler integration tests
 
 **Implementation details:**
-- Password hashing: bcrypt with cost 12 (or argon2id)
+- Password hashing: bcrypt with cost 12
 - JWT access token: 15 min expiry, contains `userID` and `username`
 - Refresh token: 7 day expiry, stored in Redis with key `refresh:{tokenHash}`
 - Logout: delete refresh token from Redis
@@ -144,9 +144,8 @@ CREATE INDEX idx_users_username ON users(username);
 **Goal:** Login and register pages in React.
 
 **Components:**
-- `features/auth/LoginForm.tsx` — email + password form
-- `features/auth/RegisterForm.tsx` — username + email + password form
-- `pages/LoginPage.tsx` and `pages/RegisterPage.tsx`
+- `pages/LoginPage.tsx` — email + password form
+- `pages/RegisterPage.tsx` — username + email + password form
 - `stores/authStore.ts` — Zustand store for user + token state
 - `lib/api.ts` — Axios interceptor for token injection + refresh on 401
 

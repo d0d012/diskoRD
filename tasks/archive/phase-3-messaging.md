@@ -32,7 +32,7 @@
 CREATE TABLE messages (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-    author_id  UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    author_id  UUID REFERENCES users(id) ON DELETE SET NULL,
     content    TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     edited_at  TIMESTAMPTZ,
@@ -181,7 +181,7 @@ Same for `MESSAGE_UPDATE` and `MESSAGE_DELETE`.
 **Goal:** Complete messaging UI with real-time updates.
 
 **Components:**
-- `features/message/MessageList.tsx` — virtualized message list (react-virtual)
+- `features/message/MessageList.tsx` — message list
 - `features/message/MessageItem.tsx` — single message with author, timestamp, content
 - `features/message/MessageInput.tsx` — input bar with send button
 - `hooks/useGateway.ts` — WebSocket connection management hook
