@@ -19,6 +19,21 @@
     "store:allow-save",
     "updater:allow-check",
     "updater:allow-download-and-install",
-    "deep-link:default"
+    "deep-link:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "x-apple.systempreferences:*"
+        },
+        {
+          "url": "ms-settings:privacy-*"
+        }
+      ]
+    },
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-show",
+    "core:window:allow-set-focus"
   ]
 }

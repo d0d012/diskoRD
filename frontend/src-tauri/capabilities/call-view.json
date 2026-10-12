@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "call-view",
+  "description": "Floating desktop call window: shows call video; no storage, updater or opener access",
+  "windows": [
+    "call-view"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-start-resize-dragging"
+  ]
+}
