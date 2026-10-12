@@ -26,6 +26,7 @@ import (
 	"github.com/d0d012/diskord/internal/presence"
 	"github.com/d0d012/diskord/internal/reaction"
 	"github.com/d0d012/diskord/internal/role"
+	"github.com/d0d012/diskord/internal/soundboard"
 	"github.com/d0d012/diskord/internal/storage"
 	"github.com/d0d012/diskord/internal/user"
 	"github.com/d0d012/diskord/internal/voice"
@@ -130,6 +131,10 @@ func main() {
 	serverCtx, serverCancel := context.WithCancel(context.Background())
 	defer serverCancel()
 	go hub.Run(serverCtx)
+
+	soundService := soundboard.NewService(soundboard.NewRepository(pool), guildRepo, hub)
+	soundboard.RegisterRoutes(app, soundboard.NewHandler(soundService), authMw,
+		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
 
 	friendService.SetNotifier(hub)
 

@@ -27,6 +27,7 @@ Self-hosted Discord-style chat and voice application for private communities.
 - Online/offline presence backed by Redis TTL keys
 - Friend requests, friends list, DM channel creation/listing
 - LiveKit voice token endpoint and Redis-backed voice participant state
+- In-voice soundboard: compact searchable popover, rapid retriggering, local previews, listener volume, and member-uploaded guild sounds (5 seconds, 48 sounds per guild; requires migration `000016`)
 - Link preview endpoint
 - React UI for auth, guilds/channels, messaging, friends/DMs, roles, voice, notifications, and desktop updater/noise-cancellation integration
 
