@@ -35,8 +35,9 @@ services:
     restart: unless-stopped
     ports:
       - "7880:7880"
+      # WebRTC media uses ICE/TCP on 7881. Forwarding the UDP range through Docker
+      # Desktop on macOS wedges all host port forwarding as soon as a call starts.
       - "7881:7881"
-      - "52000-52020:52000-52020/udp"
     volumes:
       - ./livekit/livekit.yaml:/livekit.yaml
     command: --config /livekit.yaml --dev
