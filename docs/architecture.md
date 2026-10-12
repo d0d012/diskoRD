@@ -1,0 +1,59 @@
+# Architecture notes
+
+Runtime behavior that isn't obvious from a single file. For the stack and feature list see the [README](../README.md).
+
+## Gateway (`backend/internal/gateway`)
+
+- Single `/gateway` WebSocket. Events look like `{ "op": "MESSAGE_CREATE", "d": { ... }, "s": 42 }`.
+- Guild-scoped events fan out across backend instances via Redis Pub/Sub; direct user and DM notifications go through the local hub only.
+- Per-client guild routing sets are mutex-guarded (`Client.HasGuild/AddGuild/RemoveGuild`).
+- Heartbeat/ping-pong is implemented; session resume is not.
+- In dev, Vite must proxy `/gateway` (ws) to the backend — without it every realtime event silently stops arriving.
+
+## Auth & sessions (`backend/internal/auth`, `frontend/src/lib/api.ts`)
+
+- Access token: JWT, 15 min (`JWT_ACCESS_EXPIRY`). Refresh token: opaque, stored hashed in Redis (`refresh:{sha256}`), `JWT_REFRESH_EXPIRY=8760h`, renewed on every refresh so active accounts stay signed in.
+- Refresh tokens rotate on use; the old token stays valid for a 30 s grace window so a lost response or two racing clients don't end the session.
+- `POST /auth/login` accepts `rememberMe` (default `true`); `false` limits the session to 24 h.
+- Redis runs with `appendonly yes` so sessions survive restarts. Wiping Redis or changing `JWT_ACCESS_SECRET` logs everyone out.
+- Frontend: one shared `refreshSession()` (concurrent callers share a request), refreshing ~2 min before expiry and on focus/visibility/online. Only an explicit 400/401/403 from `/auth/refresh` logs the user out; network errors, 5xx and 429 retry with backoff and keep credentials. The rotated refresh token is persisted before anything else.
+- `useGateway` reconnects with the freshest token (backoff 1–30 s, immediate on focus) and refreshes on close code 4001.
+
+## DM calls (`backend/internal/call`, `frontend/src/features/call`)
+
+- Redis state: `call:{channelId}` hash (`caller`, `callee`, `state` = ringing|active) plus `usercall:{userId}` for busy checks.
+- Rings time out after 30 s (`CALL_TIMEOUT` to both sides). Active calls expire after 90 s unless clients ping `POST /dms/:id/call/keepalive` (every 30 s).
+- Initiate returns 409 if either user is busy or the DM is already ringing; only the callee can accept/decline. If the DM has an *active* call, a new Initiate from either member replaces it (and sends `CALL_END` to the other side): the caller's client can't be in a call when it initiates, so that call died on their side (crash, reload, lost hang-up). Legacy string-typed `call:*` keys from older builds are deleted on read.
+- `DMCallPanel` is mounted app-wide in `AppPage` (remote audio via `GlobalVoiceAudio`), hangs up if the other side leaves the LiveKit room, and ends the call on `pagehide`/logout. Joining a DM call leaves any guild voice channel.
+
+## Voice (`backend/internal/voice`, `frontend/src/hooks/useVoice.ts`)
+
+- `POST /channels/:id/voice/token` returns a LiveKit JWT. Room name: `guild:{guildId}:channel:{channelId}`.
+- Voice state lives in Redis at `voice_state:{channelId}`; presence at `presence:{userId}` (TTL).
+- Coturn (TURN/STUN) exists only in the production compose file.
+
+### Soundboard
+
+- `Soundboard` is a nonmodal, anchored popover shared by the voice control bar, persistent sidebar voice controls, and DM call header. Search filters a compact grid; preview mode changes clicks to local-only playback. Clicking sounds keeps the board open. Escape restores trigger focus; outside clicks dismiss without blocking the underlying voice controls.
+- `attachSoundboard(room, guildId?)` owns playback independently of panel navigation. The guild is the **connected voice guild**, never the guild currently being browsed. DM calls have built-in sounds only. Six licensed recordings are bundled in `frontend/public/sounds/soundboard/` and predecoded on joining; custom clips use the same cached AudioBuffer playback path. There is no runtime synthesis or third-party audio fetch. The popover links to `CREDITS.txt` with creators, source URLs, licenses, and conversion details.
+- Reliable LiveKit data on `diskord.soundboard.v2` carries a catalog ID, timestamp and unique event UUID, never arbitrary URLs/audio. Local feedback starts before waiting for publish completion. Listeners deduplicate event IDs, reject oversized/stale packets (±5 seconds; synchronized clocks recommended), and resolve custom IDs only from the current guild catalog. All clients need the v2 implementation; old v1 boards do not interoperate.
+- Every trigger starts its own voice, so repeated clicks (same or different sounds, same or different senders) stack instead of cutting each other off; a newer trigger never cancels an earlier one that is still loading. There is **no clip-duration lock or two-second cooldown**. A token bucket permits eight immediate triggers and refills ten per second; each listener independently applies the same flood limit. At most 16 voices play at once; past that the oldest voice is stopped for the newest rather than queuing. A compressor bounds the combined soundboard mix; individual custom clips are peak-limited.
+- Existing LiveKit publish/data grants govern broadcast access. The normal client also requires connected, unmuted, undeafened state; previews never publish. Self-mute/deafen remain client controls, not server moderation boundaries. Listener-only volume (default 50%) multiplies participant volume and affects active clips. Deafen and Stop immediately cancel active and pending playback; Stop is local only. Preferences last for the app lifetime.
+- Reconnect/disconnect stops active playback; departure stops that participant. Cleanup aborts audio downloads, clears decoded buffers, disconnects audio nodes/listeners, and closes the AudioContext. Async work cannot play after disposal, a session transition, a newer trigger, or a local stop. Autoplay-locked sounds are dropped, not replayed after the next gesture; the board shows an unlock hint. Reliable delivery is not a playback acknowledgment.
+
+#### Guild uploads (`backend/internal/soundboard`)
+
+- Apply migration **000016** manually before using guild sounds. `GET/POST /guilds/:id/sounds`, `GET /guilds/:id/sounds/:soundId` and `DELETE /guilds/:id/sounds/:soundId` all require authentication and guild membership. **Every member** may upload, not just admins. Deletion is limited to the uploader or a moderator/admin/owner; list metadata includes the caller's `canDelete` flag.
+- The inline Add sound form accepts browser-decodable audio (MP3/WAV/Ogg etc.), at most 8 MB input and 5 seconds. Preview is local; nothing is uploaded until Add sound. The client downmixes/resamples to mono 24 kHz PCM16 WAV. The server independently validates the exact canonical header, sample format, byte counts and ≤240,044-byte duration bound; extensions, MIME types and client duration claims are not trusted.
+- At most 48 clips per guild, enforced under a guild-row transaction lock so concurrent uploads cannot bypass the quota. Uploads also use the existing Redis HTTP rate limiter (10/minute per IP/path). The bounded catalog is returned as one list.
+- Small canonical clips are stored as PostgreSQL BYTEA alongside metadata, served inside the existing authenticated JSON envelope as base64. This avoids another media service, public file URLs and orphan-file cleanup, works across backend instances, and cascades on guild deletion. Deleted users leave creatorless sounds removable by moderators. Include `guild_sounds` in normal DB backups.
+- Successful uploads/deletions emit guild-scoped `SOUNDBOARD_UPDATE` over the existing gateway/Redis fanout. Voice sessions refresh metadata and predecode sounds with three concurrent requests; opening the board and reconnecting also refresh. A first trigger racing the catalog event gets a bounded metadata retry. Unknown IDs are never fetched directly. Late downloads (>2 seconds for remote playback) are dropped rather than surprising listeners. Deleted clips are evicted and stopped.
+
+Manual smoke test: use two clients in a guild voice channel; open from sidebar and full voice controls, search and rapidly retrigger a sound, toggle local preview, and keep talking/navigating. Upload as an ordinary member; verify another client sees and hears it without reopening. Exercise invalid/overlong files, quota/network errors, deletion by uploader/moderator vs another member, mute/deafen/volume-zero, simultaneous senders, reconnect, switching guilds, and hangup during download/playback. Repeat built-ins in DM calls. Check WebKit/Tauri autoplay before/after a gesture, and popover positioning at viewport edges.
+
+## Desktop (`frontend/src-tauri`)
+
+- Closing the main window (title-bar ✕, Alt+F4, Cmd+W) hides it to the system tray / menu bar; voice and the gateway keep running. Left-clicking the tray icon, the tray "Open diskoRD" item, the macOS Dock icon, or a second launch / `diskord://` link shows it again. Only the tray "Quit diskoRD" item (or Cmd+Q on macOS) exits.
+- The webview ignores `target="_blank"`, so `installExternalLinkHandler` (`frontend/src/lib/externalLinks.ts`) sends clicks on external `http(s)`/`mailto`/`tel` links to the default browser via `tauri-plugin-opener`; links a component already handled (in-app invites) are skipped. Use `openExternal(url)` instead of `window.open`.
+- Keep `@tauri-apps/plugin-*` npm packages on the same minor as their Rust crates; newer opener releases require `@tauri-apps/api` 2.11, so it is held at 2.5.
+- Desktop call window (`call-view`, `frontend/src/features/call/CallViewWindow.tsx`, loaded as `index.html?view=call`): a separate, frameless, always-on-top OS window for a DM call or a guild voice channel. The call itself — mic, camera, mute/deafen, soundboard, hang-up — always stays in the main window; the window joins as a hidden, subscribe-only, video-only viewer (`POST /dms/:id/call/viewer` or `POST /channels/:id/voice/viewer`, identity `{userId}:viewer`, issued only to someone in that call) because a second webview can't share the main window's media. Its buttons send commands to the main window, which echoes the resulting state. Protocol in `lib/callView.ts`, main-window side in `hooks/useCallViewHost.ts` (one host per kind; only the active one answers, and a host only closes a window it opened). DM calls open it automatically and replace the in-app card on desktop; guild voice keeps the in-app panel and opens the window from the voice control bar or the sidebar bar. The window asks for a token only while it has none — re-sending tokens reconnects it and blacks out video — and uses no adaptive stream for the same reason. Both windows set `backgroundThrottling: "disabled"` (macOS 14+; Windows/WebView2 doesn't throttle pages with live WebRTC/audio). Its capability (`capabilities/call-view.json`) only allows dragging, resizing, closing and always-on-top.
