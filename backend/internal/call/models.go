@@ -28,3 +28,9 @@ type CallEndEvent struct {
 type CallTimeoutEvent struct {
 	ChannelID string `json:"channelId"`
 }
+
+// ViewerTokenResponse lets a second window watch the call without joining as the user.
+type ViewerTokenResponse struct {
+	Token string `json:"token"`
+	URL   string `json:"url"`
+}

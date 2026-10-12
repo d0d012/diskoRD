@@ -3,12 +3,14 @@ package call
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	lkauth "github.com/livekit/protocol/auth"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/friend"
 	"github.com/d0d012/diskord/pkg/config"
@@ -68,6 +70,48 @@ func (s *Service) SetNotifier(n Notifier) {
 	s.notifier = n
 }
 
+func roomFor(channelID string) string { return fmt.Sprintf("dm:%s", channelID) }
+
+func (s *Service) liveKitURL() string {
+	if s.cfg.PublicURL != "" {
+		return s.cfg.PublicURL
+	}
+	return fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
+}
+
+// ViewerToken returns a hidden, subscribe-only token for a participant's own active
+// call, so the desktop call window can show video while the call itself stays in the
+// main window. The ":viewer" identity keeps it from replacing the user's connection.
+func (s *Service) ViewerToken(ctx context.Context, channelID, userID string) (*ViewerTokenResponse, error) {
+	if _, _, err := s.lookupDM(ctx, channelID, userID); err != nil {
+		return nil, err
+	}
+	c, err := s.loadCall(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil || c.state != stateActive || (c.caller != userID && c.callee != userID) {
+		return nil, fiber.NewError(fiber.StatusGone, "no active call")
+	}
+	at := lkauth.NewAccessToken(s.cfg.APIKey, s.cfg.APISecret)
+	at.SetVideoGrant(&lkauth.VideoGrant{
+		RoomJoin:       true,
+		Room:           roomFor(channelID),
+		CanPublish:     boolPtr(false),
+		CanPublishData: boolPtr(false),
+		CanSubscribe:   boolPtr(true),
+		Hidden:         true,
+	}).
+		SetIdentity(userID + ":viewer").
+		SetName(s.lookupName(ctx, userID)).
+		SetValidFor(12 * time.Hour)
+	token, err := at.ToJWT()
+	if err != nil {
+		return nil, fmt.Errorf("call.Service.ViewerToken: %w", err)
+	}
+	return &ViewerTokenResponse{Token: token, URL: s.liveKitURL()}, nil
+}
+
 func (s *Service) generateToken(userID, username, roomName string) (string, error) {
 	at := lkauth.NewAccessToken(s.cfg.APIKey, s.cfg.APISecret)
 	grant := &lkauth.VideoGrant{
@@ -93,6 +137,15 @@ type callState struct {
 
 func (s *Service) loadCall(ctx context.Context, channelID string) (*callState, error) {
 	m, err := s.rdb.HGetAll(ctx, callKey(channelID)).Result()
+	if err != nil && strings.HasPrefix(err.Error(), "WRONGTYPE") {
+		// Older builds stored call:{channelId} as a plain string with no TTL. Such a
+		// key is a leftover, never a live call: drop it instead of failing forever.
+		log.Warn().Str("channelID", channelID).Msg("call: removing legacy call key")
+		if err := s.rdb.Del(ctx, callKey(channelID)).Err(); err != nil {
+			return nil, fmt.Errorf("call.Service.loadCall: delete legacy key: %w", err)
+		}
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("call.Service.loadCall: %w", err)
 	}
@@ -133,10 +186,14 @@ func (s *Service) Initiate(ctx context.Context, channelID, callerID string) erro
 
 	if existing, err := s.loadCall(ctx, channelID); err != nil {
 		return err
+	} else if existing != nil && existing.state == stateActive {
+		// Only the two DM members can get here, and a client can only start a call while
+		// it isn't in one. So this call is dead on the caller's side (crash, reload, lost
+		// hang-up): replace it instead of blocking calls until it expires.
+		log.Info().Str("channelID", channelID).Str("userID", callerID).Msg("call: replacing stale active call")
+		s.clearCall(ctx, channelID, existing)
+		s.notify(recipientID, "CALL_END", CallEndEvent{ChannelID: channelID})
 	} else if existing != nil {
-		if existing.state == stateActive {
-			return fiber.NewError(fiber.StatusConflict, "a call is already in progress")
-		}
 		if existing.caller == recipientID {
 			return fiber.NewError(fiber.StatusConflict, "this user is already calling you")
 		}
@@ -203,11 +260,8 @@ func (s *Service) Accept(ctx context.Context, channelID, calleeID string) error 
 		return fmt.Errorf("call.Service.Accept: notifier not set")
 	}
 
-	wsURL := s.cfg.PublicURL
-	if wsURL == "" {
-		wsURL = fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
-	}
-	roomName := fmt.Sprintf("dm:%s", channelID)
+	wsURL := s.liveKitURL()
+	roomName := roomFor(channelID)
 
 	calleeToken, err := s.generateToken(calleeID, s.lookupName(ctx, calleeID), roomName)
 	if err != nil {

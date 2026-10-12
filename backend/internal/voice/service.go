@@ -70,6 +70,70 @@ func (s *Service) generateToken(userID, username, roomName string) (string, erro
 
 func boolPtr(b bool) *bool { return &b }
 
+func roomName(guildID, channelID string) string {
+	return fmt.Sprintf("guild:%s:channel:%s", guildID, channelID)
+}
+
+func (s *Service) liveKitURL() string {
+	if s.cfg.PublicURL != "" {
+		return s.cfg.PublicURL
+	}
+	return fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
+}
+
+// viewerToken is a hidden, subscribe-only token. The ":viewer" identity keeps it from
+// replacing the user's real connection, which stays in the main window.
+func viewerToken(cfg config.LiveKitConfig, userID, username, room string) (string, error) {
+	at := lkauth.NewAccessToken(cfg.APIKey, cfg.APISecret)
+	at.SetVideoGrant(&lkauth.VideoGrant{
+		RoomJoin:       true,
+		Room:           room,
+		CanPublish:     boolPtr(false),
+		CanPublishData: boolPtr(false),
+		CanSubscribe:   boolPtr(true),
+		Hidden:         true,
+	}).
+		SetIdentity(userID + ":viewer").
+		SetName(username).
+		SetValidFor(4 * time.Hour)
+	return at.ToJWT()
+}
+
+// ViewerToken lets the desktop call window watch the voice channel the user is in.
+func (s *Service) ViewerToken(ctx context.Context, userID, channelID string) (*VoiceTokenResponse, error) {
+	ch, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if ch.Type != "voice" {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "not a voice channel")
+	}
+	ok, err := s.guildRepo.IsMember(ctx, ch.GuildID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("voice.Service.ViewerToken: %w", err)
+	}
+	if !ok {
+		return nil, fiber.NewError(fiber.StatusForbidden, "not a member of this guild")
+	}
+	// Only someone in the channel may watch it.
+	inChannel, err := s.rdb.SIsMember(ctx, voiceStateKey(channelID), userID).Result()
+	if err != nil {
+		return nil, fmt.Errorf("voice.Service.ViewerToken: redis: %w", err)
+	}
+	if !inChannel {
+		return nil, fiber.NewError(fiber.StatusConflict, "join the voice channel first")
+	}
+	var username string
+	if err := s.db.QueryRow(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&username); err != nil {
+		return nil, fmt.Errorf("voice.Service.ViewerToken: fetch username: %w", err)
+	}
+	token, err := viewerToken(s.cfg, userID, username, roomName(ch.GuildID, channelID))
+	if err != nil {
+		return nil, fmt.Errorf("voice.Service.ViewerToken: %w", err)
+	}
+	return &VoiceTokenResponse{Token: token, URL: s.liveKitURL()}, nil
+}
+
 func (s *Service) JoinVoice(ctx context.Context, userID, channelID string) (*VoiceTokenResponse, error) {
 	ch, err := s.channelRepo.GetByID(ctx, channelID)
 	if err != nil {
@@ -95,8 +159,7 @@ func (s *Service) JoinVoice(ctx context.Context, userID, channelID string) (*Voi
 		return nil, fmt.Errorf("voice.Service.JoinVoice: fetch username: %w", err)
 	}
 
-	roomName := fmt.Sprintf("guild:%s:channel:%s", ch.GuildID, channelID)
-	token, err := s.generateToken(userID, username, roomName)
+	token, err := s.generateToken(userID, username, roomName(ch.GuildID, channelID))
 	if err != nil {
 		return nil, fmt.Errorf("voice.Service.JoinVoice: generate token: %w", err)
 	}
@@ -117,11 +180,7 @@ func (s *Service) JoinVoice(ctx context.Context, userID, channelID string) (*Voi
 		})
 	}
 
-	wsURL := s.cfg.PublicURL
-	if wsURL == "" {
-		wsURL = fmt.Sprintf("ws://%s:%d", s.cfg.Host, s.cfg.Port)
-	}
-	return &VoiceTokenResponse{Token: token, URL: wsURL}, nil
+	return &VoiceTokenResponse{Token: token, URL: s.liveKitURL()}, nil
 }
 
 func (s *Service) LeaveVoice(ctx context.Context, userID, channelID string) error {

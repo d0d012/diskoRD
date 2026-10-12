@@ -48,6 +48,15 @@ func (h *Handler) End(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"ok": true}})
 }
 
+func (h *Handler) ViewerToken(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	res, err := h.svc.ViewerToken(c.Context(), c.Params("channelId"), userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": res})
+}
+
 func (h *Handler) Keepalive(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	channelID := c.Params("channelId")

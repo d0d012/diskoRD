@@ -21,6 +21,15 @@ func (h *Handler) JoinVoice(c *fiber.Ctx) error {
 	return c.JSON(Response{Data: resp})
 }
 
+func (h *Handler) ViewerToken(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	res, err := h.svc.ViewerToken(c.Context(), userID, c.Params("id"))
+	if err != nil {
+		return err
+	}
+	return c.JSON(Response{Data: res})
+}
+
 func (h *Handler) LeaveVoice(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	channelID := c.Params("id")

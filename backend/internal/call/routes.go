@@ -8,4 +8,5 @@ func RegisterRoutes(app *fiber.App, h *Handler, authMw fiber.Handler) {
 	app.Post("/dms/:channelId/call/decline", authMw, h.Decline)
 	app.Post("/dms/:channelId/call/end", authMw, h.End)
 	app.Post("/dms/:channelId/call/keepalive", authMw, h.Keepalive)
+	app.Post("/dms/:channelId/call/viewer", authMw, h.ViewerToken)
 }
