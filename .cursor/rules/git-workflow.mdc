@@ -8,12 +8,12 @@ alwaysApply: true
 ## Branch Naming
 
 ```
-feature/phase-{N}-{short-description}
-fix/phase-{N}-{short-description}
+feature/{short-description}
+fix/{short-description}
 refactor/{short-description}
 ```
 
-Examples: `feature/phase-1-auth-register`, `fix/phase-2-invite-validation`
+Examples: `feature/message-search`, `fix/invite-validation`
 
 ## Commit Messages
 
@@ -33,7 +33,7 @@ Scopes: `auth`, `guild`, `channel`, `message`, `gateway`, `presence`, `voice`, `
 
 ## PR Convention
 
-One PR per sub-task (e.g., "Phase 1: auth register endpoint" is one PR). Title matches the commit convention. PR body should have:
+One PR per task. Title matches the commit convention. PR body should have:
 
 ```
 ## Summary
