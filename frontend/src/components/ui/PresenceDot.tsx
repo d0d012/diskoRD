@@ -5,7 +5,11 @@ interface Props {
 }
 
 export function PresenceDot({ status, size = 10, borderColor = "var(--color-dc-bg-secondary)" }: Props) {
-  const color = status === "online" ? "var(--color-dc-online)" : "var(--color-dc-text-muted)";
+  const color =
+    status === "online" ? "var(--color-dc-online)"
+    : status === "idle" ? "var(--color-dc-idle)"
+    : status === "dnd" ? "var(--color-dc-dnd)"
+    : "var(--color-dc-offline, var(--color-dc-text-muted))";
   return (
     <div
       className="absolute rounded-full border-2 flex-shrink-0"

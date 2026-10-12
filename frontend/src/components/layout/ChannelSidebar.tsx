@@ -10,6 +10,8 @@ import { ServerSettingsModal } from "../../features/guild/ServerSettingsModal";
 import { VoiceStatusBar } from "../../features/voice/VoiceStatusBar";
 import { VolumeMenu } from "../../features/voice/VolumeMenu";
 import type { Channel } from "../../types";
+import { micConstraints } from "../../lib/mediaDevices";
+import { UserSettingsModal } from "../../features/settings/UserSettingsModal";
 
 // ── Inline-editable channel item ────────────────────────────────────────────
 
@@ -404,9 +406,10 @@ const STATUS_META: Record<UserStatus, { label: string; color: string }> = {
 };
 
 function UserPanel() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { status, setStatus } = useNotificationStore();
   const [open, setOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -455,9 +458,10 @@ function UserPanel() {
 
         <div className="ml-auto">
           <button
-            onClick={() => logout()}
+            onClick={() => setShowSettings(true)}
             className="p-1 rounded transition-colors"
-            title="Log Out"
+            title="User Settings"
+            aria-label="User Settings"
             style={{ color: "var(--color-dc-interactive-normal)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
@@ -468,6 +472,8 @@ function UserPanel() {
           </button>
         </div>
       </div>
+
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Status dropdown */}
       {open && (
@@ -604,7 +610,7 @@ export function ChannelSidebar() {
                   onJoin={async () => {
                     if (activeVoiceChannelId !== ch.id) {
                       try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        const stream = await navigator.mediaDevices.getUserMedia(micConstraints());
                         stream.getTracks().forEach((t) => t.stop());
                       } catch { /* permission denied — join anyway, mic will be muted */ }
                     }

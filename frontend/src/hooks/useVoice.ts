@@ -10,8 +10,12 @@ import {
   type TrackPublication,
 } from "livekit-client";
 import { playSound } from "../lib/sounds";
+import { attachSoundboard } from "../lib/soundboard";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useNoiseCancellation } from "./useNoiseCancellation";
+import { cameraDeviceId, micConstraints } from "../lib/mediaDevices";
+import { useSettingsStore } from "../stores/settingsStore";
+import { useCallStore } from "../stores/callStore";
 
 export interface VoiceParticipant {
   identity: string;
@@ -76,6 +80,7 @@ export function useVoice() {
     isNoiseCancellationEnabled,
   } = useVoiceStore();
   const { processStream } = useNoiseCancellation();
+  const inputDeviceId = useSettingsStore((s) => s.inputDeviceId);
 
   const refreshParticipants = useCallback(() => {
     const room = roomRef.current;
@@ -105,15 +110,15 @@ export function useVoice() {
 
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
+    const cleanupSoundboard = attachSoundboard(room, useVoiceStore.getState().activeVoiceGuildId);
 
     room.on(RoomEvent.Connected, async () => {
       setConnectionState(ConnectionState.Connected);
       refreshParticipants();
-      const { isMuted } = useVoiceStore.getState();
 
       let rawStream: MediaStream | null = null;
       try {
-        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        rawStream = await navigator.mediaDevices.getUserMedia(micConstraints());
         const { stream: processedStream, cleanup } =
           await processStream(rawStream);
         ncCleanupRef.current = cleanup;
@@ -124,14 +129,13 @@ export function useVoice() {
           undefined,
           false
         );
-        await room.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
-        if (isMuted) {
-          await room.localParticipant.setMicrophoneEnabled(false);
-        }
+        const pub = await room.localParticipant.publishTrack(livekitTrack, { source: Track.Source.Microphone });
+        // Mute may have been toggled while the track was publishing.
+        if (useVoiceStore.getState().isMuted) await pub.mute();
       } catch {
         rawStream?.getTracks().forEach((t) => t.stop());
         // Fall back to LiveKit's built-in mic handling
-        room.localParticipant.setMicrophoneEnabled(!isMuted);
+        room.localParticipant.setMicrophoneEnabled(!useVoiceStore.getState().isMuted).catch(() => {});
       }
     });
 
@@ -164,6 +168,7 @@ export function useVoice() {
     room.connect(liveKitUrl, liveKitToken);
 
     return () => {
+      cleanupSoundboard();
       room.removeAllListeners();
       room.disconnect();
       roomRef.current = null;
@@ -173,8 +178,13 @@ export function useVoice() {
   }, [liveKitToken, liveKitUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mic mute/unmute
+  // Only toggles an already-published mic. Before that, the Connected handler publishes
+  // the mic and applies the current mute state; calling setMicrophoneEnabled here would
+  // publish a second microphone track and break negotiation.
   useEffect(() => {
-    roomRef.current?.localParticipant.setMicrophoneEnabled(!isMuted);
+    const pub = roomRef.current?.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (!pub?.track) return;
+    (isMuted ? pub.mute() : pub.unmute()).catch(() => {});
   }, [isMuted]);
 
   // NC toggle mid-call — rewire the mic pipeline when NC enabled state changes
@@ -192,7 +202,7 @@ export function useVoice() {
       const micPub = room!.localParticipant.getTrackPublication(Track.Source.Microphone);
 
       try {
-        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        rawStream = await navigator.mediaDevices.getUserMedia(micConstraints());
         if (cancelled) { rawStream.getTracks().forEach(t => t.stop()); return; }
         const { stream: processedStream, cleanup } = await processStream(rawStream);
         if (cancelled) { cleanup(); rawStream.getTracks().forEach(t => t.stop()); return; }
@@ -211,12 +221,17 @@ export function useVoice() {
 
     rewireMic();
     return () => { cancelled = true; };
-  }, [isNoiseCancellationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isNoiseCancellationEnabled, inputDeviceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Camera — fixed 720p / 30fps
   useEffect(() => {
     roomRef.current?.localParticipant.setCameraEnabled(isCameraOn, {
+      deviceId: cameraDeviceId(),
       resolution: { width: 1280, height: 720, frameRate: 30 },
+    }).catch(() => {
+      // Denied or busy camera: don't leave the button showing "on".
+      useVoiceStore.getState().setCameraOn(false);
+      useCallStore.getState().setNotice("Couldn't turn on your camera. Check Settings → Permissions.");
     });
   }, [isCameraOn]);
 

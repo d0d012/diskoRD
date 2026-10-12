@@ -8,9 +8,11 @@ interface Props {
   guildId: string;
   channelName: string;
   onTyping: (channelId: string, guildId: string) => void;
+  /** Defaults to "Message #channel". */
+  placeholder?: string;
 }
 
-export function MessageInput({ channelId, guildId, channelName, onTyping }: Props) {
+export function MessageInput({ channelId, guildId, channelName, onTyping, placeholder }: Props) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -125,7 +127,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping }: Prop
             color: "var(--color-dc-text-normal)",
             paddingTop: "2px",
           }}
-          placeholder={`Message #${channelName}`}
+          placeholder={placeholder ?? `Message #${channelName}`}
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}

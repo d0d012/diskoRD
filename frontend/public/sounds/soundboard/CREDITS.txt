@@ -1,0 +1,51 @@
+diskoRD built-in soundboard — sound credits
+
+These are licensed sound-effect assets, not Discord's proprietary audio.
+All six files are bundled locally; playback does not contact their source sites.
+
+Air horn (airhorn.wav)
+  Original: Air Horn — Mike Koenig
+  Source: https://soundbible.com/1542-Air-Horn.html
+  License: Creative Commons Attribution 3.0 Unported
+  https://creativecommons.org/licenses/by/3.0/
+
+Sad trombone (sad.wav)
+  Original: Sad Trombone — Joe Lamb
+  Source: https://soundbible.com/1830-Sad-Trombone.html
+  License: Creative Commons Attribution 3.0 Unported
+  https://creativecommons.org/licenses/by/3.0/
+
+Ba dum tss (drum.wav)
+  Original: Drum_ComedyRimshot.wav — xtrgamr
+  Source: https://freesound.org/people/xtrgamr/sounds/432972/
+  Audio: https://cdn.freesound.org/previews/432/432972_4157918-lq.mp3
+  License: Creative Commons Attribution 4.0 International
+  https://creativecommons.org/licenses/by/4.0/
+  Adapted from the publicly available MP3 preview.
+
+Magic (magic.wav)
+  Original: Magic Wand Noise — Mike Koenig
+  Source: https://soundbible.com/474-Magic-Wand-Noise.html
+  License: Creative Commons Attribution 3.0 Unported
+  https://creativecommons.org/licenses/by/3.0/
+
+Level up (cheer.wav)
+  Original: jingles_NES01.ogg from Music Jingles — Kenney
+  Source: https://kenney.nl/assets/music-jingles
+  License: CC0 1.0 Universal
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Boop (beep.wav)
+  Original: bong_001.ogg from Interface Sounds — Kenney
+  Source: https://kenney.nl/assets/interface-sounds
+  License: CC0 1.0 Universal
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Modifications by diskoRD:
+  Leading silence trimmed at -55 dB; downmixed to mono; resampled to 24 kHz;
+  peak adjusted to approximately -9 dBFS; converted to PCM16 WAV.
+  No sound has been time-stretched or synthesized by the app.
+  All clips are under five seconds. The in-app labels are listed above.
+
+Retrieved 2026-10-02. No endorsement by the original creators is implied.
+Retain these credits and license links when redistributing the bundled sounds.

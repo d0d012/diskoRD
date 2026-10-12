@@ -2,6 +2,9 @@ import { useRef, useState } from "react";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
 import { ScreenShareModal } from "./ScreenShareModal";
+import { Soundboard } from "./Soundboard";
+import { micConstraints } from "../../lib/mediaDevices";
+import { isTauri } from "../../lib/inviteLinks";
 
 interface ControlBarProps {
   /** When true, renders with semi-transparent dark background for overlay use */
@@ -47,6 +50,8 @@ export function ControlBar({ floating = false }: ControlBarProps) {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const monitorCleanupRef = useRef<(() => void) | null>(null);
   const monitorLoadingRef = useRef(false);
+  const voiceWindowOpen = useVoiceStore((s) => s.voiceWindowOpen);
+  const setVoiceWindowOpen = useVoiceStore((s) => s.setVoiceWindowOpen);
   const { isMuted, isDeafened, isCameraOn, isScreenSharing, setMuted, setDeafened, setCameraOn, setScreenSharing, leaveVoice } =
     useVoiceStore();
   const { isEnabled: isNCEnabled, toggle: toggleNC, processStream } = useNoiseCancellation();
@@ -61,7 +66,7 @@ export function ControlBar({ floating = false }: ControlBarProps) {
     if (monitorLoadingRef.current) return;
     monitorLoadingRef.current = true;
     try {
-      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rawStream = await navigator.mediaDevices.getUserMedia(micConstraints());
       const { stream, cleanup: ncCleanup } = await processStream(rawStream);
       const ctx = new AudioContext();
       const source = ctx.createMediaStreamSource(stream);
@@ -164,6 +169,19 @@ export function ControlBar({ floating = false }: ControlBarProps) {
             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
           </svg>
         </ControlBtn>
+
+        <Soundboard />
+
+        {/* Desktop: show the call in its own window (the panel here stays as is) */}
+        {isTauri() && (
+          <ControlBtn active={voiceWindowOpen} onClick={() => setVoiceWindowOpen(!voiceWindowOpen)}
+            title={voiceWindowOpen ? "Close call window" : "Open in a separate window"} floating={floating}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
+          </svg>
+          </ControlBtn>
+        )}
 
         {/* Disconnect */}
         <ControlBtn danger onClick={leaveVoice} title="Disconnect" floating={floating}>

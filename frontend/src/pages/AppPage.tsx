@@ -15,6 +15,7 @@ import { NotificationToastContainer } from "../features/notification/Notificatio
 import { IncomingCallOverlay } from "../features/call/IncomingCallOverlay";
 import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
 import { DMCallPanel } from "../features/call/DMCallPanel";
+import { VoiceCallViewHost } from "../features/voice/VoiceCallViewHost";
 
 function EmptyState() {
   return (
@@ -89,10 +90,19 @@ export function AppPage() {
 
   useEffect(() => {
     fetchGuilds();
-    // Request OS notification permission once on load
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+  }, []);
+
+  // Ask for notification permission on the first click or key press: WebKit (the macOS
+  // app and Safari) rejects permission prompts that aren't triggered by a user gesture.
+  useEffect(() => {
+    if (typeof Notification === "undefined" || Notification.permission !== "default") return;
+    const events = ["pointerdown", "keydown"] as const;
+    function ask() {
+      events.forEach((e) => document.removeEventListener(e, ask, true));
       Notification.requestPermission().catch(() => {});
     }
+    events.forEach((e) => document.addEventListener(e, ask, true));
+    return () => events.forEach((e) => document.removeEventListener(e, ask, true));
   }, []);
 
   const isHome = activeGuildId === null;
@@ -109,6 +119,7 @@ export function AppPage() {
       <IncomingCallOverlay />
       <OutgoingCallOverlay />
       <DMCallPanel />
+      <VoiceCallViewHost />
       <TitleBar />
       <div className="flex-1 overflow-hidden">
         <MainLayout>

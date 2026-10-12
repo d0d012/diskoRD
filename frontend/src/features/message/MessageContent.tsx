@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { parseInviteCode, goToInvite } from "../../lib/inviteLinks";
+import { openExternal } from "../../lib/externalLinks";
+import { linkify } from "../../lib/linkify";
 
 /** Invite links open inside the app instead of a browser tab. */
 function openInApp(e: React.MouseEvent, url: string) {
@@ -144,7 +146,7 @@ function InlineImage({ url }: { url: string }) {
       className="mt-2 rounded-lg max-w-sm max-h-80 object-contain block cursor-pointer"
       style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
       onError={() => setBroken(true)}
-      onClick={() => window.open(url, "_blank")}
+      onClick={() => openExternal(url)}
     />
   );
 }
@@ -184,38 +186,24 @@ export function MessageContent({ content, attachments }: Props) {
   const imageUrls = urlMatches.filter((u) => isImageUrl(u) && !getYoutubeId(u));
   const linkUrls = urlMatches.filter((u) => !getYoutubeId(u) && !isImageUrl(u));
 
-  // Replace raw URLs in text with clickable links
-  const textParts: React.ReactNode[] = [];
-  let remaining = content;
-  const allUrls = urlMatches.slice().sort((a, b) => remaining.indexOf(a) - remaining.indexOf(b));
-
-  if (allUrls.length === 0) {
-    textParts.push(<TextWithMentions key="text" text={content} />);
-  } else {
-    let cursor = 0;
-    for (const url of allUrls) {
-      const idx = remaining.indexOf(url, 0);
-      if (idx < 0) continue;
-      const before = remaining.slice(0, idx);
-      if (before) textParts.push(<TextWithMentions key={`t-${cursor}`} text={before} />);
-      textParts.push(
-        <a
-          key={`u-${url}`}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => openInApp(e, url)}
-          style={{ color: "var(--color-dc-text-link, #00b0f4)" }}
-          className="hover:underline"
-        >
-          {url}
-        </a>
-      );
-      remaining = remaining.slice(idx + url.length);
-      cursor++;
-    }
-    if (remaining) textParts.push(<TextWithMentions key="tail" text={remaining} />);
-  }
+  // Turn URLs and bare domains (e.g. "youtube.com") in the text into clickable links
+  const textParts = linkify(content).map((part, i) =>
+    part.type === "text" ? (
+      <TextWithMentions key={i} text={part.text} />
+    ) : (
+      <a
+        key={i}
+        href={part.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => openInApp(e, part.href)}
+        style={{ color: "var(--color-dc-text-link, #00b0f4)" }}
+        className="hover:underline"
+      >
+        {part.text}
+      </a>
+    )
+  );
 
   return (
     <div>

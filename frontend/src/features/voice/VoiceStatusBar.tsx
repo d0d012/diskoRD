@@ -1,11 +1,15 @@
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useGuildStore } from "../../stores/guildStore";
+import { Soundboard } from "./Soundboard";
+import { CallStatusBar } from "../call/CallStatusBar";
+import { isTauri } from "../../lib/inviteLinks";
 
 export function VoiceStatusBar() {
-  const { activeVoiceChannelId, activeVoiceGuildId, isMuted, setMuted, leaveVoice } = useVoiceStore();
+  const { activeVoiceChannelId, activeVoiceGuildId, isMuted, setMuted, leaveVoice, voiceWindowOpen, setVoiceWindowOpen } = useVoiceStore();
   const { channels, setActiveChannel } = useGuildStore();
 
-  if (!activeVoiceChannelId || !activeVoiceGuildId) return null;
+  // Guild voice and DM calls are exclusive; show the DM call bar when there's no voice channel.
+  if (!activeVoiceChannelId || !activeVoiceGuildId) return <CallStatusBar />;
 
   const channel = (channels[activeVoiceGuildId] ?? []).find((c) => c.id === activeVoiceChannelId);
 
@@ -26,6 +30,22 @@ export function VoiceStatusBar() {
             #{channel?.name ?? "…"}
           </p>
         </div>
+        <Soundboard compact />
+        {isTauri() && (
+          <button
+            onClick={() => setVoiceWindowOpen(!voiceWindowOpen)}
+            title={voiceWindowOpen ? "Close call window" : "Open in a separate window"}
+            aria-label={voiceWindowOpen ? "Close call window" : "Open in a separate window"}
+            aria-pressed={voiceWindowOpen}
+            className="p-1 rounded transition-colors flex-shrink-0 hover:bg-[var(--color-dc-bg-modifier-hover)]"
+            style={{ color: voiceWindowOpen ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
+          </svg>
+          </button>
+        )}
         <button
           onClick={() => setMuted(!isMuted)}
           title={isMuted ? "Unmute" : "Mute"}

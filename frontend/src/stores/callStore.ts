@@ -20,6 +20,9 @@ interface CallStore {
   /** One-line message for the user (errors, "No answer", …); auto-cleared by the UI. */
   notice: string | null;
   setNotice: (notice: string | null) => void;
+  /** Channel whose call window the user hid; the call keeps running. A new call starts visible. */
+  hiddenPanelChannelId: string | null;
+  setCallPanelHidden: (hidden: boolean) => void;
 
   // Outgoing — I initiate
   initiateCall: (channelId: string, recipientId: string, recipientName: string) => Promise<void>;
@@ -58,8 +61,10 @@ export const useCallStore = create<CallStore>((set, get) => ({
   state: "idle",
   call: null,
   notice: null,
+  hiddenPanelChannelId: null,
 
   setNotice: (notice) => set({ notice }),
+  setCallPanelHidden: (hidden) => set({ hiddenPanelChannelId: hidden ? get().call?.channelId ?? null : null }),
 
   initiateCall: async (channelId, recipientId, recipientName) => {
     if (get().state !== "idle") return;
@@ -103,7 +108,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
   onCallAccepted: (channelId, token, url) => {
     const current = get().call;
     if (!current || current.channelId !== channelId) return;
-    set({ state: "in-call", call: { ...current, token, url } });
+    // Every call starts with its window visible, even in a DM whose last call was hidden.
+    set({ state: "in-call", call: { ...current, token, url }, hiddenPanelChannelId: null });
   },
 
   onCallEnded: (channelId, notice) => {
@@ -136,3 +142,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
     }
   },
 }));
+
+/** Whether the floating call window is hidden for the current call. */
+export function isCallPanelHidden(s: Pick<CallStore, "call" | "hiddenPanelChannelId">): boolean {
+  return !!s.call && s.hiddenPanelChannelId === s.call.channelId;
+}

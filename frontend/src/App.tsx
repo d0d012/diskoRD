@@ -8,6 +8,8 @@ import { useAuthStore } from "./stores/authStore";
 import { useUpdater } from "./hooks/useUpdater";
 import { useNoiseCancellation } from "./hooks/useNoiseCancellation";
 import { useDeepLinks } from "./hooks/useDeepLinks";
+import { installExternalLinkHandler } from "./lib/externalLinks";
+import { useSettingsStore } from "./stores/settingsStore";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
@@ -81,6 +83,9 @@ export function App() {
     initialize();
     loadPersistedPreference();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => installExternalLinkHandler(), []);
+  useEffect(() => { void useSettingsStore.getState().load(); }, []);
 
   if (!isInitialized) {
     return (

@@ -7,6 +7,7 @@ import { useFriendStore } from "../stores/friendStore";
 import { usePresenceStore } from "../stores/presenceStore";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useCallStore } from "../stores/callStore";
+import { useSoundboardStore } from "../stores/soundboardStore";
 import { useNotificationStore } from "../stores/notificationStore";
 import { useToastStore } from "../features/notification/NotificationToast";
 import { playSound } from "../lib/sounds";
@@ -85,6 +86,11 @@ export function useGateway() {
         if (event.s > seqRef.current) seqRef.current = event.s;
 
         switch (event.op) {
+          case "SOUNDBOARD_UPDATE": {
+            const data = event.d as { guildId: string };
+            if (data.guildId === useSoundboardStore.getState().guildId) void useSoundboardStore.getState().refresh();
+            break;
+          }
           case "HELLO": {
             const d = event.d as { heartbeatInterval: number };
             const interval = d?.heartbeatInterval ?? 30000;

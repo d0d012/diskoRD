@@ -30,6 +30,8 @@ interface ParticipantTileProps {
   isPinned?: boolean;
   onClick?: () => void;
   onDoubleClick?: () => void;
+  /** Right-click per-user volume; off where it can't apply (the desktop call window). */
+  volumeMenu?: boolean;
 }
 
 export function ParticipantTile({
@@ -38,6 +40,7 @@ export function ParticipantTile({
   isPinned = false,
   onClick,
   onDoubleClick,
+  volumeMenu: volumeMenuEnabled = true,
 }: ParticipantTileProps) {
   const [showExpand, setShowExpand] = useState(false);
   const [volumeMenu, setVolumeMenu] = useState<{ x: number; y: number } | null>(null);
@@ -66,7 +69,7 @@ export function ParticipantTile({
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => variant === "main" && setShowExpand(true)}
       onMouseLeave={() => setShowExpand(false)}
-      onContextMenu={!isLocal ? (e) => { e.preventDefault(); e.stopPropagation(); setVolumeMenu({ x: e.clientX, y: e.clientY }); } : undefined}
+      onContextMenu={!isLocal && volumeMenuEnabled ? (e) => { e.preventDefault(); e.stopPropagation(); setVolumeMenu({ x: e.clientX, y: e.clientY }); } : undefined}
     >
       {/* Video or avatar */}
       {hasVideo && cameraTrack ? (

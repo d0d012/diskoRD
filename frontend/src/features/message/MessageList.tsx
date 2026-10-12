@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 import { MessageItem } from "./MessageItem";
 import type { Message } from "../../types";
@@ -6,6 +6,8 @@ import type { Message } from "../../types";
 interface Props {
   channelId: string;
   channelName: string;
+  /** Replaces the default channel intro shown at the start of history. */
+  intro?: ReactNode;
 }
 
 function isSameAuthorAndClose(a: Message, b: Message): boolean {
@@ -14,7 +16,7 @@ function isSameAuthorAndClose(a: Message, b: Message): boolean {
   return diff < 7 * 60 * 1000; // 7 minutes
 }
 
-export function MessageList({ channelId, channelName }: Props) {
+export function MessageList({ channelId, channelName, intro }: Props) {
   const { messages, hasMore, fetchMessages } = useMessageStore();
   const msgs = messages[channelId] ?? [];
   const more = hasMore[channelId] ?? false;
@@ -71,7 +73,7 @@ export function MessageList({ channelId, channelName }: Props) {
       onScroll={handleScroll}
     >
       {/* Channel intro */}
-      {!more && (
+      {!more && (intro ?? (
         <div className="px-4 pt-14 pb-4">
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
@@ -89,7 +91,7 @@ export function MessageList({ channelId, channelName }: Props) {
             This is the start of the #{channelName} channel.
           </p>
         </div>
-      )}
+      ))}
 
       {/* Load more spinner */}
       {more && (

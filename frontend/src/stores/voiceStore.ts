@@ -40,6 +40,10 @@ interface VoiceStore {
   setRemoteVolume: (userId: string, v: number) => void;
   onRoomDisconnected: () => void;
 
+  /** Desktop: the separate call window for the current voice channel is open. */
+  voiceWindowOpen: boolean;
+  setVoiceWindowOpen: (open: boolean) => void;
+
   // Noise cancellation
   isNoiseCancellationEnabled: boolean;
   setNoiseCancellationEnabled: (enabled: boolean) => void;
@@ -64,11 +68,13 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   remoteVolumes: {},
   voiceParticipants: {},
   isNoiseCancellationEnabled: false,
+  voiceWindowOpen: false,
+  setVoiceWindowOpen: (open) => set({ voiceWindowOpen: open }),
 
   joinVoice: async (channelId, guildId) => {
     const { activeVoiceChannelId } = get();
     if (activeVoiceChannelId && activeVoiceChannelId !== channelId) {
-      await api.delete(`/channels/${activeVoiceChannelId}/voice/leave`).catch(() => {});
+      void api.delete(`/channels/${activeVoiceChannelId}/voice/leave`).catch(() => {});
     }
     set({ isConnecting: true });
     try {
@@ -79,8 +85,6 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         liveKitToken: data.data.token,
         liveKitUrl: data.data.url,
         isConnecting: false,
-        isMuted: false,
-        isDeafened: false,
         isCameraOn: false,
         isScreenSharing: false,
       });
@@ -92,8 +96,9 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
 
   leaveVoice: async () => {
     const { activeVoiceChannelId } = get();
+    // Leave locally first so a slow or unreachable backend never traps the user in the call.
     if (activeVoiceChannelId) {
-      await api.delete(`/channels/${activeVoiceChannelId}/voice/leave`).catch(() => {});
+      void api.delete(`/channels/${activeVoiceChannelId}/voice/leave`).catch(() => {});
     }
     set({
       activeVoiceChannelId: null,
@@ -102,6 +107,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       liveKitUrl: null,
       isCameraOn: false,
       isScreenSharing: false,
+      voiceWindowOpen: false,
     });
   },
 
@@ -127,6 +133,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       liveKitUrl: null,
       isCameraOn: false,
       isScreenSharing: false,
+      voiceWindowOpen: false,
     });
   },
 

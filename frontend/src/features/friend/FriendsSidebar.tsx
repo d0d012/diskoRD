@@ -1,16 +1,23 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { PresenceDot } from "../../components/ui/PresenceDot";
+import { Avatar } from "../../components/ui/Avatar";
+import { statusLabel } from "../../lib/avatar";
 import { VoiceStatusBar } from "../voice/VoiceStatusBar";
+import { UserSettingsModal } from "../settings/UserSettingsModal";
 
 export function FriendsSidebar() {
   const { dms, activeDMId, setActiveDM, fetchDMs, requests } = useFriendStore();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
+  const [showSettings, setShowSettings] = useState(false);
   const unreadCounts = useMessageStore((s) => s.unreadCounts);
   const markRead = useMessageStore((s) => s.markRead);
   const pendingCount = requests.filter((r) => r.direction === "incoming").length;
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLocaleLowerCase();
+  const visibleDMs = q ? dms.filter((dm) => dm.recipient.username.toLocaleLowerCase().includes(q)) : dms;
 
   useEffect(() => {
     fetchDMs();
@@ -18,14 +25,24 @@ export function FriendsSidebar() {
 
   return (
     <div className="w-60 flex-shrink-0 flex flex-col" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
-      {/* Search bar placeholder */}
-      <div className="px-2 pt-2 pb-1 flex-shrink-0">
-        <div
-          className="flex items-center px-2 py-1.5 rounded cursor-text text-sm"
-          style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-muted)" }}
-        >
-          Find or start a conversation
-        </div>
+      {/* Search */}
+      <div className="h-12 px-2.5 flex items-center flex-shrink-0 border-b" style={{ borderColor: "var(--color-dc-bg-floating)" }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQuery("");
+            if (e.key === "Enter" && visibleDMs[0]) {
+              setActiveDM(visibleDMs[0].id);
+              markRead(visibleDMs[0].id);
+              setQuery("");
+            }
+          }}
+          placeholder="Find a conversation"
+          aria-label="Find a conversation"
+          className="w-full h-7 px-2 rounded text-sm outline-none placeholder:text-[var(--color-dc-text-muted)]"
+          style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -57,56 +74,62 @@ export function FriendsSidebar() {
         </button>
 
         {/* DMs section */}
-        {dms.length > 0 && (
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide px-2 mb-1"
-              style={{ color: "var(--color-dc-text-muted)" }}>
-              Direct Messages
-            </p>
-            {dms.map((dm) => (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide px-2 mb-1"
+            style={{ color: "var(--color-dc-text-muted)" }}>
+            Direct Messages
+          </p>
+          {visibleDMs.map((dm) => {
+            const active = activeDMId === dm.id;
+            const unread = !active ? unreadCounts[dm.id] ?? 0 : 0;
+            const offline = dm.recipient.status === "offline" || !dm.recipient.status;
+            return (
               <button
                 key={dm.id}
                 onClick={() => {
                   setActiveDM(dm.id);
                   markRead(dm.id);
                 }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors"
+                className={`group w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                  active ? "" : "hover:bg-[var(--color-dc-bg-modifier-hover)]"
+                }`}
                 style={{
-                  backgroundColor: activeDMId === dm.id ? "var(--color-dc-bg-modifier-selected)" : "transparent",
-                  color: activeDMId === dm.id ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
-                }}
-                onMouseEnter={(e) => {
-                  if (activeDMId !== dm.id) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)";
-                }}
-                onMouseLeave={(e) => {
-                  if (activeDMId !== dm.id) e.currentTarget.style.backgroundColor = "transparent";
+                  backgroundColor: active ? "var(--color-dc-bg-modifier-selected)" : undefined,
+                  color: active || unread ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
                 }}
               >
-                <div className="relative flex-shrink-0">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                    style={{
-                      backgroundColor: `hsl(${(dm.recipient.username.charCodeAt(0) * 37) % 360}, 55%, 45%)`,
-                    }}
-                  >
-                    {dm.recipient.username[0]?.toUpperCase()}
-                  </div>
-                  <PresenceDot status={dm.recipient.status} size={10} borderColor="var(--color-dc-bg-secondary)" />
+                <div className={offline && !active && !unread ? "opacity-50 group-hover:opacity-100 transition-opacity" : ""}>
+                  <Avatar name={dm.recipient.username} size={32} status={dm.recipient.status}
+                    ringColor="var(--color-dc-bg-secondary)" />
                 </div>
-                <span className="truncate font-medium flex-1 text-left">{dm.recipient.username}</span>
-                {unreadCounts[dm.id] > 0 && activeDMId !== dm.id && (
+                <div className="flex-1 min-w-0 text-left">
+                  <div className={`truncate leading-tight ${unread ? "font-semibold" : "font-medium"}`}>
+                    {dm.recipient.username}
+                  </div>
+                  <div className="truncate text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>
+                    {statusLabel(dm.recipient.status)}
+                  </div>
+                </div>
+                {unread > 0 && (
                   <span
-                    className="min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white text-xs"
+                    className="min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white"
                     style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px" }}
                   >
-                    {unreadCounts[dm.id] > 99 ? "99+" : unreadCounts[dm.id]}
+                    {unread > 99 ? "99+" : unread}
                   </span>
                 )}
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+          {visibleDMs.length === 0 && (
+            <p className="px-2 py-3 text-sm" style={{ color: "var(--color-dc-text-muted)" }}>
+              {q ? `No conversations match "${query.trim()}".` : "No conversations yet. Message a friend to start one."}
+            </p>
+          )}
+        </div>
       </div>
+
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
 
       <VoiceStatusBar />
 
@@ -129,12 +152,12 @@ export function FriendsSidebar() {
             </span>
             <span className="text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>Online</span>
           </div>
-          <button onClick={() => logout()} className="p-1 rounded" title="Log Out"
+          <button onClick={() => setShowSettings(true)} className="p-1 rounded" title="User Settings" aria-label="User Settings"
             style={{ color: "var(--color-dc-interactive-normal)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.477.477 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
             </svg>
           </button>
         </div>
