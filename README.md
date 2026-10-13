@@ -28,7 +28,11 @@ Self-hosted Discord-style chat and voice application for private communities.
 - Friend requests, friends list, DM channel creation/listing
 - LiveKit voice token endpoint and Redis-backed voice participant state
 - In-voice soundboard: compact searchable popover, rapid retriggering, local previews, listener volume, and member-uploaded guild sounds (5 seconds, 48 sounds per guild; requires migration `000016`)
-- Link preview endpoint
+- DM voice/video calls (ring, accept/decline, camera, soundboard) with recovery from dropped clients
+- Desktop call window: a separate, draggable, always-on-top window for DM calls and guild voice, with call controls and soundboard
+- User settings: input/output/camera devices, mic test, permissions with shortcuts to the OS privacy settings
+- Desktop shell: tray icon and close-to-tray, external links open in the default browser, auto-updater
+- Link preview endpoint (bare domains such as `example.com` are linkified too)
 - React UI for auth, guilds/channels, messaging, friends/DMs, roles, voice, notifications, and desktop updater/noise-cancellation integration
 
 ## Local development
@@ -45,6 +49,8 @@ This starts:
 - Redis on `localhost:6380`
 - LiveKit on `localhost:7880`
 - Nginx on `localhost:80`
+
+Local LiveKit carries media over ICE/TCP on `7881`; its UDP range is not forwarded, because forwarding it through Docker Desktop on macOS stops all port forwarding as soon as a call starts.
 
 Local database defaults:
 
@@ -94,6 +100,8 @@ VITE_WS_URL=ws://localhost:8080/gateway \
 npm run dev
 ```
 
+Or put the two variables in `frontend/.env.development.local` (gitignored, dev only) and run `npm run dev`.
+
 Open http://localhost:5173.
 
 ## Useful commands
@@ -116,6 +124,18 @@ npm run test
 ```
 
 Current known test state: backend tests pass; frontend build/lint run, but the voice layout test file currently has failing expectations against the implemented layout behavior.
+
+## Releases and deployment
+
+- **Desktop release:** bump the version in `frontend/package.json`, `frontend/src-tauri/Cargo.toml` and `frontend/src-tauri/tauri.conf.json`, then push a `v*` tag. The release workflow builds and signs the **Windows** installer and publishes `latest.json`; installed Windows apps update themselves. macOS builds are not produced by CI.
+- **Backend + web deploy** to an already provisioned server: upload the code, then run `scripts/update.sh`. It backs up the backend image, web build and database, rebuilds, runs migrations and prints a rollback command. Deploy the backend before a release reaches users when new clients depend on new endpoints.
+
+```bash
+rsync -az --exclude .git --exclude node_modules --exclude dist --exclude target --exclude .pi-logs --exclude .claude --exclude '.env*' --exclude DEV_CREDENTIALS.md --exclude backend/server ./ root@204.168.224.53:/opt/diskord/
+ssh root@204.168.224.53 "bash /opt/diskord/scripts/update.sh"
+```
+
+- `scripts/deploy.sh` provisions a fresh VPS (packages, firewall, TLS); don't use it on a running server.
 
 ## Notes
 

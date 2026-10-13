@@ -13,7 +13,7 @@ diskoRD is a self-hosted Discord alternative: Go + Fiber backend (`backend/`), R
 
 - Backend: `go test ./...` in `backend/`. Frontend: `npm run lint` and `npm run test` in `frontend/`.
 - Commits: `type(scope): description` (types `feat|fix|refactor|test|chore|docs`; scope is the domain, `frontend`, `infra`, or `release`). Branches: `feature/…`, `fix/…`, `refactor/…`.
-- Releases: bump the version in `frontend/package.json`, `frontend/src-tauri/Cargo.toml` and `tauri.conf.json` together, and keep `@tauri-apps/*` npm package versions on the same minor as their Rust crates — the release build fails on a mismatch.
+- Releases: bump the version in `frontend/package.json`, `frontend/src-tauri/Cargo.toml` and `tauri.conf.json` together, and keep `@tauri-apps/*` npm package versions on the same minor as their Rust crates — the release build fails on a mismatch. A `v*` tag builds the Windows installer only. Deploy the backend first with `scripts/update.sh` (README) when the new client needs new endpoints; `scripts/deploy.sh` is for provisioning a fresh server only.
 
 ## Repo layout notes
 
