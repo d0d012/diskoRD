@@ -1,12 +1,19 @@
 import { create } from "zustand";
-
-export type UserStatus = "online" | "away" | "dnd";
+import { api } from "../lib/api";
+import type { PreferredStatus } from "../types";
 
 interface NotificationStore {
-  status: UserStatus;
+  /** The user's chosen status. The server is the source of truth. */
+  status: PreferredStatus;
+  /** Transient message shown when a status change fails. */
+  statusError: string | null;
   mutedChannels: Set<string>;
   mutedDmUsers: Set<string>;
-  setStatus: (s: UserStatus) => void;
+  /** Updates optimistically and reverts if the server rejects the change. */
+  setStatus: (s: PreferredStatus) => Promise<void>;
+  clearStatusError: () => void;
+  /** Applies the server's authoritative status (READY.me / USER_UPDATE self). */
+  syncStatus: (s: PreferredStatus | undefined) => void;
   toggleMuteChannel: (channelId: string) => void;
   toggleMuteDmUser: (userId: string) => void;
   isChannelMuted: (channelId: string) => boolean;
@@ -14,7 +21,6 @@ interface NotificationStore {
 }
 
 interface PersistedPrefs {
-  status?: UserStatus;
   mutedChannels?: string[];
   mutedDmUsers?: string[];
 }
@@ -28,29 +34,56 @@ function loadPrefs(): PersistedPrefs {
   }
 }
 
-function save(status: UserStatus, mutedChannels: Set<string>, mutedDmUsers: Set<string>) {
-  localStorage.setItem(
-    "notification_prefs",
-    JSON.stringify({
-      status,
-      mutedChannels: Array.from(mutedChannels),
-      mutedDmUsers: Array.from(mutedDmUsers),
-    })
-  );
+function save(mutedChannels: Set<string>, mutedDmUsers: Set<string>) {
+  try {
+    localStorage.setItem(
+      "notification_prefs",
+      JSON.stringify({
+        mutedChannels: Array.from(mutedChannels),
+        mutedDmUsers: Array.from(mutedDmUsers),
+      })
+    );
+  } catch {
+    // Storage unavailable (private mode, quota) — mutes simply won't persist.
+  }
 }
 
 const prefs = loadPrefs();
 
+// Monotonic id for status writes. A failed request only reverts while it is
+// still the newest intent; a later pick or a server sync wins.
+let statusGeneration = 0;
+
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
-  status: prefs.status ?? "online",
+  status: "online",
+  statusError: null,
   mutedChannels: new Set(prefs.mutedChannels ?? []),
   mutedDmUsers: new Set(prefs.mutedDmUsers ?? []),
 
-  setStatus: (status) => {
-    set((s) => {
-      save(status, s.mutedChannels, s.mutedDmUsers);
-      return { status };
-    });
+  setStatus: async (status) => {
+    const generation = ++statusGeneration;
+    const previous = get().status;
+    set({ status });
+    try {
+      await api.put("/users/me/presence", { status });
+      if (statusGeneration === generation) set({ statusError: null });
+    } catch (err) {
+      // Only the newest intent may revert or raise an error; a stale request
+      // finishing late must not clobber a newer selection or its toast.
+      if (statusGeneration === generation) {
+        set({ status: previous, statusError: "Couldn't update your status" });
+      }
+      throw err;
+    }
+  },
+
+  clearStatusError: () => set({ statusError: null }),
+
+  syncStatus: (status) => {
+    if (status) {
+      statusGeneration++;
+      set({ status });
+    }
   },
 
   toggleMuteChannel: (channelId) => {
@@ -58,7 +91,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       const next = new Set(s.mutedChannels);
       if (next.has(channelId)) next.delete(channelId);
       else next.add(channelId);
-      save(s.status, next, s.mutedDmUsers);
+      save(next, s.mutedDmUsers);
       return { mutedChannels: next };
     });
   },
@@ -68,7 +101,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
       const next = new Set(s.mutedDmUsers);
       if (next.has(userId)) next.delete(userId);
       else next.add(userId);
-      save(s.status, s.mutedChannels, next);
+      save(s.mutedChannels, next);
       return { mutedDmUsers: next };
     });
   },

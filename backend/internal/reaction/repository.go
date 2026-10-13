@@ -45,6 +45,19 @@ func (r *Repository) Remove(ctx context.Context, messageID, userID, emoji string
 	return tag.RowsAffected() > 0, nil
 }
 
+// CountForEmoji returns the total number of reactions for one emoji on a message.
+func (r *Repository) CountForEmoji(ctx context.Context, messageID, emoji string) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM message_reactions WHERE message_id = $1 AND emoji = $2`,
+		messageID, emoji,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("reaction.Repository.CountForEmoji: %w", err)
+	}
+	return count, nil
+}
+
 // GetForMessage aggregates reactions for a message.
 func (r *Repository) GetForMessage(ctx context.Context, messageID, viewerID string) ([]Reaction, error) {
 	rows, err := r.db.Query(ctx,

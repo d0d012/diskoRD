@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
+import { api, resolveMediaUrl } from "../../lib/api";
 import { parseInviteCode, goToInvite } from "../../lib/inviteLinks";
 import { openExternal } from "../../lib/externalLinks";
 import { linkify } from "../../lib/linkify";
@@ -138,15 +138,16 @@ function YoutubeEmbed({ videoId }: { videoId: string }) {
 
 function InlineImage({ url }: { url: string }) {
   const [broken, setBroken] = useState(false);
-  if (broken) return null;
+  const src = resolveMediaUrl(url);
+  if (broken || !src) return null;
   return (
     <img
-      src={url}
+      src={src}
       alt="attachment"
       className="mt-2 rounded-lg max-w-sm max-h-80 object-contain block cursor-pointer"
       style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
       onError={() => setBroken(true)}
-      onClick={() => openExternal(url)}
+      onClick={() => openExternal(src)}
     />
   );
 }

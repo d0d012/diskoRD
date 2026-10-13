@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGuildStore } from "../../stores/guildStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { CreateGuildModal } from "../../features/guild/CreateGuildModal";
+import { resolveMediaUrl } from "../../lib/api";
 import type { Guild } from "../../types";
 
 interface ServerIconProps {
@@ -29,7 +30,7 @@ function ServerIcon({ guild, active, unread, mentionCount, onClick }: ServerIcon
         }`}
       >
         {guild.iconUrl ? (
-          <img src={guild.iconUrl} alt={guild.name} className="w-full h-full object-cover" />
+          <img src={resolveMediaUrl(guild.iconUrl)} alt={guild.name} className="w-full h-full object-cover" draggable={false} />
         ) : (
           <span className="text-white text-sm font-semibold select-none">
             {guild.name

@@ -3,13 +3,17 @@ import { useGuildStore } from "../../stores/guildStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useVoiceStore } from "../../stores/voiceStore";
-import { useNotificationStore, type UserStatus } from "../../stores/notificationStore";
+import { useNotificationStore } from "../../stores/notificationStore";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { statusColor, statusLabel } from "../../lib/avatar";
+import { Avatar } from "../ui/Avatar";
+import { UserProfileCard } from "../../features/profile/UserProfileCard";
 import { InviteModal } from "../../features/guild/InviteModal";
 import { CreateChannelModal } from "../../features/channel/CreateChannelModal";
 import { ServerSettingsModal } from "../../features/guild/ServerSettingsModal";
 import { VoiceStatusBar } from "../../features/voice/VoiceStatusBar";
 import { VolumeMenu } from "../../features/voice/VolumeMenu";
-import type { Channel } from "../../types";
+import type { Channel, PreferredStatus } from "../../types";
 import { micConstraints } from "../../lib/mediaDevices";
 import { UserSettingsModal } from "../../features/settings/UserSettingsModal";
 
@@ -226,6 +230,11 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
   );
 }
 
+function VoiceParticipantAvatar({ userId, username, size = 20 }: { userId: string; username: string; size?: number }) {
+  const live = useLiveUser(userId, { id: userId, username });
+  return <Avatar name={live.username ?? username} src={live.avatarUrl} size={size} />;
+}
+
 // ── Voice channel item (join-on-click, shows participants) ──────────────────
 
 interface VoiceChannelItemProps {
@@ -242,6 +251,7 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
   const voiceParticipants = useVoiceStore((s) => s.voiceParticipants[channel.id]);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [volumeMenu, setVolumeMenu] = useState<{ userId: string; username: string; x: number; y: number } | null>(null);
+  const [profileAnchor, setProfileAnchor] = useState<{ userId: string; rect: DOMRect } | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(channel.name);
   const [deleteError, setDeleteError] = useState("");
@@ -336,12 +346,16 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             >
               <div
-                className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-semibold"
-                style={{ backgroundColor: `hsl(${(p.username.charCodeAt(0) * 37) % 360}, 55%, 40%)` }}
+                className="w-5 h-5 rounded-full flex-shrink-0"
+                onClick={(e) => { e.stopPropagation(); setProfileAnchor({ userId: p.userId, rect: e.currentTarget.getBoundingClientRect() }); }}
               >
-                {p.username[0]?.toUpperCase()}
+                <VoiceParticipantAvatar userId={p.userId} username={p.username} size={20} />
               </div>
-              <span className="text-xs truncate" style={{ color: "var(--color-dc-text-muted)" }}>
+              <span
+                className="text-xs truncate hover:underline cursor-pointer"
+                style={{ color: "var(--color-dc-text-muted)" }}
+                onClick={(e) => { e.stopPropagation(); setProfileAnchor({ userId: p.userId, rect: e.currentTarget.getBoundingClientRect() }); }}
+              >
                 {p.username}
               </span>
             </div>
@@ -356,6 +370,16 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
           x={volumeMenu.x}
           y={volumeMenu.y}
           onClose={() => setVolumeMenu(null)}
+        />
+      )}
+
+      {profileAnchor && (
+        <UserProfileCard
+          userId={profileAnchor.userId}
+          guildId={guildId}
+          anchorRect={profileAnchor.rect}
+          preferredSide="right"
+          onClose={() => setProfileAnchor(null)}
         />
       )}
 
@@ -399,18 +423,25 @@ function CategoryHeader({
 
 // ── User panel ───────────────────────────────────────────────────────────────
 
-const STATUS_META: Record<UserStatus, { label: string; color: string }> = {
-  online: { label: "Online",           color: "var(--color-dc-online, #23a55a)" },
-  away:   { label: "Away",             color: "var(--color-dc-idle, #f0b232)"   },
-  dnd:    { label: "Do Not Disturb",   color: "var(--color-dc-red, #ed4245)"    },
-};
+const STATUS_OPTIONS: { value: PreferredStatus; label: string; description?: string }[] = [
+  { value: "online", label: "Online" },
+  { value: "idle", label: "Away" },
+  { value: "dnd", label: "Do Not Disturb", description: "You will not receive desktop notifications" },
+  { value: "invisible", label: "Invisible", description: "You will appear offline" },
+];
 
 function UserPanel() {
   const { user } = useAuthStore();
-  const { status, setStatus } = useNotificationStore();
+  const { status, setStatus, statusError, clearStatusError } = useNotificationStore();
   const [open, setOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!statusError) return;
+    const timer = setTimeout(() => clearStatusError(), 3500);
+    return () => clearTimeout(timer);
+  }, [statusError, clearStatusError]);
 
   useEffect(() => {
     if (!open) return;
@@ -435,15 +466,12 @@ function UserPanel() {
           title="Change status"
           onClick={() => setOpen((o) => !o)}
         >
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-            style={{ backgroundColor: "var(--color-dc-brand)" }}
-          >
-            {user?.username?.[0]?.toUpperCase() ?? "?"}
-          </div>
-          <div
-            className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
-            style={{ backgroundColor: STATUS_META[status].color, borderColor: "var(--color-dc-bg-tertiary)" }}
+          <Avatar
+            name={user?.username ?? "?"}
+            src={user?.avatarUrl}
+            size={32}
+            status={status}
+            ringColor="var(--color-dc-bg-tertiary)"
           />
         </div>
 
@@ -451,8 +479,8 @@ function UserPanel() {
           <span className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--color-dc-header-primary)" }}>
             {user?.username ?? "…"}
           </span>
-          <span className="text-xs leading-tight" style={{ color: STATUS_META[status].color }}>
-            {STATUS_META[status].label}
+          <span className="text-xs leading-tight" style={{ color: statusColor(status) }}>
+            {statusLabel(status)}
           </span>
         </div>
 
@@ -475,26 +503,43 @@ function UserPanel() {
 
       {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
 
+      {statusError && (
+        <div
+          role="status"
+          className="absolute bottom-full left-0 mb-1 px-3 py-2 rounded-md text-xs font-medium shadow-xl z-[60]"
+          style={{ backgroundColor: "var(--color-dc-red)", color: "#fff" }}
+        >
+          {statusError}
+        </div>
+      )}
+
       {/* Status dropdown */}
       {open && (
         <div
           className="absolute bottom-full left-0 mb-1 w-48 rounded-lg py-1 shadow-xl z-50"
           style={{ backgroundColor: "var(--color-dc-bg-floating, #18191c)", border: "1px solid var(--color-dc-bg-modifier-hover)" }}
         >
-          {(["online", "away", "dnd"] as UserStatus[]).map((s) => (
+          {STATUS_OPTIONS.map((opt) => (
             <button
-              key={s}
-              onClick={() => { setStatus(s); setOpen(false); }}
+              key={opt.value}
+              onClick={() => { void setStatus(opt.value).catch(() => {}); setOpen(false); }}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left"
               style={{
-                backgroundColor: status === s ? "var(--color-dc-bg-modifier-selected)" : "transparent",
+                backgroundColor: status === opt.value ? "var(--color-dc-bg-modifier-selected)" : "transparent",
                 color: "var(--color-dc-text-normal)",
               }}
-              onMouseEnter={(e) => { if (status !== s) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
-              onMouseLeave={(e) => { if (status !== s) e.currentTarget.style.backgroundColor = "transparent"; }}
+              onMouseEnter={(e) => { if (status !== opt.value) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
+              onMouseLeave={(e) => { if (status !== opt.value) e.currentTarget.style.backgroundColor = "transparent"; }}
             >
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_META[s].color }} />
-              {STATUS_META[s].label}
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(opt.value) }} />
+              <span className="flex flex-col">
+                <span>{opt.label}</span>
+                {opt.description && (
+                  <span className="text-[11px]" style={{ color: "var(--color-dc-text-muted)" }}>
+                    {opt.description}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </div>

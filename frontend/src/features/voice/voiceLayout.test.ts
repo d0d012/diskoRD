@@ -27,10 +27,10 @@ describe("getLayoutMode", () => {
     expect(getLayoutMode([])).toBe("grid");
   });
   it("returns stage when any participant has a camera track", () => {
-    expect(getLayoutMode([mkp({ cameraTrack: {} as any })])).toBe("stage");
+    expect(getLayoutMode([mkp({ cameraTrack: {} as any, isCameraEnabled: true })])).toBe("stage");
   });
   it("returns stage when any participant has a screen track", () => {
-    expect(getLayoutMode([mkp({ screenTrack: {} as any })])).toBe("stage");
+    expect(getLayoutMode([mkp({ screenTrack: {} as any, isScreenSharing: true })])).toBe("stage");
   });
 });
 
@@ -61,19 +61,19 @@ describe("getMainParticipant", () => {
   it("falls back to screen sharer when pinnedId not found", () => {
     const track = {} as any;
     const a = mkp({ identity: "a" });
-    const b = mkp({ identity: "b", screenTrack: track });
+    const b = mkp({ identity: "b", screenTrack: track, isScreenSharing: true });
     expect(getMainParticipant([a, b], "nonexistent")).toBe(b);
   });
   it("prefers screen share over camera track", () => {
     const track = {} as any;
-    const a = mkp({ identity: "a", cameraTrack: track });
-    const b = mkp({ identity: "b", screenTrack: track });
+    const a = mkp({ identity: "a", cameraTrack: track, isCameraEnabled: true });
+    const b = mkp({ identity: "b", screenTrack: track, isScreenSharing: true });
     expect(getMainParticipant([a, b], null)).toBe(b);
   });
   it("falls back to camera when no screen share", () => {
     const track = {} as any;
     const a = mkp({ identity: "a" });
-    const b = mkp({ identity: "b", cameraTrack: track });
+    const b = mkp({ identity: "b", cameraTrack: track, isCameraEnabled: true });
     expect(getMainParticipant([a, b], null)).toBe(b);
   });
   it("falls back to speaking participant", () => {

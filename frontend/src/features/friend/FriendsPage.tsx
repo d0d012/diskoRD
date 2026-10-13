@@ -1,19 +1,14 @@
 import { useEffect, useState } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { PresenceDot } from "../../components/ui/PresenceDot";
+import { Avatar } from "../../components/ui/Avatar";
+import { useLiveUser } from "../../hooks/useLiveUser";
 import { api } from "../../lib/api";
+import { statusLabel } from "../../lib/avatar";
 
-function UserAvatar({ username, size = 8 }: { username: string; size?: number }) {
-  const color = `hsl(${(username.charCodeAt(0) * 37) % 360}, 55%, 45%)`;
-  const px = size * 4; // Tailwind size to px
-  return (
-    <div
-      className={`w-${size} h-${size} rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 relative`}
-      style={{ backgroundColor: color, width: px, height: px, fontSize: px * 0.4 }}
-    >
-      {username[0]?.toUpperCase()}
-    </div>
-  );
+function UserAvatar({ user, size = 32 }: { user: { id?: string; username: string; avatarUrl?: string | null }; size?: number }) {
+  const live = useLiveUser(user.id, user);
+  return <Avatar name={live.username ?? user.username} src={live.avatarUrl} size={size} />;
 }
 
 function AddFriendSection() {
@@ -88,10 +83,7 @@ function AddFriendSection() {
       {status === "found" && found && (
         <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded"
           style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
-            style={{ backgroundColor: `hsl(${(found.username.charCodeAt(0) * 37) % 360}, 55%, 45%)` }}>
-            {found.username[0]?.toUpperCase()}
-          </div>
+          <UserAvatar user={found} size={32} />
           <span className="text-sm font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>{found.username}</span>
         </div>
       )}
@@ -125,7 +117,7 @@ function PendingRequests() {
             <div key={r.id} className="flex items-center gap-3 px-2 py-2 rounded-lg mb-1"
               style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
               <div className="relative">
-                <UserAvatar username={r.user.username} />
+                <UserAvatar user={r.user} size={32} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>{r.user.username}</p>
@@ -169,7 +161,7 @@ function PendingRequests() {
           {outgoing.map((r) => (
             <div key={r.id} className="flex items-center gap-3 px-2 py-2 rounded-lg mb-1"
               style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
-              <UserAvatar username={r.user.username} />
+              <UserAvatar user={r.user} size={32} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>{r.user.username}</p>
                 <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>Outgoing Friend Request</p>
@@ -196,8 +188,8 @@ function PendingRequests() {
 
 function FriendsList() {
   const { friends, openDM, removeFriend } = useFriendStore();
-  const online = friends.filter((f) => f.status === "online");
-  const offline = friends.filter((f) => f.status !== "online");
+  const online = friends.filter((f) => f.status !== "offline");
+  const offline = friends.filter((f) => f.status === "offline");
 
   if (friends.length === 0) {
     return (
@@ -218,12 +210,12 @@ function FriendsList() {
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-secondary)")}
       >
         <div className="relative">
-          <UserAvatar username={f.username} />
-          <PresenceDot status={f.status} borderColor="var(--color-dc-bg-secondary)" />
+          <UserAvatar user={f} size={32} />
+          <PresenceDot status={f.status} size={12} borderColor="var(--color-dc-bg-secondary)" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>{f.username}</p>
-          <p className="text-xs capitalize" style={{ color: "var(--color-dc-text-muted)" }}>{f.status}</p>
+          <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>{statusLabel(f.status)}</p>
         </div>
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <button

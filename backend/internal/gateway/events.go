@@ -19,6 +19,7 @@ const (
 	OpGuildMemberUpdate = "GUILD_MEMBER_UPDATE"
 	OpGuildMemberRemove = "GUILD_MEMBER_REMOVE"
 	OpPresenceUpdate    = "PRESENCE_UPDATE"
+	OpUserUpdate        = "USER_UPDATE"
 	OpVoiceStateUpdate  = "VOICE_STATE_UPDATE"
 	OpReactionAdd       = "REACTION_ADD"
 	OpReactionRemove    = "REACTION_REMOVE"

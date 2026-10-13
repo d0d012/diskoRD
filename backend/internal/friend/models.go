@@ -20,10 +20,10 @@ type FriendResponse struct {
 }
 
 type FriendRequestResponse struct {
-	ID         string         `json:"id"`         // friendship ID
-	Direction  string         `json:"direction"`  // "incoming" | "outgoing"
-	User       FriendResponse `json:"user"`       // the other party
-	CreatedAt  time.Time      `json:"createdAt"`
+	ID        string         `json:"id"`        // friendship ID
+	Direction string         `json:"direction"` // "incoming" | "outgoing"
+	User      FriendResponse `json:"user"`      // the other party
+	CreatedAt time.Time      `json:"createdAt"`
 }
 
 type DMChannel struct {
@@ -34,9 +34,9 @@ type DMChannel struct {
 }
 
 type DMChannelResponse struct {
-	ID           string         `json:"id"`
-	Recipient    FriendResponse `json:"recipient"`
-	CreatedAt    time.Time      `json:"createdAt"`
+	ID        string         `json:"id"`
+	Recipient FriendResponse `json:"recipient"`
+	CreatedAt time.Time      `json:"createdAt"`
 }
 
 type Response struct {

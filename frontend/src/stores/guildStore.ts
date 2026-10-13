@@ -15,7 +15,9 @@ interface GuildStore {
   setActiveChannel: (channelId: string) => void;
   fetchGuilds: () => Promise<void>;
   createGuild: (name: string) => Promise<Guild & { channels: Channel[] }>;
-  updateGuild: (guildId: string, patch: Partial<Pick<Guild, "name" | "iconUrl">>) => Promise<Guild>;
+  updateGuild: (guildId: string, patch: Partial<Pick<Guild, "name">>) => Promise<Guild>;
+  uploadGuildIcon: (guildId: string, file: File) => Promise<Guild>;
+  removeGuildIcon: (guildId: string) => Promise<Guild>;
   deleteGuild: (guildId: string) => Promise<void>;
   fetchChannels: (guildId: string) => Promise<Channel[]>;
   createInvite: (guildId: string) => Promise<string>;
@@ -102,6 +104,24 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
 
   updateGuild: async (guildId: string, patch) => {
     const { data } = await api.patch(`/guilds/${guildId}`, patch);
+    const guild: Guild = data.data;
+    get().upsertGuild(guild);
+    return guild;
+  },
+
+  uploadGuildIcon: async (guildId, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await api.post(`/guilds/${guildId}/icon`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    const guild: Guild = data.data;
+    get().upsertGuild(guild);
+    return guild;
+  },
+
+  removeGuildIcon: async (guildId) => {
+    const { data } = await api.delete(`/guilds/${guildId}/icon`);
     const guild: Guild = data.data;
     get().upsertGuild(guild);
     return guild;

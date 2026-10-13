@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Message } from "../../types";
-import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
+import { useMessageMenuStore } from "../../stores/messageMenuStore";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
+import { UserProfileCard } from "../profile/UserProfileCard";
 import { AddReactionButton } from "./AddReactionButton";
+import { MessageContextMenu } from "./MessageContextMenu";
 import { MessageContent } from "./MessageContent";
 
 interface Props {
@@ -23,27 +27,50 @@ function formatDate(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
-function Avatar({ username }: { username: string }) {
-  const color = `hsl(${(username.charCodeAt(0) * 37) % 360}, 55%, 45%)`;
-  return (
-    <div
-      className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold text-sm select-none"
-      style={{ backgroundColor: color }}
-    >
-      {username[0]?.toUpperCase()}
-    </div>
-  );
-}
-
 export function MessageItem({ message, isGrouped }: Props) {
-  const user = useAuthStore((s) => s.user);
-  const { editMessage, deleteMessage, toggleReaction } = useMessageStore();
+  const { editMessage, toggleReaction } = useMessageStore();
+  const menuOpen = useMessageMenuStore((s) => s.openId === message.id);
+  const menuX = useMessageMenuStore((s) => s.x);
+  const menuY = useMessageMenuStore((s) => s.y);
+  const openMenu = useMessageMenuStore((s) => s.open);
+  const closeMenu = useMessageMenuStore((s) => s.close);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [hovered, setHovered] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
 
-  const isOwn = user?.id === message.author?.id;
-  const authorName = message.author?.username ?? "Deleted User";
+  const liveAuthor = useLiveUser(message.author?.id, message.author);
+  const authorName = liveAuthor?.displayName ?? liveAuthor?.username ?? "Deleted User";
+
+  // Drop a stale open-menu id if this message unmounts while its menu is open.
+  useEffect(() => {
+    return () => {
+      if (useMessageMenuStore.getState().openId === message.id) {
+        useMessageMenuStore.getState().close();
+      }
+    };
+  }, [message.id]);
+
+  function handleContextMenu(e: React.MouseEvent) {
+    const target = e.target as HTMLElement;
+    // Let the native menu handle links, images and selected text.
+    if (target.closest("a[href], img")) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim() && rowRef.current?.contains(selection.anchorNode)) {
+      return;
+    }
+    e.preventDefault();
+    openMenu(message.id, e.clientX, e.clientY);
+  }
+
+  function handleRowKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+      e.preventDefault();
+      const rect = rowRef.current?.getBoundingClientRect();
+      if (rect) openMenu(message.id, rect.left + 24, rect.top + 12);
+    }
+  }
 
   function handleEditSubmit() {
     if (editContent.trim() && editContent !== message.content) {
@@ -65,18 +92,28 @@ export function MessageItem({ message, isGrouped }: Props) {
 
   return (
     <div
-      className="group flex gap-4 px-4 py-0.5 rounded transition-colors relative"
+      ref={rowRef}
+      tabIndex={-1}
+      className="group flex gap-4 px-4 py-0.5 rounded transition-colors relative outline-none"
       style={{
         paddingTop: isGrouped ? "1px" : "16px",
-        backgroundColor: hovered ? "var(--color-dc-bg-modifier-hover)" : "transparent",
+        backgroundColor: hovered || menuOpen ? "var(--color-dc-bg-modifier-hover)" : "transparent",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onContextMenu={handleContextMenu}
+      onKeyDown={handleRowKeyDown}
     >
       {/* Avatar or spacer */}
       <div className="w-10 flex-shrink-0">
         {!isGrouped ? (
-          <Avatar username={authorName} />
+          <button
+            onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
+            className="block rounded-full focus:outline-none"
+            aria-label={`View ${authorName}'s profile`}
+          >
+            <Avatar name={liveAuthor?.username ?? authorName} src={liveAuthor?.avatarUrl} size={40} />
+          </button>
         ) : (
           <span
             className="invisible group-hover:visible text-xs leading-none pt-1 text-right w-full block"
@@ -94,6 +131,7 @@ export function MessageItem({ message, isGrouped }: Props) {
             <span
               className="font-semibold text-sm hover:underline cursor-pointer"
               style={{ color: "var(--color-dc-header-primary)" }}
+              onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
             >
               {authorName}
             </span>
@@ -146,8 +184,8 @@ export function MessageItem({ message, isGrouped }: Props) {
             <MessageContent content={message.content} attachments={message.attachments} />
           )}
 
-          {/* Reactions */}
-          {(message.reactions && message.reactions.length > 0) ? (
+          {/* Reactions — only rendered when present, so hover never changes layout */}
+          {message.reactions && message.reactions.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1 items-center">
               {message.reactions.map((r) => (
                 <button
@@ -180,70 +218,27 @@ export function MessageItem({ message, isGrouped }: Props) {
                 <AddReactionButton messageId={message.id} channelId={message.channelId} />
               </div>
             </div>
-          ) : (
-            hovered && !editing && (
-              <div className="mt-1">
-                <AddReactionButton messageId={message.id} channelId={message.channelId} />
-              </div>
-            )
           )}
         </div>
 
-        {/* Action toolbar */}
-      {hovered && !editing && isOwn && (
-        <div
-          className="absolute right-4 top-1 flex items-center gap-1 rounded px-1 py-0.5 shadow-md"
-          style={{ backgroundColor: "var(--color-dc-bg-floating)", border: "1px solid var(--color-dc-bg-modifier-hover)" }}
-        >
-          <ActionButton
-            title="Edit"
-            onClick={() => { setEditContent(message.content); setEditing(true); }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-            </svg>
-          </ActionButton>
-          <ActionButton
-            title="Delete"
-            danger
-            onClick={() => deleteMessage(message.id, message.channelId)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </ActionButton>
-        </div>
+      {profileAnchor && message.author?.id && (
+        <UserProfileCard
+          userId={message.author.id}
+          guildId={message.guildId}
+          anchorRect={profileAnchor}
+          preferredSide="right"
+          onClose={() => setProfileAnchor(null)}
+        />
+      )}
+      {menuOpen && (
+        <MessageContextMenu
+          message={message}
+          x={menuX}
+          y={menuY}
+          onEdit={() => { setEditContent(message.content); setEditing(true); }}
+          onClose={closeMenu}
+        />
       )}
     </div>
-  );
-}
-
-function ActionButton({
-  children, title, danger, onClick,
-}: {
-  children: React.ReactNode;
-  title: string;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className="p-1 rounded transition-colors"
-      style={{ color: danger ? "var(--color-dc-red)" : "var(--color-dc-interactive-normal)" }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.color = danger
-          ? "var(--color-dc-red-hover, #f04747)"
-          : "var(--color-dc-interactive-hover)";
-        e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.color = danger ? "var(--color-dc-red)" : "var(--color-dc-interactive-normal)";
-        e.currentTarget.style.backgroundColor = "transparent";
-      }}
-    >
-      {children}
-    </button>
   );
 }

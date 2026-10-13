@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
-import { PresenceDot } from "../../components/ui/PresenceDot";
+import { useUserStore } from "../../stores/userStore";
 import { Avatar } from "../../components/ui/Avatar";
-import { statusLabel } from "../../lib/avatar";
+import { statusColor, statusLabel } from "../../lib/avatar";
+import { useNotificationStore } from "../../stores/notificationStore";
 import { VoiceStatusBar } from "../voice/VoiceStatusBar";
 import { UserSettingsModal } from "../settings/UserSettingsModal";
 
 export function FriendsSidebar() {
   const { dms, activeDMId, setActiveDM, fetchDMs, requests } = useFriendStore();
   const { user } = useAuthStore();
+  const status = useNotificationStore((s) => s.status);
   const [showSettings, setShowSettings] = useState(false);
   const unreadCounts = useMessageStore((s) => s.unreadCounts);
   const markRead = useMessageStore((s) => s.markRead);
@@ -18,6 +20,7 @@ export function FriendsSidebar() {
   const [query, setQuery] = useState("");
   const q = query.trim().toLocaleLowerCase();
   const visibleDMs = q ? dms.filter((dm) => dm.recipient.username.toLocaleLowerCase().includes(q)) : dms;
+  const liveUsers = useUserStore((s) => s.users);
 
   useEffect(() => {
     fetchDMs();
@@ -80,6 +83,7 @@ export function FriendsSidebar() {
             Direct Messages
           </p>
           {visibleDMs.map((dm) => {
+            const live = { ...dm.recipient, ...liveUsers[dm.recipient.id] };
             const active = activeDMId === dm.id;
             const unread = !active ? unreadCounts[dm.id] ?? 0 : 0;
             const offline = dm.recipient.status === "offline" || !dm.recipient.status;
@@ -99,12 +103,12 @@ export function FriendsSidebar() {
                 }}
               >
                 <div className={offline && !active && !unread ? "opacity-50 group-hover:opacity-100 transition-opacity" : ""}>
-                  <Avatar name={dm.recipient.username} size={32} status={dm.recipient.status}
+                  <Avatar name={live.username} src={live.avatarUrl} size={32} status={dm.recipient.status}
                     ringColor="var(--color-dc-bg-secondary)" />
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <div className={`truncate leading-tight ${unread ? "font-semibold" : "font-medium"}`}>
-                    {dm.recipient.username}
+                    {live.displayName || live.username}
                   </div>
                   <div className="truncate text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>
                     {statusLabel(dm.recipient.status)}
@@ -140,17 +144,13 @@ export function FriendsSidebar() {
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}>
           <div className="relative flex-shrink-0">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-              style={{ backgroundColor: "var(--color-dc-brand)" }}>
-              {user?.username?.[0]?.toUpperCase() ?? "?"}
-            </div>
-            <PresenceDot status="online" size={10} borderColor="var(--color-dc-bg-tertiary)" />
+            <Avatar name={user?.username ?? "?"} src={user?.avatarUrl} size={32} status={status} ringColor="var(--color-dc-bg-tertiary)" />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--color-dc-header-primary)" }}>
               {user?.username ?? "…"}
             </span>
-            <span className="text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>Online</span>
+            <span className="text-xs leading-tight" style={{ color: statusColor(status) }}>{statusLabel(status)}</span>
           </div>
           <button onClick={() => setShowSettings(true)} className="p-1 rounded" title="User Settings" aria-label="User Settings"
             style={{ color: "var(--color-dc-interactive-normal)" }}

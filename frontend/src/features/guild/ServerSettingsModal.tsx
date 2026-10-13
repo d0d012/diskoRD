@@ -1,6 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RolesSettings } from "./RolesSettings";
 import { useGuildStore } from "../../stores/guildStore";
+import { resolveMediaUrl } from "../../lib/api";
+import { AvatarCropper } from "../settings/AvatarCropper";
+
+const MAX_ICON_BYTES = 8 * 1024 * 1024;
+const ICON_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+function initials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function errorText(err: unknown, fallback: string): string {
+  return (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
+}
 
 interface Props {
   guildId: string;
@@ -19,7 +32,12 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const { deleteGuild, updateGuild } = useGuildStore();
+  const { deleteGuild, updateGuild, uploadGuildIcon, removeGuildIcon } = useGuildStore();
+  const iconUrl = useGuildStore((s) => s.guilds.find((g) => g.id === guildId)?.iconUrl ?? null);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [iconBusy, setIconBusy] = useState(false);
+  const [iconError, setIconError] = useState("");
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(guildName);
@@ -48,6 +66,48 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
       setName(guildName);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleIconFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!ICON_TYPES.includes(file.type)) {
+      setIconError("Unsupported image type: PNG, JPEG, GIF or WebP only");
+      return;
+    }
+    setIconError("");
+    // GIFs skip the cropper so they keep their animation.
+    if (file.type === "image/gif") void uploadIcon(file);
+    else setCropFile(file);
+  }
+
+  async function uploadIcon(file: File) {
+    if (file.size > MAX_ICON_BYTES) {
+      setIconError("Image must be 8MB or smaller");
+      return;
+    }
+    setIconBusy(true);
+    setIconError("");
+    try {
+      await uploadGuildIcon(guildId, file);
+    } catch (err) {
+      setIconError(errorText(err, "Could not upload the icon"));
+    } finally {
+      setIconBusy(false);
+    }
+  }
+
+  async function handleRemoveIcon() {
+    setIconBusy(true);
+    setIconError("");
+    try {
+      await removeGuildIcon(guildId);
+    } catch (err) {
+      setIconError(errorText(err, "Could not remove the icon"));
+    } finally {
+      setIconBusy(false);
     }
   }
 
@@ -126,6 +186,68 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
           {activeSection === "overview" && (
             <div className="p-8 max-w-lg">
               <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-dc-text-muted)" }}>
+                Server Icon
+              </label>
+              <div className="flex items-center gap-5 mb-2">
+                <button
+                  type="button"
+                  onClick={() => iconInputRef.current?.click()}
+                  disabled={!isOwner || iconBusy}
+                  aria-label="Change server icon"
+                  className="relative w-20 h-20 rounded-full overflow-hidden group flex-shrink-0 flex items-center justify-center disabled:cursor-default"
+                  style={{ backgroundColor: "var(--color-dc-brand)" }}
+                >
+                  {iconUrl ? (
+                    <img src={resolveMediaUrl(iconUrl)} alt="" className="w-full h-full object-cover" draggable={false} />
+                  ) : (
+                    <span className="text-2xl font-semibold text-white select-none">{initials(name || guildName)}</span>
+                  )}
+                  {isOwner && (
+                    <span
+                      className={`absolute inset-0 items-center justify-center text-[11px] font-semibold uppercase text-white ${iconBusy ? "flex" : "hidden group-hover:flex"}`}
+                      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+                    >
+                      {iconBusy ? "Uploading…" : "Change"}
+                    </span>
+                  )}
+                </button>
+                {isOwner ? (
+                  <div className="min-w-0">
+                    <input ref={iconInputRef} type="file" accept={ICON_TYPES.join(",")} className="hidden" onChange={handleIconFile} />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => iconInputRef.current?.click()}
+                        disabled={iconBusy}
+                        className="px-4 h-8 rounded text-sm font-medium text-white whitespace-nowrap hover:brightness-110 disabled:opacity-60"
+                        style={{ backgroundColor: "var(--color-dc-brand)" }}
+                      >
+                        Upload Image
+                      </button>
+                      {iconUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveIcon}
+                          disabled={iconBusy}
+                          className="px-3 h-8 rounded text-sm font-medium whitespace-nowrap hover:underline disabled:opacity-60"
+                          style={{ color: "var(--color-dc-text-normal)" }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "var(--color-dc-text-muted)" }}>
+                      PNG, JPEG or WebP — you can crop it before uploading. GIFs up to 8MB.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: "var(--color-dc-text-muted)" }}>Only the server owner can change the icon.</p>
+                )}
+              </div>
+              {iconError && <p className="text-sm mb-2" style={{ color: "var(--color-dc-red, #ed4245)" }}>{iconError}</p>}
+              <div className="h-px my-6" style={{ backgroundColor: "var(--color-dc-bg-modifier-hover)" }} />
+
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-dc-text-muted)" }}>
                 Server Name
               </label>
               <input
@@ -179,6 +301,18 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
           )}
         </div>
       </div>
+
+      {cropFile && (
+        <AvatarCropper
+          file={cropFile}
+          title="Edit Server Icon"
+          onCancel={() => setCropFile(null)}
+          onApply={(cropped) => {
+            setCropFile(null);
+            void uploadIcon(cropped);
+          }}
+        />
+      )}
 
       {/* Confirmation dialog */}
       {showConfirm && (

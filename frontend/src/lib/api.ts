@@ -4,6 +4,25 @@ import { storage } from "./storage";
 const baseURL = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
 export const apiBaseURL = baseURL;
 
+/**
+ * Resolves a relative media URL (e.g. `/uploads/avatars/...`) against the API
+ * origin. Web builds serve `/uploads` from the same origin, so the URL is left
+ * untouched; desktop/Tauri builds point at an absolute API origin and need the
+ * prefix. Absolute URLs are returned unchanged.
+ */
+export function resolveMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (!url.startsWith("/")) return url;
+  if (/^https?:\/\//i.test(baseURL)) {
+    try {
+      return new URL(url, baseURL).toString();
+    } catch {
+      return url;
+    }
+  }
+  return url;
+}
+
 export const api = axios.create({
   baseURL,
   headers: { "Content-Type": "application/json" },

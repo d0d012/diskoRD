@@ -218,6 +218,37 @@ func (r *Repository) SoftDelete(ctx context.Context, messageID string) error {
 	return nil
 }
 
+// GetReactionsForMessages aggregates reactions for a batch of messages, grouped
+// by message id, and flags whether viewerID reacted with each emoji.
+func (r *Repository) GetReactionsForMessages(ctx context.Context, messageIDs []string, viewerID string) (map[string][]ReactionRef, error) {
+	result := make(map[string][]ReactionRef)
+	if len(messageIDs) == 0 {
+		return result, nil
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT message_id, emoji, COUNT(*) AS count, bool_or(user_id = $2)
+		 FROM message_reactions
+		 WHERE message_id = ANY($1)
+		 GROUP BY message_id, emoji
+		 ORDER BY COUNT(*) DESC, emoji ASC`,
+		messageIDs, viewerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("message.Repository.GetReactionsForMessages: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var messageID string
+		var ref ReactionRef
+		if err := rows.Scan(&messageID, &ref.Emoji, &ref.Count, &ref.SelfReacted); err != nil {
+			return nil, fmt.Errorf("message.Repository.GetReactionsForMessages: scan: %w", err)
+		}
+		result[messageID] = append(result[messageID], ref)
+	}
+	return result, nil
+}
+
 // GetUserIDsByUsernames resolves @mention usernames to user IDs.
 func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []string) (map[string]string, error) {
 	if len(usernames) == 0 {

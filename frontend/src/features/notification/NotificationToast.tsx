@@ -1,12 +1,14 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useGuildStore } from "../../stores/guildStore";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
 
 export interface ToastData {
   id: string;
   authorId: string;
   username: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   preview: string;
   channelId: string;
   guildId?: string;
@@ -35,14 +37,13 @@ export const useToastStore = create<ToastStore>((set) => ({
 function Toast({ toast }: { toast: ToastData }) {
   const { dismiss } = useToastStore();
   const { setActiveGuild, setActiveChannel } = useGuildStore();
+  const live = useLiveUser(toast.authorId, { id: toast.authorId, username: toast.username, avatarUrl: toast.avatarUrl });
 
   useEffect(() => {
     const timer = setTimeout(() => dismiss(toast.id), 4000);
     return () => clearTimeout(timer);
   }, [toast.id, dismiss]);
 
-  const initials = toast.username[0]?.toUpperCase() ?? "?";
-  const color = `hsl(${(toast.username.charCodeAt(0) * 37) % 360}, 55%, 40%)`;
   const preview =
     toast.preview.length > 50
       ? toast.preview.slice(0, 50) + "…"
@@ -69,12 +70,7 @@ function Toast({ toast }: { toast: ToastData }) {
       }}
     >
       {/* Avatar */}
-      <div
-        className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-semibold"
-        style={{ backgroundColor: color }}
-      >
-        {initials}
-      </div>
+      <Avatar name={live.username ?? toast.username} src={live.avatarUrl} size={36} />
 
       {/* Content */}
       <div className="flex-1 min-w-0">

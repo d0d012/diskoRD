@@ -15,6 +15,9 @@ type ReactionEvent struct {
 	Emoji     string `json:"emoji"`
 	UserID    string `json:"userId"`
 	Action    string `json:"action"` // "add" or "remove"
+	// Count is the total number of reactions for this emoji on this message
+	// after the change (0 when the last one was removed).
+	Count int `json:"count"`
 }
 
 // EventPublisher is implemented by the gateway hub.

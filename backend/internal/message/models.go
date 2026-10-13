@@ -20,15 +20,24 @@ type AuthorInfo struct {
 }
 
 type MessageResponse struct {
-	ID          string     `json:"id"`
-	ChannelID   string     `json:"channelId"`
-	GuildID     string     `json:"guildId"`
-	Author      AuthorInfo `json:"author"`
-	Content     string     `json:"content"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	EditedAt    *time.Time `json:"editedAt,omitempty"`
-	Mentions    []string   `json:"mentions,omitempty"`
-	Attachments []string   `json:"attachments,omitempty"` // public URLs
+	ID          string        `json:"id"`
+	ChannelID   string        `json:"channelId"`
+	GuildID     string        `json:"guildId"`
+	Author      AuthorInfo    `json:"author"`
+	Content     string        `json:"content"`
+	CreatedAt   time.Time     `json:"createdAt"`
+	EditedAt    *time.Time    `json:"editedAt,omitempty"`
+	Mentions    []string      `json:"mentions,omitempty"`
+	Attachments []string      `json:"attachments,omitempty"` // public URLs
+	Reactions   []ReactionRef `json:"reactions,omitempty"`
+}
+
+// ReactionRef is the aggregated reaction summary attached to a message for the
+// viewer that requested it.
+type ReactionRef struct {
+	Emoji       string `json:"emoji"`
+	Count       int    `json:"count"`
+	SelfReacted bool   `json:"selfReacted"`
 }
 
 type CreateMessageRequest struct {

@@ -1,12 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useState } from "react";
 import { useMessageStore } from "../../stores/messageStore";
-
-const COMMON_EMOJIS = [
-  "👍", "👎", "❤️", "😂", "🔥", "🎉",
-  "✅", "🤔", "👀", "🙌", "💯", "✨",
-  "🙏", "😭", "😊", "🚀", "💀", "🤝",
-  "💪", "💡", "😎", "🤡", "💖", "😡"
-];
+import { useSettingsStore } from "../../stores/settingsStore";
+import { EmojiPicker } from "./EmojiPicker";
 
 interface AddReactionButtonProps {
   messageId: string;
@@ -14,33 +9,28 @@ interface AddReactionButtonProps {
 }
 
 export function AddReactionButton({ messageId, channelId }: AddReactionButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const { toggleReaction } = useMessageStore();
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
+  const recordEmoji = useSettingsStore((s) => s.recordEmoji);
 
   function handleReaction(emoji: string) {
-    toggleReaction(messageId, channelId, emoji);
-    setIsOpen(false);
+    recordEmoji(emoji);
+    void toggleReaction(messageId, channelId, emoji);
+    setAnchorRect(null);
   }
 
   return (
-    <div className="relative inline-block" ref={popoverRef}>
+    <div className="relative inline-block">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={() => {
+          if (anchorRect) {
+            setAnchorRect(null);
+          } else if (buttonRef.current) {
+            setAnchorRect(buttonRef.current.getBoundingClientRect());
+          }
+        }}
         className="flex items-center justify-center w-6 h-6 rounded-full transition-colors"
         style={{
           backgroundColor: "var(--color-dc-bg-tertiary)",
@@ -64,26 +54,12 @@ export function AddReactionButton({ messageId, channelId }: AddReactionButtonPro
         </svg>
       </button>
 
-      {isOpen && (
-        <div
-          className="absolute z-50 p-2 shadow-xl rounded-xl grid grid-cols-6 gap-1 mb-1 bottom-full left-0"
-          style={{
-            backgroundColor: "var(--color-dc-bg-floating)",
-            border: "1px solid var(--color-dc-background-modifier-accent)",
-            width: "max-content"
-          }}
-        >
-          {COMMON_EMOJIS.map(emoji => (
-            <button
-              key={emoji}
-              onClick={() => handleReaction(emoji)}
-              className="text-lg w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
-              style={{ padding: "0" }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+      {anchorRect && (
+        <EmojiPicker
+          anchorRect={anchorRect}
+          onSelect={handleReaction}
+          onClose={() => setAnchorRect(null)}
+        />
       )}
     </div>
   );

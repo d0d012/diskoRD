@@ -7,12 +7,14 @@ import (
 	"github.com/d0d012/diskord/pkg/middleware"
 )
 
-func RegisterRoutes(app *fiber.App, h *Handler, authMiddleware fiber.Handler, db *pgxpool.Pool) {
+func RegisterRoutes(app *fiber.App, h *Handler, authMiddleware fiber.Handler, db *pgxpool.Pool, uploadLimit fiber.Handler) {
 	guilds := app.Group("/guilds", authMiddleware)
 	guilds.Post("/", h.CreateGuild)
 	guilds.Get("/:id", h.GetGuild)
 	guilds.Patch("/:id", h.UpdateGuild)
 	guilds.Delete("/:id", h.DeleteGuild)
+	guilds.Post("/:id/icon", uploadLimit, h.UploadIcon)
+	guilds.Delete("/:id/icon", h.DeleteIcon)
 	guilds.Get("/:id/members", h.ListMembers)
 	guilds.Delete("/:id/members/:userId", middleware.RequireRole(db, "moderator"), h.KickMember)
 	guilds.Patch("/:id/members/:userId/role", middleware.RequireRole(db, "admin"), h.UpdateMemberRole)

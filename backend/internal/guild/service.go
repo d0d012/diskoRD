@@ -3,6 +3,7 @@ package guild
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
@@ -11,10 +12,17 @@ import (
 	"github.com/d0d012/diskord/pkg/middleware"
 )
 
+// IconStorage is the file-storage subset used for guild icons.
+type IconStorage interface {
+	SaveGuildIcon(guildID, mimeType string, r io.Reader) (string, error)
+	DeleteGuildIcons(guildID string) error
+}
+
 type Service struct {
 	repo        *Repository
 	presenceSvc *presence.Service
 	pub         EventPublisher
+	icons       IconStorage
 }
 
 func NewService(repo *Repository, presenceSvc *presence.Service) *Service {
@@ -23,6 +31,10 @@ func NewService(repo *Repository, presenceSvc *presence.Service) *Service {
 
 func (s *Service) SetPublisher(pub EventPublisher) {
 	s.pub = pub
+}
+
+func (s *Service) SetIconStorage(icons IconStorage) {
+	s.icons = icons
 }
 
 func (s *Service) Create(ctx context.Context, userID string, req CreateGuildRequest) (*GuildResponse, error) {
@@ -82,7 +94,7 @@ func (s *Service) Get(ctx context.Context, userID, guildID string) (*GuildRespon
 }
 
 func (s *Service) Update(ctx context.Context, userID, guildID string, req UpdateGuildRequest) (*GuildListItem, error) {
-	if req.Name == nil && req.IconURL == nil {
+	if req.Name == nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "at least one field must be provided")
 	}
 
@@ -105,6 +117,57 @@ func (s *Service) Update(ctx context.Context, userID, guildID string, req Update
 	return &resp, nil
 }
 
+// SetIcon stores an uploaded icon for the guild. Owner only.
+func (s *Service) SetIcon(ctx context.Context, userID, guildID, mimeType string, r io.Reader) (*GuildListItem, error) {
+	if err := s.requireOwner(ctx, userID, guildID); err != nil {
+		return nil, err
+	}
+	if s.icons == nil {
+		return nil, fiber.NewError(fiber.StatusNotImplemented, "storage not configured")
+	}
+	url, err := s.icons.SaveGuildIcon(guildID, mimeType, r)
+	if err != nil {
+		return nil, fmt.Errorf("guild.Service.SetIcon: %w", err)
+	}
+	return s.setIconURL(ctx, guildID, &url)
+}
+
+// RemoveIcon clears the guild icon and deletes its files. Owner only.
+func (s *Service) RemoveIcon(ctx context.Context, userID, guildID string) (*GuildListItem, error) {
+	if err := s.requireOwner(ctx, userID, guildID); err != nil {
+		return nil, err
+	}
+	if s.icons != nil {
+		if err := s.icons.DeleteGuildIcons(guildID); err != nil {
+			return nil, fmt.Errorf("guild.Service.RemoveIcon: %w", err)
+		}
+	}
+	return s.setIconURL(ctx, guildID, nil)
+}
+
+func (s *Service) setIconURL(ctx context.Context, guildID string, url *string) (*GuildListItem, error) {
+	updated, err := s.repo.SetIconURL(ctx, guildID, url)
+	if err != nil {
+		return nil, err
+	}
+	resp := updated.ToListItem()
+	if s.pub != nil {
+		s.pub.PublishToGuild(guildID, "GUILD_UPDATE", resp)
+	}
+	return &resp, nil
+}
+
+func (s *Service) requireOwner(ctx context.Context, userID, guildID string) error {
+	g, err := s.repo.GetGuildByID(ctx, guildID)
+	if err != nil {
+		return err
+	}
+	if g.OwnerID != userID {
+		return fiber.NewError(fiber.StatusForbidden, "only the guild owner can update this guild")
+	}
+	return nil
+}
+
 func (s *Service) Delete(ctx context.Context, userID, guildID string) error {
 	g, err := s.repo.GetGuildByID(ctx, guildID)
 	if err != nil {
@@ -117,6 +180,11 @@ func (s *Service) Delete(ctx context.Context, userID, guildID string) error {
 
 	if err := s.repo.DeleteGuild(ctx, guildID); err != nil {
 		return err
+	}
+	if s.icons != nil {
+		if err := s.icons.DeleteGuildIcons(guildID); err != nil {
+			log.Warn().Err(err).Str("guildID", guildID).Msg("guild.Service.Delete: remove icon files")
+		}
 	}
 	if s.pub != nil {
 		s.pub.PublishToGuild(guildID, "GUILD_DELETE", map[string]string{"guildId": guildID})

@@ -9,9 +9,11 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useCallStore } from "../stores/callStore";
 import { useSoundboardStore } from "../stores/soundboardStore";
 import { useNotificationStore } from "../stores/notificationStore";
+import { useUserStore } from "../stores/userStore";
 import { useToastStore } from "../features/notification/NotificationToast";
 import { playSound } from "../lib/sounds";
-import type { Message } from "../types";
+import { storage } from "../lib/storage";
+import type { Message, PreferredStatus, PresenceStatus, PublicUser, User } from "../types";
 
 const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ??
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/gateway`;
@@ -71,8 +73,10 @@ export function useGateway() {
       gatewaySocket = ws;
 
       ws.onopen = () => {
-        // Connection established — HELLO event will set heartbeat interval
+        // Connection established — HELLO event will set heartbeat interval.
+        // Seed the picker from the session until READY.me arrives.
         backoffMs = 1000;
+        useNotificationStore.getState().syncStatus(useAuthStore.getState().user?.preferredStatus);
       };
 
       ws.onmessage = (evt) => {
@@ -172,16 +176,14 @@ export function useGateway() {
           }
 
           case "REACTION_ADD": {
-            const d = event.d as { messageId: string; channelId: string; emoji: string; count?: number; selfReacted?: boolean };
-            // Depending on payload, we might not have count/selfReacted from backend events directly
-            // For simplicity, add 1 optimistic reaction if not existing
-            useMessageStore.getState().addReaction(d.messageId, d.channelId, { emoji: d.emoji, count: d.count || 1, selfReacted: d.selfReacted || false });
+            const d = event.d as { messageId: string; channelId: string; emoji: string; userId?: string; count?: number };
+            useMessageStore.getState().applyReactionEvent(d.messageId, d.channelId, d.emoji, d.count ?? 1, d.userId, "add");
             break;
           }
 
           case "REACTION_REMOVE": {
-            const d = event.d as { messageId: string; channelId: string; emoji: string; userId: string };
-            useMessageStore.getState().removeReaction(d.messageId, d.channelId, d.emoji, d.userId);
+            const d = event.d as { messageId: string; channelId: string; emoji: string; userId?: string; count?: number };
+            useMessageStore.getState().applyReactionEvent(d.messageId, d.channelId, d.emoji, d.count ?? 0, d.userId, "remove");
             break;
           }
 
@@ -232,12 +234,29 @@ export function useGateway() {
 
           case "READY": {
             const d = event.d as {
-              presences: Record<string, string>;
+              presences: Record<string, PresenceStatus> | null;
               voiceStates: { userId: string; username: string; channelId: string; joined: boolean }[];
+              audience?: string[] | null;
+              me?: { preferredStatus?: PreferredStatus };
             };
-            setPresenceStatuses(d.presences);
-            for (const [userId, status] of Object.entries(d.presences)) {
-              updatePresence(userId, status as "online" | "offline");
+            const presences = d.presences ?? {};
+            // `audience` is exactly the guild membership the snapshot covers.
+            // Only entries that fell out of that previous audience are stale, so
+            // DM/friend-only users are never touched by an unloaded list.
+            const nextAudience = new Set(d.audience ?? []);
+            const prevAudience = usePresenceStore.getState().guildAudience;
+            const meId = useAuthStore.getState().user?.id;
+            const stale: Record<string, PresenceStatus> = {};
+            for (const id of prevAudience) {
+              if (id !== meId && !nextAudience.has(id)) stale[id] = "offline";
+            }
+            setPresenceStatuses({ ...stale, ...presences });
+            usePresenceStore.getState().setGuildAudience(Array.from(nextAudience));
+            for (const [userId, status] of Object.entries(presences)) {
+              updatePresence(userId, status);
+            }
+            if (d.me?.preferredStatus) {
+              useNotificationStore.getState().syncStatus(d.me.preferredStatus);
             }
             for (const vs of d.voiceStates) {
               updateVoiceState(vs.channelId, { userId: vs.userId, username: vs.username }, vs.joined);
@@ -246,9 +265,25 @@ export function useGateway() {
           }
 
           case "PRESENCE_UPDATE": {
-            const d = event.d as { userId: string; status: "online" | "offline" };
+            const d = event.d as { userId: string; status: PresenceStatus };
             updatePresence(d.userId, d.status);
             setPresenceStatus(d.userId, d.status);
+            break;
+          }
+
+          case "USER_UPDATE": {
+            const d = event.d as PublicUser & { preferredStatus?: PreferredStatus };
+            if (!d?.id) break;
+            useUserStore.getState().upsertUser(d);
+            const me = useAuthStore.getState().user;
+            if (me?.id === d.id) {
+              const merged = { ...me, ...d } as User;
+              useAuthStore.getState().setUser(merged);
+              void storage.set("user", JSON.stringify(merged));
+              if (d.preferredStatus) {
+                useNotificationStore.getState().syncStatus(d.preferredStatus);
+              }
+            }
             break;
           }
 
@@ -397,16 +432,30 @@ export function useGateway() {
       backoffMs = 1000;
       connect();
     }
+    // A background tab can miss several interval beats; an immediate one keeps
+    // presence fresh the moment the user returns.
+    function sendHeartbeatNow() {
+      const ws = gatewaySocket;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ op: "HEARTBEAT", s: seqRef.current }));
+      }
+    }
     function onVisible() {
-      if (document.visibilityState === "visible") reconnectNow();
+      if (document.visibilityState !== "visible") return;
+      reconnectNow();
+      sendHeartbeatNow();
+    }
+    function onFocus() {
+      reconnectNow();
+      sendHeartbeatNow();
     }
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", reconnectNow);
+    window.addEventListener("focus", onFocus);
     window.addEventListener("online", reconnectNow);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", reconnectNow);
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", reconnectNow);
       destroyed = true;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);

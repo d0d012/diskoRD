@@ -1,6 +1,8 @@
 package reaction
 
 import (
+	"net/url"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -12,17 +14,26 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
+// decodeEmoji unescapes the emoji route param. Browsers percent-encode non-ASCII
+// path segments, and Fiber does not unescape route params itself.
+func decodeEmoji(raw string) (string, error) {
+	emoji, err := url.PathUnescape(raw)
+	if err != nil {
+		return "", fiber.NewError(fiber.StatusBadRequest, "invalid emoji")
+	}
+	return emoji, nil
+}
+
 func (h *Handler) Add(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	messageID := c.Params("id")
-	emoji := c.Params("emoji")
 
-	if emoji == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "emoji is required")
+	emoji, err := decodeEmoji(c.Params("emoji"))
+	if err != nil {
+		return err
 	}
 
-	err := h.svc.AddReaction(c.Context(), userID, messageID, emoji)
-	if err != nil {
+	if err := h.svc.AddReaction(c.Context(), userID, messageID, emoji); err != nil {
 		return err
 	}
 
@@ -32,14 +43,13 @@ func (h *Handler) Add(c *fiber.Ctx) error {
 func (h *Handler) Remove(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	messageID := c.Params("id")
-	emoji := c.Params("emoji")
 
-	if emoji == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "emoji is required")
+	emoji, err := decodeEmoji(c.Params("emoji"))
+	if err != nil {
+		return err
 	}
 
-	err := h.svc.RemoveReaction(c.Context(), userID, messageID, emoji)
-	if err != nil {
+	if err := h.svc.RemoveReaction(c.Context(), userID, messageID, emoji); err != nil {
 		return err
 	}
 

@@ -1,12 +1,16 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import { useUserStore } from "./userStore";
+import type { PresenceStatus } from "../types";
 
 export interface FriendUser {
   id: string;
   username: string;
-  displayName?: string;
-  avatarUrl?: string;
-  status: "online" | "offline";
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  bannerColor?: string | null;
+  status: PresenceStatus;
 }
 
 export interface FriendRequest {
@@ -37,7 +41,7 @@ interface FriendStore {
   removeFriend: (friendshipId: string) => Promise<void>;
   openDM: (userId: string) => Promise<DMChannel>;
   setActiveDM: (dmId: string | null) => void;
-  updatePresence: (userId: string, status: "online" | "offline") => void;
+  updatePresence: (userId: string, status: PresenceStatus) => void;
   // Gateway-driven updates
   addRequest: (req: FriendRequest) => void;
   onFriendAccepted: (friendshipId: string) => void;
@@ -53,17 +57,23 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
 
   fetchFriends: async () => {
     const { data } = await api.get("/users/me/friends");
-    set({ friends: data.data ?? [] });
+    const friends: FriendUser[] = data.data ?? [];
+    useUserStore.getState().upsertMany(friends);
+    set({ friends });
   },
 
   fetchRequests: async () => {
     const { data } = await api.get("/users/me/friend-requests");
-    set({ requests: data.data ?? [] });
+    const requests: FriendRequest[] = data.data ?? [];
+    useUserStore.getState().upsertMany(requests.map((r) => r.user));
+    set({ requests });
   },
 
   fetchDMs: async () => {
     const { data } = await api.get("/users/me/dms");
-    set({ dms: data.data ?? [] });
+    const dms: DMChannel[] = data.data ?? [];
+    useUserStore.getState().upsertMany(dms.map((d) => d.recipient));
+    set({ dms });
   },
 
   sendRequest: async (userId) => {

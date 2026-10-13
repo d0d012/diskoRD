@@ -11,20 +11,35 @@ export interface PaginatedResponse<T> {
   error?: string;
 }
 
-export interface User {
+/** A status other users can see. `invisible` is never visible. */
+export type PresenceStatus = "online" | "idle" | "dnd" | "offline";
+
+/** The status a user can choose for themself. */
+export type PreferredStatus = "online" | "idle" | "dnd" | "invisible";
+
+/** The publicly shared profile fields, as carried by USER_UPDATE. */
+export interface PublicUser {
   id: string;
   username: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  bannerColor?: string | null;
+}
+
+export interface User extends PublicUser {
   email?: string;
-  displayName?: string;
-  avatarUrl?: string;
-  status: "online" | "idle" | "dnd" | "offline";
+  /** Legacy field; presence comes from the presence store, not this. */
+  status: PresenceStatus;
+  /** Only present on the authenticated user's own payload. */
+  preferredStatus?: PreferredStatus;
   createdAt: string;
 }
 
 export interface Guild {
   id: string;
   name: string;
-  iconUrl?: string;
+  iconUrl?: string | null;
   ownerId: string;
   createdAt: string;
 }
@@ -71,10 +86,13 @@ export interface GuildRole {
 export interface Member {
   id: string;
   username: string;
-  displayName?: string;
-  avatarUrl?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  bannerColor?: string | null;
   role: string;
   roles: GuildRole[];
   joinedAt: string;
-  status: string;
+  createdAt?: string;
+  status: PresenceStatus;
 }

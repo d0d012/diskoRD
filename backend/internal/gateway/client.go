@@ -65,6 +65,8 @@ func (c *Client) ReadPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		// Protocol-level pongs are not throttled by background tabs, unlike JS timers.
+		c.hub.touch(c.userID)
 		return nil
 	})
 

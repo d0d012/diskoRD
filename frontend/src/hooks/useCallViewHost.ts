@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { useAuthStore } from "../stores/authStore";
 import { useSoundboardStore } from "../stores/soundboardStore";
+import { useUserStore } from "../stores/userStore";
 import { SOUNDBOARD_SOUNDS } from "../lib/soundboard";
 import { isTauri } from "../lib/inviteLinks";
 import {
@@ -40,10 +41,14 @@ export function useCallViewHost(options: CallViewHostOptions): void {
 
   const soundboardAvailable = useSoundboardStore((s) => !!s.session && s.available);
   const guildSounds = useSoundboardStore((s) => s.sounds);
+  // Known profiles ride along with the controls so the call window can render avatars;
+  // any profile change re-memoises and re-emits state.
+  const users = useUserStore((s) => s.users);
   const controls = useMemo<CallViewControls>(() => ({
     isMuted,
     isDeafened,
     cameraOn,
+    profiles: users,
     soundboard: {
       available: soundboardAvailable,
       sounds: [
@@ -52,7 +57,7 @@ export function useCallViewHost(options: CallViewHostOptions): void {
         ...(options.kind === "guild" ? guildSounds.map(({ id, name }) => ({ id, name })) : []),
       ],
     },
-  }), [isMuted, isDeafened, cameraOn, soundboardAvailable, guildSounds, options.kind]);
+  }), [isMuted, isDeafened, cameraOn, soundboardAvailable, guildSounds, options.kind, users]);
 
   // Latest values for the long-lived listeners below.
   const latest = useRef({ options, controls, active });

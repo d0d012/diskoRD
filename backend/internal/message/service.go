@@ -163,6 +163,19 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 
+	// Attach reaction summaries for the viewer.
+	if len(msgs) > 0 {
+		ids := make([]string, len(msgs))
+		for i := range msgs {
+			ids[i] = msgs[i].ID
+		}
+		if reactions, err := s.repo.GetReactionsForMessages(ctx, ids, userID); err == nil {
+			for i := range msgs {
+				msgs[i].Reactions = reactions[msgs[i].ID]
+			}
+		}
+	}
+
 	return &MessagesPage{Items: msgs, HasMore: hasMore}, nil
 }
 
@@ -185,6 +198,9 @@ func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMe
 		return nil, err
 	}
 	msg.GuildID = guildID
+	if reactions, err := s.repo.GetReactionsForMessages(ctx, []string{msg.ID}, userID); err == nil {
+		msg.Reactions = reactions[msg.ID]
+	}
 
 	if s.pub != nil {
 		if cc.IsDM {

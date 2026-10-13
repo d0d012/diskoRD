@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { useCallStore } from "../../stores/callStore";
 import { startLoop, stopLoop } from "../../lib/sounds";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
 
 export function IncomingCallOverlay() {
   const { state, call, acceptCall, declineCall } = useCallStore();
+  const live = useLiveUser(call?.recipientId, { id: call?.recipientId ?? "", username: call?.recipientName ?? "" });
 
   useEffect(() => {
     if (state !== "ringing") return;
@@ -12,8 +15,6 @@ export function IncomingCallOverlay() {
   }, [state]);
 
   if (state !== "ringing" || !call) return null;
-
-  const color = `hsl(${(call.recipientName.charCodeAt(0) * 37) % 360}, 55%, 45%)`;
 
   return (
     <div
@@ -25,12 +26,7 @@ export function IncomingCallOverlay() {
         style={{ backgroundColor: "var(--color-dc-bg-secondary)", minWidth: 280 }}
       >
         {/* Avatar */}
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-semibold select-none"
-          style={{ backgroundColor: color }}
-        >
-          {call.recipientName[0]?.toUpperCase()}
-        </div>
+        <Avatar name={live.username ?? call.recipientName} src={live.avatarUrl} size={80} />
 
         <div className="text-center">
           <p className="text-base font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>

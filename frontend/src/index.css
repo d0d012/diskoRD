@@ -90,3 +90,7 @@ body,
 ::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.5);
 }
+
+.lightbox-in { animation: lightbox-in 140ms ease-out; }
+@keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lightbox-in { animation: none; } }

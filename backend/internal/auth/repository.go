@@ -23,9 +23,9 @@ func (r *Repository) CreateUser(ctx context.Context, username, email, passwordHa
 	err := r.db.QueryRow(ctx,
 		`INSERT INTO users (username, email, password_hash)
 		 VALUES ($1, $2, $3)
-		 RETURNING id, username, email, password_hash, display_name, avatar_url, status, created_at, updated_at`,
+		 RETURNING id, username, email, password_hash, display_name, avatar_url, bio, banner_color, preferred_status, status, created_at, updated_at`,
 		username, email, passwordHash,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.BannerColor, &u.PreferredStatus, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("auth.Repository.CreateUser: %w", err)
 	}
@@ -35,10 +35,10 @@ func (r *Repository) CreateUser(ctx context.Context, username, email, passwordHa
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
 	err := r.db.QueryRow(ctx,
-		`SELECT id, username, email, password_hash, display_name, avatar_url, status, created_at, updated_at
+		`SELECT id, username, email, password_hash, display_name, avatar_url, bio, banner_color, preferred_status, status, created_at, updated_at
 		 FROM users WHERE email = $1`,
 		email,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.BannerColor, &u.PreferredStatus, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid email or password")
 	}
@@ -51,10 +51,10 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*User, e
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	err := r.db.QueryRow(ctx,
-		`SELECT id, username, email, password_hash, display_name, avatar_url, status, created_at, updated_at
+		`SELECT id, username, email, password_hash, display_name, avatar_url, bio, banner_color, preferred_status, status, created_at, updated_at
 		 FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.BannerColor, &u.PreferredStatus, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusNotFound, "user not found")
 	}

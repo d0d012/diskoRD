@@ -32,9 +32,10 @@ type CreateGuildRequest struct {
 	Name string `json:"name" validate:"required,min=1,max=100"`
 }
 
+// UpdateGuildRequest is the JSON body for PATCH /guilds/:id. Icons are only
+// settable through upload, so there is deliberately no iconUrl field here.
 type UpdateGuildRequest struct {
-	Name    *string `json:"name" validate:"omitempty,min=1,max=100"`
-	IconURL *string `json:"iconUrl" validate:"omitempty,url"`
+	Name *string `json:"name" validate:"omitempty,min=1,max=100"`
 }
 
 type GuildResponse struct {
@@ -54,9 +55,10 @@ type ChannelResponse struct {
 }
 
 type GuildListItem struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	IconURL   *string   `json:"iconUrl,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Not omitempty: GUILD_UPDATE must carry null so clients clear a removed icon.
+	IconURL   *string   `json:"iconUrl"`
 	OwnerID   string    `json:"ownerId"`
 	CreatedAt time.Time `json:"createdAt"`
 }

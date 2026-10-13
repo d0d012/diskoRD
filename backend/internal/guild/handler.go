@@ -1,8 +1,13 @@
 package guild
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/d0d012/diskord/internal/storage"
 )
 
 type Handler struct {
@@ -72,6 +77,45 @@ func (h *Handler) UpdateGuild(c *fiber.Ctx) error {
 		return err
 	}
 
+	return c.JSON(Response{Data: result})
+}
+
+func (h *Handler) UploadIcon(c *fiber.Ctx) error {
+	guildID := c.Params("id")
+	file, err := c.FormFile("file")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "file is required")
+	}
+	if file.Size > storage.MaxFileSize {
+		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "file exceeds 8MB limit")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "could not read uploaded file")
+	}
+	defer src.Close()
+
+	mimeType, err := storage.SniffImage(src)
+	if errors.Is(err, storage.ErrUnsupportedImage) {
+		return fiber.NewError(fiber.StatusBadRequest, "unsupported image type: PNG, JPEG, GIF or WebP only")
+	}
+	if err != nil {
+		return fmt.Errorf("guild.Handler.UploadIcon: %w", err)
+	}
+
+	result, err := h.service.SetIcon(c.Context(), c.Locals("userID").(string), guildID, mimeType, src)
+	if err != nil {
+		return err
+	}
+	return c.JSON(Response{Data: result})
+}
+
+func (h *Handler) DeleteIcon(c *fiber.Ctx) error {
+	result, err := h.service.RemoveIcon(c.Context(), c.Locals("userID").(string), c.Params("id"))
+	if err != nil {
+		return err
+	}
 	return c.JSON(Response{Data: result})
 }
 

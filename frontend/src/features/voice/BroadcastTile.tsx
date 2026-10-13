@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { VoiceParticipant } from "../../hooks/useVoice";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
 import { VideoTile } from "./VideoTile";
 import { VolumeMenu } from "./VolumeMenu";
 
@@ -23,7 +25,7 @@ export function BroadcastTile({
 
   const isSidebar = variant === "sidebar";
   const nameSize = isSidebar ? "text-[9px]" : "text-xs";
-  const color = `hsl(${(name.charCodeAt(0) * 37) % 360}, 55%, 40%)`;
+  const live = useLiveUser(participant.identity, { id: participant.identity, username: name });
 
   return (
     <>
@@ -87,12 +89,7 @@ export function BroadcastTile({
             style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
           >
             {/* Mini avatar */}
-            <div
-              className="w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold"
-              style={{ backgroundColor: color, fontSize: "7px" }}
-            >
-              {name[0]?.toUpperCase()}
-            </div>
+            <Avatar name={live.username ?? name} src={live.avatarUrl} size={14} />
             <span className={`${nameSize} font-medium truncate`}>
               {name}'s Screen
             </span>

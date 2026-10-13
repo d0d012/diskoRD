@@ -8,6 +8,9 @@ Runtime behavior that isn't obvious from a single file. For the stack and featur
 - Guild-scoped events fan out across backend instances via Redis Pub/Sub; direct user and DM notifications go through the local hub only.
 - Per-client guild routing sets are mutex-guarded (`Client.HasGuild/AddGuild/RemoveGuild`).
 - Heartbeat/ping-pong is implemented; session resume is not.
+- Presence lives at `presence:{userId}` (TTL, heartbeat-refreshed). The stored value is the user's **preferred** status (`online | idle | dnd | invisible`); `invisible` is mapped to `offline` by `presence.Visible` on the way out, so other clients never see it. `READY` carries the visible statuses plus `me.preferredStatus` for the client's own picker, and `PRESENCE_UPDATE` stays `{ userId, status }` with `status ∈ online|idle|dnd|offline`.
+- Presence and profile-change audiences are resolved from the DB (`guild_members`, `dm_channels`), not the in-memory connection map, so the last disconnect still reaches guild members with `offline`.
+- `USER_UPDATE` carries the public profile (`id, username, displayName, avatarUrl, bio, bannerColor`) and is published to every guild the user belongs to, every DM partner, and the user themself; the self copy also carries `preferredStatus`. Avatars change URL on every upload, so clients never need cache-busting.
 - In dev, Vite must proxy `/gateway` (ws) to the backend — without it every realtime event silently stops arriving.
 
 ## Auth & sessions (`backend/internal/auth`, `frontend/src/lib/api.ts`)
@@ -19,22 +22,29 @@ Runtime behavior that isn't obvious from a single file. For the stack and featur
 - Frontend: one shared `refreshSession()` (concurrent callers share a request), refreshing ~2 min before expiry and on focus/visibility/online. Only an explicit 400/401/403 from `/auth/refresh` logs the user out; network errors, 5xx and 429 retry with backoff and keep credentials. The rotated refresh token is persisted before anything else.
 - `useGateway` reconnects with the freshest token (backoff 1–30 s, immediate on focus) and refreshes on close code 4001.
 
+## Profiles & presence (`backend/internal/user`, `frontend/src/stores/userStore.ts`)
+
+- `PATCH /users/me` updates `displayName`, `bio` (max 190 runes) and `bannerColor` (`#rrggbb` or `""` to clear); `nil`/omitted means unchanged, `""` clears to NULL. It deliberately has no `avatarUrl` — avatars are only set by `POST /users/me/avatar` (content-sniffed, image-only, 8 MB, rate-limited) and cleared by `DELETE /users/me/avatar`.
+- Guild icons work the same way: owner-only `POST /guilds/:id/icon` / `DELETE /guilds/:id/icon` (sniffed via `storage.SniffImage`, stored under `uploads/guild-icons/{guildId}/`), and `PATCH /guilds/:id` has no `iconUrl`. `GUILD_UPDATE` always carries `iconUrl` (null when removed) because the client merges guild updates into existing state.
+- `PUT /users/me/presence` stores the preferred status and leaves the live presence value to the hub (`SET ... XX KEEPTTL`), so choosing a status only takes effect while connected.
+- Public user payloads never include the live status; the frontend `userStore` is a live overlay seeded from members/friends/DMs/messages and kept fresh by `USER_UPDATE`, resolved through `useLiveUser`.
+
 ## DM calls (`backend/internal/call`, `frontend/src/features/call`)
 
 - Redis state: `call:{channelId}` hash (`caller`, `callee`, `state` = ringing|active) plus `usercall:{userId}` for busy checks.
 - Rings time out after 30 s (`CALL_TIMEOUT` to both sides). Active calls expire after 90 s unless clients ping `POST /dms/:id/call/keepalive` (every 30 s).
 - Initiate returns 409 if either user is busy or the DM is already ringing; only the callee can accept/decline. If the DM has an *active* call, a new Initiate from either member replaces it (and sends `CALL_END` to the other side): the caller's client can't be in a call when it initiates, so that call died on their side (crash, reload, lost hang-up). Legacy string-typed `call:*` keys from older builds are deleted on read.
-- `DMCallPanel` is mounted app-wide in `AppPage` (remote audio via `GlobalVoiceAudio`), hangs up if the other side leaves the LiveKit room, and ends the call on `pagehide`/logout. Joining a DM call leaves any guild voice channel.
+- `DMCallPanel` is mounted app-wide in `AppPage` (remote audio via `GlobalVoiceAudio`), hangs up if the other side leaves the LiveKit room, and ends the call on `pagehide`/logout. Joining a DM call leaves any guild voice channel. On desktop the call's video shows in the separate call window (see Desktop); on the web it's an in-app card that can be dragged, resized, collapsed and hidden. Either way the sidebar "Call Connected" bar brings it back.
 
 ## Voice (`backend/internal/voice`, `frontend/src/hooks/useVoice.ts`)
 
-- `POST /channels/:id/voice/token` returns a LiveKit JWT. Room name: `guild:{guildId}:channel:{channelId}`.
+- `POST /channels/:id/voice/token` returns a LiveKit JWT. Room name: `guild:{guildId}:channel:{channelId}`. `POST /channels/:id/voice/viewer` returns a hidden, subscribe-only token for the desktop call window (only for someone in the channel).
 - Voice state lives in Redis at `voice_state:{channelId}`; presence at `presence:{userId}` (TTL).
-- Coturn (TURN/STUN) exists only in the production compose file.
+- Coturn (TURN/STUN) exists only in the production compose file. Local LiveKit doesn't forward its UDP range (see README), so local media runs over ICE/TCP on 7881.
 
 ### Soundboard
 
-- `Soundboard` is a nonmodal, anchored popover shared by the voice control bar, persistent sidebar voice controls, and DM call header. Search filters a compact grid; preview mode changes clicks to local-only playback. Clicking sounds keeps the board open. Escape restores trigger focus; outside clicks dismiss without blocking the underlying voice controls.
+- `Soundboard` is a nonmodal, anchored popover shared by the voice control bar, persistent sidebar voice controls, and DM call header. The desktop call window has its own sound grid that sends play commands to the main window, where the session lives. Search filters a compact grid; preview mode changes clicks to local-only playback. Clicking sounds keeps the board open. Escape restores trigger focus; outside clicks dismiss without blocking the underlying voice controls.
 - `attachSoundboard(room, guildId?)` owns playback independently of panel navigation. The guild is the **connected voice guild**, never the guild currently being browsed. DM calls have built-in sounds only. Six licensed recordings are bundled in `frontend/public/sounds/soundboard/` and predecoded on joining; custom clips use the same cached AudioBuffer playback path. There is no runtime synthesis or third-party audio fetch. The popover links to `CREDITS.txt` with creators, source URLs, licenses, and conversion details.
 - Reliable LiveKit data on `diskord.soundboard.v2` carries a catalog ID, timestamp and unique event UUID, never arbitrary URLs/audio. Local feedback starts before waiting for publish completion. Listeners deduplicate event IDs, reject oversized/stale packets (±5 seconds; synchronized clocks recommended), and resolve custom IDs only from the current guild catalog. All clients need the v2 implementation; old v1 boards do not interoperate.
 - Every trigger starts its own voice, so repeated clicks (same or different sounds, same or different senders) stack instead of cutting each other off; a newer trigger never cancels an earlier one that is still loading. There is **no clip-duration lock or two-second cooldown**. A token bucket permits eight immediate triggers and refills ten per second; each listener independently applies the same flood limit. At most 16 voices play at once; past that the oldest voice is stopped for the newest rather than queuing. A compressor bounds the combined soundboard mix; individual custom clips are peak-limited.

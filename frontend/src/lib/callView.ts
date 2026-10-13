@@ -37,11 +37,21 @@ export interface CallViewInit {
 
 export interface CallViewSound { id: string; name: string; emoji?: string }
 
+/** Enough profile data for the call window to render avatars instead of initials. */
+export interface CallViewProfile {
+  id: string;
+  username: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+}
+
 export interface CallViewControls {
   isMuted: boolean;
   isDeafened: boolean;
   cameraOn: boolean;
   soundboard: { available: boolean; sounds: CallViewSound[] };
+  /** Profiles known to the main window, so the call window can show avatars. */
+  profiles?: Record<string, CallViewProfile>;
 }
 
 export type CallViewCommand =

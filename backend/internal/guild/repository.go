@@ -79,17 +79,34 @@ func (r *Repository) UpdateGuild(ctx context.Context, id string, req UpdateGuild
 	err := r.db.QueryRow(ctx, `
 		UPDATE guilds
 		SET name = COALESCE($2, name),
-		    icon_url = COALESCE($3, icon_url),
 		    updated_at = now()
 		WHERE id = $1
 		RETURNING id, name, icon_url, owner_id, created_at, updated_at`,
-		id, req.Name, req.IconURL,
+		id, req.Name,
 	).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusNotFound, "guild not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("guild.Repository.UpdateGuild: %w", err)
+	}
+	return &g, nil
+}
+
+// SetIconURL points the guild at an uploaded icon; nil clears it.
+func (r *Repository) SetIconURL(ctx context.Context, id string, url *string) (*Guild, error) {
+	var g Guild
+	err := r.db.QueryRow(ctx, `
+		UPDATE guilds SET icon_url = $2, updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, icon_url, owner_id, created_at, updated_at`,
+		id, url,
+	).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fiber.NewError(fiber.StatusNotFound, "guild not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("guild.Repository.SetIconURL: %w", err)
 	}
 	return &g, nil
 }

@@ -1,9 +1,13 @@
 import { useEffect } from "react";
 import { useCallStore } from "../../stores/callStore";
 import { startLoop, stopLoop } from "../../lib/sounds";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
+import { avatarColor } from "../../lib/avatar";
 
 export function OutgoingCallOverlay() {
   const { state, call, cancelCall } = useCallStore();
+  const live = useLiveUser(call?.recipientId, { id: call?.recipientId ?? "", username: call?.recipientName ?? "" });
 
   useEffect(() => {
     if (state !== "calling") return;
@@ -13,7 +17,7 @@ export function OutgoingCallOverlay() {
 
   if (state !== "calling" || !call) return null;
 
-  const color = `hsl(${(call.recipientName.charCodeAt(0) * 37) % 360}, 55%, 45%)`;
+  const color = avatarColor(call.recipientName);
 
   return (
     <div
@@ -30,12 +34,7 @@ export function OutgoingCallOverlay() {
             className="absolute inset-0 rounded-full animate-ping opacity-30"
             style={{ backgroundColor: color }}
           />
-          <div
-            className="relative w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-semibold select-none"
-            style={{ backgroundColor: color }}
-          >
-            {call.recipientName[0]?.toUpperCase()}
-          </div>
+          <Avatar name={live.username ?? call.recipientName} src={live.avatarUrl} size={80} />
         </div>
 
         <div className="text-center">

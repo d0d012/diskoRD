@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ParticipantTile } from "../voice/ParticipantTile";
 import { BroadcastTile } from "../voice/BroadcastTile";
 import { buildTiles } from "../voice/voiceLayout";
+import { useUserStore } from "../../stores/userStore";
 import { buildParticipant } from "./participants";
 import type { VoiceParticipant } from "../../hooks/useVoice";
 import {
@@ -49,6 +50,13 @@ export function CallViewWindow() {
       void unlistenState.then((f) => f());
     };
   }, []);
+
+  // Seed profiles the main window sends so tiles can show avatars (see useCallViewHost).
+  useEffect(() => {
+    if (controls?.profiles) {
+      useUserStore.getState().upsertMany(Object.values(controls.profiles));
+    }
+  }, [controls]);
 
   // Handshake: ask for a viewer token only while we don't have one. Each answer is a new
   // token, so asking while connected would reconnect the viewer every time.

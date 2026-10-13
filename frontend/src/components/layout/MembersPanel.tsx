@@ -3,22 +3,12 @@ import { api } from "../../lib/api";
 import { useGuildStore } from "../../stores/guildStore";
 import { usePresenceStore } from "../../stores/presenceStore";
 import { useAuthStore } from "../../stores/authStore";
-import { PresenceDot } from "../ui/PresenceDot";
+import { useUserStore } from "../../stores/userStore";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../ui/Avatar";
 import { RolePicker } from "../../features/guild/RolePicker";
-import { MemberProfilePopup } from "../../features/guild/MemberProfilePopup";
+import { UserProfilePopover } from "../../features/profile/UserProfilePopover";
 import type { GuildRole, Member } from "../../types";
-
-function MemberAvatar({ username }: { username: string }) {
-  const color = `hsl(${(username.charCodeAt(0) * 37) % 360}, 55%, 45%)`;
-  return (
-    <div
-      className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-semibold"
-      style={{ backgroundColor: color }}
-    >
-      {username[0]?.toUpperCase()}
-    </div>
-  );
-}
 
 // Returns the highest-position role that has a non-default color
 function displayColor(roles: GuildRole[] | undefined): string | null {
@@ -39,9 +29,10 @@ function RoleBadge({ role }: { role: GuildRole }) {
   );
 }
 
-function MemberRow({ member, guildId }: { member: Member; guildId: string }) {
+function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildId: string; canManageRoles: boolean }) {
+  const live = useLiveUser(member.id, member);
   const liveStatus = usePresenceStore((s) => s.statuses[member.id] ?? member.status);
-  const isOnline = liveStatus === "online";
+  const isOnline = liveStatus !== "offline";
   const currentUser = useAuthStore((s) => s.user);
   const rolesMap = useGuildStore((s) => s.roles);
   const roles = rolesMap[guildId] ?? [];
@@ -73,16 +64,13 @@ function MemberRow({ member, guildId }: { member: Member; guildId: string }) {
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
       >
-        <div className="relative flex-shrink-0">
-          <MemberAvatar username={member.username} />
-          <PresenceDot status={liveStatus} borderColor="var(--color-dc-bg-secondary)" />
-        </div>
+        <Avatar name={live.username} src={live.avatarUrl} size={32} status={liveStatus} ringColor="var(--color-dc-bg-secondary)" />
         <div className="min-w-0 flex-1">
           <p
             className="text-sm font-medium truncate"
             style={{ color: nameColor ?? "var(--color-dc-header-primary)" }}
           >
-            {member.displayName ?? member.username}
+            {live.displayName ?? live.username}
           </p>
           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
             {member.role === "owner" && (
@@ -93,7 +81,7 @@ function MemberRow({ member, guildId }: { member: Member; guildId: string }) {
         </div>
 
         {/* + button — only for others, visible on hover */}
-        {currentUser?.id !== member.id && (
+        {canManageRoles && currentUser?.id !== member.id && (
           <button
             ref={addBtnRef}
             onClick={handleAddClick}
@@ -121,9 +109,13 @@ function MemberRow({ member, guildId }: { member: Member; guildId: string }) {
       )}
 
       {showProfile && (
-        <MemberProfilePopup
+        <UserProfilePopover
+          userId={member.id}
+          guildId={guildId}
           member={member}
-          anchorRef={rowRef as React.RefObject<HTMLElement>}
+          canManageRoles={canManageRoles}
+          anchorRef={rowRef as React.RefObject<HTMLElement | null>}
+          preferredSide="left"
           onClose={() => setShowProfile(false)}
         />
       )}
@@ -144,6 +136,7 @@ export function MembersPanel() {
   const rolesMap = useGuildStore((s) => s.roles);
   const roles = (activeGuildId ? rolesMap[activeGuildId] : undefined) ?? [];
   const { fetchRoles } = useGuildStore();
+  const currentUser = useAuthStore((s) => s.user);
   const [members, setMembers] = useState<Member[]>([]);
   const statuses = usePresenceStore((s) => s.statuses);
 
@@ -152,7 +145,11 @@ export function MembersPanel() {
 
     function refreshMembers() {
       api.get(`/guilds/${activeGuildId}/members`)
-        .then(({ data }) => setMembers(data.data ?? []))
+        .then(({ data }) => {
+          const list: Member[] = data.data ?? [];
+          useUserStore.getState().upsertMany(list);
+          setMembers(list);
+        })
         .catch(() => {});
       fetchRoles(activeGuildId!);
     }
@@ -169,13 +166,18 @@ export function MembersPanel() {
 
   if (!activeGuildId) return null;
 
+  const myRole = members.find((m) => m.id === currentUser?.id)?.role ?? "member";
+  // Assigning/removing roles requires at least the moderator tier (matches the server).
+  const canManageRoles = myRole !== "member";
+
   const withStatus = members.map((m) => ({
     ...m,
     liveStatus: statuses[m.id] ?? m.status,
   }));
 
-  const online = withStatus.filter((m) => m.liveStatus === "online");
-  const offline = withStatus.filter((m) => m.liveStatus !== "online");
+  // Anything that isn't offline counts as online, so idle/dnd stay grouped.
+  const online = withStatus.filter((m) => m.liveStatus !== "offline");
+  const offline = withStatus.filter((m) => m.liveStatus === "offline");
 
   // Build hoisted sections from roles sorted by position desc
   const hoistedRoles = [...roles].filter((r) => r.hoist).sort((a, b) => b.position - a.position);
@@ -212,7 +214,7 @@ export function MembersPanel() {
             {sec.label} — {sec.members.length}
           </p>
           {sec.members.map((m) => (
-            <MemberRow key={m.id} member={m} guildId={activeGuildId} />
+            <MemberRow key={m.id} member={m} guildId={activeGuildId} canManageRoles={canManageRoles} />
           ))}
         </div>
       ))}
@@ -222,7 +224,7 @@ export function MembersPanel() {
         <div className="mb-2">
           <SectionHeader label="Online" count={remainingOnline.length} />
           {remainingOnline.map((m) => (
-            <MemberRow key={m.id} member={m} guildId={activeGuildId} />
+            <MemberRow key={m.id} member={m} guildId={activeGuildId} canManageRoles={canManageRoles} />
           ))}
         </div>
       )}
@@ -232,7 +234,7 @@ export function MembersPanel() {
         <div>
           <SectionHeader label="Offline" count={offline.length} />
           {offline.map((m) => (
-            <MemberRow key={m.id} member={m} guildId={activeGuildId} />
+            <MemberRow key={m.id} member={m} guildId={activeGuildId} canManageRoles={canManageRoles} />
           ))}
         </div>
       )}

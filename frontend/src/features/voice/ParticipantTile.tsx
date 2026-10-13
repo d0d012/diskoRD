@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { VoiceParticipant } from "../../hooks/useVoice";
+import { useLiveUser } from "../../hooks/useLiveUser";
+import { Avatar } from "../../components/ui/Avatar";
 import { VideoTile } from "./VideoTile";
 import { VolumeMenu } from "./VolumeMenu";
 
@@ -50,9 +52,9 @@ export function ParticipantTile({
   const { name, isSpeaking, isMicEnabled, cameraTrack, isLocal, isCameraEnabled } = participant;
   const hasVideo = isCameraEnabled && cameraTrack !== null;
   const color = `hsl(${(name.charCodeAt(0) * 37) % 360}, 55%, 40%)`;
+  const live = useLiveUser(participant.identity, { id: participant.identity, username: name });
 
   const isSidebar = variant === "sidebar";
-  const avatarSize = isSidebar ? "w-7 h-7 text-xs" : "w-10 h-10 text-base";
   const nameSize = isSidebar ? "text-[10px]" : "text-xs";
   const badgeSize = isSidebar ? "w-3.5 h-3.5" : "w-5 h-5";
   const badgeIcon = isSidebar ? "7" : "10";
@@ -75,10 +77,7 @@ export function ParticipantTile({
       {hasVideo && cameraTrack ? (
         <VideoTile track={cameraTrack} />
       ) : (
-        <span className={`${avatarSize} rounded-full flex items-center justify-center font-bold text-white`}
-          style={{ backgroundColor: color }}>
-          {name[0]?.toUpperCase() ?? "?"}
-        </span>
+        <Avatar name={live.username ?? name} src={live.avatarUrl} size={isSidebar ? 28 : 40} />
       )}
 
       {/* Name label */}

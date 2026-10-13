@@ -24,6 +24,18 @@ type Hub struct {
 
 	register   chan *Client
 	unregister chan *Client
+	// touch is a non-blocking liveness signal from client read loops. The Redis
+	// write happens in the hub goroutine so a read loop never blocks on Redis.
+	touchCh chan string
+	// presenceCh carries status changes so they are ordered against connect /
+	// disconnect lifecycle events in the hub goroutine.
+	presenceCh chan presenceUpdate
+	done       chan struct{}
+
+	// preferred holds each locally connected user's chosen status, so a touch can
+	// recreate an expired key with the right value without hitting the database.
+	prefMu    sync.RWMutex
+	preferred map[string]string
 
 	rdb      *redis.Client
 	db       *pgxpool.Pool
@@ -31,11 +43,20 @@ type Hub struct {
 	seq      int64 // monotonically increasing sequence number
 }
 
+type presenceUpdate struct {
+	userID string
+	status string
+}
+
 func NewHub(rdb *redis.Client, db *pgxpool.Pool, presenceSvc *presence.Service) *Hub {
 	return &Hub{
 		clients:    make(map[string]map[*Client]bool),
 		register:   make(chan *Client, 256),
 		unregister: make(chan *Client, 256),
+		touchCh:    make(chan string, 1024),
+		presenceCh: make(chan presenceUpdate, 256),
+		done:       make(chan struct{}),
+		preferred:  make(map[string]string),
 		rdb:        rdb,
 		db:         db,
 		presence:   presenceSvc,
@@ -49,6 +70,7 @@ func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			close(h.done)
 			return
 
 		case client := <-h.register:
@@ -60,8 +82,13 @@ func (h *Hub) Run(ctx context.Context) {
 			h.clients[client.userID][client] = true
 			h.mu.Unlock()
 			if firstConn {
-				if err := h.presence.SetOnline(context.Background(), client.userID); err == nil {
-					h.broadcastPresence(client.userID, "online")
+				preferred, ok := h.lookupPreferredStatus(context.Background(), client.userID)
+				if !ok {
+					preferred = "online"
+				}
+				h.setPreferred(client.userID, preferred)
+				if err := h.presence.Set(context.Background(), client.userID, preferred); err == nil {
+					h.broadcastPresence(client.userID, presence.Visible(preferred))
 				}
 			}
 			log.Debug().Str("userID", client.userID).Msg("gateway: client connected")
@@ -81,11 +108,18 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 			h.mu.Unlock()
 			if lastConn {
+				h.clearPreferred(client.userID)
 				if err := h.presence.SetOffline(context.Background(), client.userID); err == nil {
 					h.broadcastPresence(client.userID, "offline")
 				}
 			}
 			log.Debug().Str("userID", client.userID).Msg("gateway: client disconnected")
+
+		case userID := <-h.touchCh:
+			h.handleTouch(userID)
+
+		case upd := <-h.presenceCh:
+			h.applyPresenceChange(upd.userID, upd.status)
 		}
 	}
 }
@@ -163,6 +197,9 @@ func (h *Hub) broadcastToGuild(event routableEvent) {
 
 // handleClientMessage processes an incoming WebSocket message from a client.
 func (h *Hub) handleClientMessage(c *Client, msg []byte) {
+	// Any client traffic is evidence the user is alive.
+	h.touch(c.userID)
+
 	var event Event
 	if err := json.Unmarshal(msg, &event); err != nil {
 		return
@@ -170,7 +207,7 @@ func (h *Hub) handleClientMessage(c *Client, msg []byte) {
 
 	switch event.Op {
 	case OpHeartbeat:
-		h.presence.Refresh(context.Background(), c.userID)
+		// The presence refresh already happened via touch above; just ack.
 		seq := atomic.LoadInt64(&h.seq)
 		ack, _ := json.Marshal(Event{Op: OpHeartbeatAck, S: seq})
 		select {
@@ -228,7 +265,187 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 	}
 }
 
-// loadUserGuilds queries the DB for all guild IDs the user belongs to.
+// touch queues a non-blocking liveness signal. Drops when the buffer is full:
+// the next ping is only 30s away.
+func (h *Hub) touch(userID string) {
+	select {
+	case h.touchCh <- userID:
+	default:
+	}
+}
+
+// handleTouch recreates or refreshes the user's presence key. When the key was
+// missing, the user is broadcast as back online. Runs in the hub goroutine.
+func (h *Hub) handleTouch(userID string) {
+	h.mu.RLock()
+	connected := len(h.clients[userID]) > 0
+	h.mu.RUnlock()
+	if !connected {
+		return // a queued touch from a connection that has since closed
+	}
+
+	preferred := h.getPreferred(userID)
+	recreated, err := h.presence.Touch(context.Background(), userID, preferred)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("gateway: touch presence")
+		return
+	}
+	if !recreated {
+		return
+	}
+
+	// The key had expired. The in-memory value may be stale if the status was
+	// changed through another instance, so reconcile with the source of truth.
+	dbPreferred, ok := h.lookupPreferredStatus(context.Background(), userID)
+	if !ok {
+		// Database unavailable: keep the value Touch already created (the cached
+		// one) rather than clobbering an Invisible user with a default.
+		h.broadcastPresence(userID, presence.Visible(preferred))
+		return
+	}
+
+	// Only overwrite if no other instance changed the key since we recreated it.
+	restored, err := h.presence.Restore(context.Background(), userID, preferred, dbPreferred)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("gateway: restore presence")
+		return
+	}
+	if !restored {
+		// A newer value won; whoever wrote it owns the broadcast.
+		return
+	}
+
+	h.setPreferred(userID, dbPreferred)
+	h.broadcastPresence(userID, presence.Visible(dbPreferred))
+}
+
+func (h *Hub) setPreferred(userID, status string) {
+	h.prefMu.Lock()
+	h.preferred[userID] = status
+	h.prefMu.Unlock()
+}
+
+func (h *Hub) getPreferred(userID string) string {
+	h.prefMu.RLock()
+	status := h.preferred[userID]
+	h.prefMu.RUnlock()
+	if status == "" {
+		return "online"
+	}
+	return status
+}
+
+func (h *Hub) clearPreferred(userID string) {
+	h.prefMu.Lock()
+	delete(h.preferred, userID)
+	h.prefMu.Unlock()
+}
+
+// lookupPreferredStatus reads the user's stored status. ok is false when the user
+// is unknown or the query failed, so callers never silently fall back to online.
+func (h *Hub) lookupPreferredStatus(ctx context.Context, userID string) (status string, ok bool) {
+	if err := h.db.QueryRow(ctx, `SELECT preferred_status FROM users WHERE id = $1`, userID).Scan(&status); err != nil || status == "" {
+		return "", false
+	}
+	return status, true
+}
+
+// PublishUserUpdate fans a public profile change out to every guild the user
+// belongs to and every DM partner, then sends the self copy (which carries the
+// preferred status) back to the user's own connections.
+func (h *Hub) PublishUserUpdate(userID string, public any, self any) {
+	ctx := context.Background()
+	for _, guildID := range h.guildIDsForUser(ctx, userID) {
+		h.PublishToGuild(guildID, OpUserUpdate, public)
+	}
+	for _, partnerID := range h.dmPartnersForUser(ctx, userID) {
+		h.notifyUser(partnerID, OpUserUpdate, public)
+	}
+	h.notifyUser(userID, OpUserUpdate, self)
+}
+
+// PublishPresenceChange hands the status change to the hub goroutine so it is
+// ordered against connect/disconnect lifecycle events, then echoes the self copy
+// to the user's own sessions.
+func (h *Hub) PublishPresenceChange(userID, status string, self any) {
+	select {
+	case h.presenceCh <- presenceUpdate{userID: userID, status: status}:
+	case <-h.done:
+	}
+
+	// Always echo the self copy so the user's other sessions update their picker.
+	h.notifyUser(userID, OpUserUpdate, self)
+}
+
+// applyPresenceChange runs in the hub goroutine. A user connected on this
+// instance is always written with SET (their key may have expired); for users
+// connected elsewhere, SetIfOnline avoids resurrecting a presence nobody is
+// maintaining. The cache is only kept for locally connected users.
+func (h *Hub) applyPresenceChange(userID, status string) {
+	h.mu.RLock()
+	connected := len(h.clients[userID]) > 0
+	h.mu.RUnlock()
+
+	if connected {
+		h.setPreferred(userID, status)
+		if err := h.presence.Set(context.Background(), userID, status); err != nil {
+			log.Error().Err(err).Str("userID", userID).Msg("gateway: update presence")
+		}
+		h.broadcastPresence(userID, presence.Visible(status))
+		return
+	}
+
+	online, err := h.presence.SetIfOnline(context.Background(), userID, status)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("gateway: update presence")
+	}
+	if online {
+		h.broadcastPresence(userID, presence.Visible(status))
+	}
+}
+
+// guildIDsForUser resolves the guilds a user belongs to from the database, so
+// the audience is correct even after the user's last connection is removed.
+func (h *Hub) guildIDsForUser(ctx context.Context, userID string) []string {
+	rows, err := h.db.Query(ctx, `SELECT guild_id FROM guild_members WHERE user_id = $1`, userID)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("gateway: query user guilds")
+		return nil
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// dmPartnersForUser resolves everyone who shares a DM channel with the user.
+func (h *Hub) dmPartnersForUser(ctx context.Context, userID string) []string {
+	rows, err := h.db.Query(ctx,
+		`SELECT CASE WHEN user_a_id = $1 THEN user_b_id ELSE user_a_id END
+		 FROM dm_channels WHERE user_a_id = $1 OR user_b_id = $1`,
+		userID,
+	)
+	if err != nil {
+		log.Error().Err(err).Str("userID", userID).Msg("gateway: query DM partners")
+		return nil
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
 func (h *Hub) loadUserGuilds(ctx context.Context, userID string) (map[string]bool, error) {
 	rows, err := h.db.Query(ctx,
 		`SELECT guild_id FROM guild_members WHERE user_id = $1`, userID)
@@ -301,56 +518,6 @@ func (h *Hub) PublishToDM(user1ID, user2ID, op string, data interface{}) {
 // sendReadyEvent sends the current presence and voice state snapshot to a newly connected client.
 func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
 	guildIDs := client.GuildIDs()
-	if len(guildIDs) == 0 {
-		return
-	}
-
-	// 1. Get all member user IDs across the client's guilds
-	rows, err := h.db.Query(ctx,
-		`SELECT DISTINCT user_id FROM guild_members WHERE guild_id = ANY($1)`,
-		guildIDs)
-	if err != nil {
-		return
-	}
-	var memberIDs []string
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) == nil {
-			memberIDs = append(memberIDs, id)
-		}
-	}
-	rows.Close()
-
-	// 2. Batch-fetch presence statuses
-	presences := h.presence.GetStatuses(ctx, memberIDs)
-
-	// 3. Get all voice channels in the client's guilds
-	rows2, err := h.db.Query(ctx,
-		`SELECT id FROM channels WHERE guild_id = ANY($1) AND type = 'voice'`,
-		guildIDs)
-	if err != nil {
-		return
-	}
-	var voiceChannelIDs []string
-	for rows2.Next() {
-		var id string
-		if rows2.Scan(&id) == nil {
-			voiceChannelIDs = append(voiceChannelIDs, id)
-		}
-	}
-	rows2.Close()
-
-	// 4. Get active voice participants (userId → channelId) from Redis
-	voiceUserChannel := make(map[string]string)
-	for _, chID := range voiceChannelIDs {
-		members, err := h.rdb.SMembers(ctx, fmt.Sprintf("voice_state:%s", chID)).Result()
-		if err != nil {
-			continue
-		}
-		for _, uid := range members {
-			voiceUserChannel[uid] = chID
-		}
-	}
 
 	type VoiceStateEntry struct {
 		UserID    string `json:"userId"`
@@ -358,40 +525,95 @@ func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
 		ChannelID string `json:"channelId"`
 		Joined    bool   `json:"joined"`
 	}
-	var voiceStates []VoiceStateEntry
 
-	if len(voiceUserChannel) > 0 {
-		ids := make([]string, 0, len(voiceUserChannel))
-		for uid := range voiceUserChannel {
-			ids = append(ids, uid)
-		}
-		rows3, err := h.db.Query(ctx,
-			`SELECT id, username FROM users WHERE id = ANY($1)`, ids)
+	presences := map[string]string{}
+	voiceStates := []VoiceStateEntry{}
+	memberIDs := []string{}
+
+	if len(guildIDs) > 0 {
+		// 1. Get all member user IDs across the client's guilds
+		rows, err := h.db.Query(ctx,
+			`SELECT DISTINCT user_id FROM guild_members WHERE guild_id = ANY($1)`,
+			guildIDs)
 		if err == nil {
-			for rows3.Next() {
-				var uid, uname string
-				if rows3.Scan(&uid, &uname) == nil {
-					voiceStates = append(voiceStates, VoiceStateEntry{
-						UserID:    uid,
-						Username:  uname,
-						ChannelID: voiceUserChannel[uid],
-						Joined:    true,
-					})
+			for rows.Next() {
+				var id string
+				if rows.Scan(&id) == nil {
+					memberIDs = append(memberIDs, id)
 				}
 			}
-			rows3.Close()
+			rows.Close()
+
+			// 2. Batch-fetch presence statuses
+			presences = h.presence.GetStatuses(ctx, memberIDs)
+
+			// 3. Get all voice channels in the client's guilds
+			rows2, err := h.db.Query(ctx,
+				`SELECT id FROM channels WHERE guild_id = ANY($1) AND type = 'voice'`,
+				guildIDs)
+			if err == nil {
+				var voiceChannelIDs []string
+				for rows2.Next() {
+					var id string
+					if rows2.Scan(&id) == nil {
+						voiceChannelIDs = append(voiceChannelIDs, id)
+					}
+				}
+				rows2.Close()
+
+				// 4. Get active voice participants (userId → channelId) from Redis
+				voiceUserChannel := make(map[string]string)
+				for _, chID := range voiceChannelIDs {
+					members, err := h.rdb.SMembers(ctx, fmt.Sprintf("voice_state:%s", chID)).Result()
+					if err != nil {
+						continue
+					}
+					for _, uid := range members {
+						voiceUserChannel[uid] = chID
+					}
+				}
+
+				if len(voiceUserChannel) > 0 {
+					ids := make([]string, 0, len(voiceUserChannel))
+					for uid := range voiceUserChannel {
+						ids = append(ids, uid)
+					}
+					rows3, err := h.db.Query(ctx,
+						`SELECT id, username FROM users WHERE id = ANY($1)`, ids)
+					if err == nil {
+						for rows3.Next() {
+							var uid, uname string
+							if rows3.Scan(&uid, &uname) == nil {
+								voiceStates = append(voiceStates, VoiceStateEntry{
+									UserID:    uid,
+									Username:  uname,
+									ChannelID: voiceUserChannel[uid],
+									Joined:    true,
+								})
+							}
+						}
+						rows3.Close()
+					}
+				}
+			}
 		}
 	}
 
-	if voiceStates == nil {
-		voiceStates = []VoiceStateEntry{}
+	// 5. Send READY event. Always sent, even without guilds, so the client
+	// learns its own preferred status. `audience` is the set of user IDs the
+	// presence snapshot covers, letting the client drop stale guild entries
+	// without guessing and without touching DM/friend-only users.
+	myStatus, ok := h.lookupPreferredStatus(ctx, client.userID)
+	if !ok {
+		myStatus = "online"
 	}
-
-	// 5. Send READY event
+	me := map[string]string{"preferredStatus": myStatus}
 	seq := atomic.LoadInt64(&h.seq)
 	raw, err := json.Marshal(map[string]interface{}{
 		"presences":   presences,
 		"voiceStates": voiceStates,
+		"audience":    memberIDs,
+		"me":          me,
 	})
 	if err != nil {
 		return
@@ -406,41 +628,17 @@ func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
 	}
 }
 
-// broadcastPresence sends a PRESENCE_UPDATE event to all guild members and DM partners of the given user.
+// broadcastPresence sends a PRESENCE_UPDATE event to all guild members and DM
+// partners of the given user. The audience is resolved from the database so it
+// still works when the user's own last connection has already been removed.
 func (h *Hub) broadcastPresence(userID, status string) {
-	// Collect which guilds this user belongs to
-	h.mu.RLock()
-	conns := h.clients[userID]
-	var guilds []string
-	for client := range conns {
-		guilds = client.GuildIDs()
-		break // all connections share the same guild set
-	}
-	h.mu.RUnlock()
-
-	for _, guildID := range guilds {
-		h.PublishToGuild(guildID, OpPresenceUpdate, map[string]string{
-			"userId": userID,
-			"status": status,
-		})
-	}
-
-	// Also notify DM partners who may not share any guild
+	ctx := context.Background()
 	presenceData := map[string]string{"userId": userID, "status": status}
-	rows, err := h.db.Query(context.Background(),
-		`SELECT CASE WHEN user_a_id = $1 THEN user_b_id ELSE user_a_id END
-		 FROM dm_channels WHERE user_a_id = $1 OR user_b_id = $1`,
-		userID,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("gateway: broadcastPresence: query DM partners")
-		return
+
+	for _, guildID := range h.guildIDsForUser(ctx, userID) {
+		h.PublishToGuild(guildID, OpPresenceUpdate, presenceData)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var partnerID string
-		if err := rows.Scan(&partnerID); err == nil {
-			h.notifyUser(partnerID, OpPresenceUpdate, presenceData)
-		}
+	for _, partnerID := range h.dmPartnersForUser(ctx, userID) {
+		h.notifyUser(partnerID, OpPresenceUpdate, presenceData)
 	}
 }

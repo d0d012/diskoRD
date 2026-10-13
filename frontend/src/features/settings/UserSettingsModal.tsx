@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNoiseCancellation } from "../../hooks/useNoiseCancellation";
+import { ProfileSettings } from "./ProfileSettings";
 import {
   canOpenSystemSettings,
   micConstraints,
@@ -14,14 +15,15 @@ import {
   type PermissionState,
 } from "../../lib/mediaDevices";
 
-type Section = "voice" | "permissions";
+type Section = "profile" | "voice" | "permissions";
 
 interface Props {
   onClose: () => void;
+  initialSection?: Section;
 }
 
-export function UserSettingsModal({ onClose }: Props) {
-  const [section, setSection] = useState<Section>("voice");
+export function UserSettingsModal({ onClose, initialSection = "voice" }: Props) {
+  const [section, setSection] = useState<Section>(initialSection);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const logout = useAuthStore((s) => s.logout);
 
@@ -60,12 +62,16 @@ export function UserSettingsModal({ onClose }: Props) {
       aria-label="User Settings"
     >
       <div
-        className="w-full max-w-3xl h-[min(640px,90vh)] flex rounded-lg overflow-hidden shadow-2xl"
+        className="w-full max-w-[960px] h-[min(680px,90vh)] flex rounded-lg overflow-hidden shadow-2xl"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Nav */}
         <nav className="w-52 flex-shrink-0 p-3 flex flex-col gap-0.5" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
           <p className="px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>
+            My Account
+          </p>
+          {navItem("profile", "My Profile")}
+          <p className="px-2.5 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>
             App Settings
           </p>
           {navItem("voice", "Voice & Video")}
@@ -84,7 +90,7 @@ export function UserSettingsModal({ onClose }: Props) {
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex items-center justify-between px-6 pt-5 pb-3">
             <h2 className="text-xl font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
-              {section === "voice" ? "Voice & Video" : "Permissions"}
+              {section === "profile" ? "My Profile" : section === "voice" ? "Voice & Video" : "Permissions"}
             </h2>
             <button
               onClick={onClose}
@@ -99,7 +105,7 @@ export function UserSettingsModal({ onClose }: Props) {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto px-6 pb-6">
-            {section === "voice" ? <VoiceSettings /> : <PermissionSettings />}
+            {section === "profile" ? <ProfileSettings /> : section === "voice" ? <VoiceSettings /> : <PermissionSettings />}
           </div>
         </div>
       </div>

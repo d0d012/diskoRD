@@ -3,9 +3,9 @@ package auth
 import "github.com/gofiber/fiber/v2"
 
 type RouteConfig struct {
-	AuthMiddleware     fiber.Handler
-	LoginRateLimit     fiber.Handler
-	RegisterRateLimit  fiber.Handler
+	AuthMiddleware    fiber.Handler
+	LoginRateLimit    fiber.Handler
+	RegisterRateLimit fiber.Handler
 }
 
 func RegisterRoutes(app *fiber.App, h *Handler, cfg RouteConfig) {

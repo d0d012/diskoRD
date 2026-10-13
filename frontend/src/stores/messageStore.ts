@@ -1,7 +1,27 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { useAuthStore } from "./authStore";
+import { useUserStore } from "./userStore";
 import type { Message } from "../types";
+
+// Per message+emoji generation counter. Every change (optimistic or a gateway
+// event) bumps it, so a failed request only rolls back if nothing newer landed.
+const reactionGenerations = new Map<string, number>();
+
+function reactionKey(messageId: string, emoji: string): string {
+  return `${messageId}\u0000${emoji}`;
+}
+
+function bumpReactionGeneration(messageId: string, emoji: string): number {
+  const key = reactionKey(messageId, emoji);
+  const next = (reactionGenerations.get(key) ?? 0) + 1;
+  reactionGenerations.set(key, next);
+  return next;
+}
+
+function reactionGeneration(messageId: string, emoji: string): number {
+  return reactionGenerations.get(reactionKey(messageId, emoji)) ?? 0;
+}
 
 interface TypingUser {
   userId: string;
@@ -27,8 +47,8 @@ interface MessageStore {
   uploadImage: (channelId: string, file: File, caption?: string) => Promise<void>;
   editMessage: (messageId: string, channelId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string, channelId: string) => Promise<void>;
-  addReaction: (messageId: string, channelId: string, reaction: { emoji: string; count: number; selfReacted: boolean }) => void;
-  removeReaction: (messageId: string, channelId: string, emoji: string, userId: string) => void;
+  setReactionCount: (messageId: string, channelId: string, emoji: string, count: number, selfReacted: boolean) => void;
+  applyReactionEvent: (messageId: string, channelId: string, emoji: string, count: number, actorId: string | undefined, action: "add" | "remove") => void;
   toggleReaction: (messageId: string, channelId: string, emoji: string) => Promise<void>;
   setTyping: (channelId: string, user: TypingUser) => void;
   clearTyping: (channelId: string, userId: string) => void;
@@ -50,19 +70,21 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     if (beforeId) params.before = beforeId;
 
     const { data } = await api.get(`/channels/${channelId}/messages`, { params });
-    const page = data.data as { items: Message[]; hasMore: boolean };
+    const page = data.data as { items: Message[] | null; hasMore: boolean };
+    const items = page.items ?? [];
+    useUserStore.getState().upsertMany(items.map((m) => m.author));
 
     if (beforeId) {
       set((s) => ({
         messages: {
           ...s.messages,
-          [channelId]: [...page.items, ...(s.messages[channelId] ?? [])],
+          [channelId]: [...items, ...(s.messages[channelId] ?? [])],
         },
         hasMore: { ...s.hasMore, [channelId]: page.hasMore },
       }));
     } else {
       set((s) => ({
-        messages: { ...s.messages, [channelId]: page.items },
+        messages: { ...s.messages, [channelId]: items },
         hasMore: { ...s.hasMore, [channelId]: page.hasMore },
       }));
     }
@@ -79,6 +101,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   },
 
   addMessage: (msg, activeChannelId, currentUserId) => {
+    if (msg.author) useUserStore.getState().upsertUser(msg.author);
     set((s) => {
       const existing = s.messages[msg.channelId] ?? [];
       if (existing.some((m) => m.id === msg.id)) {
@@ -131,6 +154,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   },
 
   updateMessage: (msg) => {
+    if (msg.author) useUserStore.getState().upsertUser(msg.author);
     set((s) => {
       const msgs = s.messages[msg.channelId];
       if (!msgs) return s;
@@ -178,7 +202,8 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     get().removeMessage(messageId, channelId);
   },
 
-  addReaction: (messageId, channelId, reaction) => {
+  // Sets the chip to the server-provided count. A non-positive count removes it.
+  setReactionCount: (messageId, channelId, emoji, count, selfReacted) => {
     set((s) => {
       const msgs = s.messages[channelId];
       if (!msgs) return s;
@@ -187,17 +212,13 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
           ...s.messages,
           [channelId]: msgs.map((m) => {
             if (m.id !== messageId) return m;
-            const existingReactions = m.reactions ?? [];
-            const existing = existingReactions.find(r => r.emoji === reaction.emoji);
-            if (existing) {
-              return {
-                ...m,
-                reactions: existingReactions.map(r => r.emoji === reaction.emoji ? { ...r, count: reaction.count, selfReacted: r.selfReacted || reaction.selfReacted } : r)
-              };
-            }
+            const others = (m.reactions ?? []).filter((r) => r.emoji !== emoji);
+            if (count <= 0) return { ...m, reactions: others };
             return {
               ...m,
-              reactions: [...existingReactions, reaction].sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji))
+              reactions: [...others, { emoji, count, selfReacted }].sort(
+                (a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji)
+              ),
             };
           }),
         },
@@ -205,56 +226,57 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     });
   },
 
-  removeReaction: (messageId, channelId, emoji, userId) => {
-    const { user } = useAuthStore.getState();
-    const isSelf = user?.id === userId;
-
-    set((s) => {
-      const msgs = s.messages[channelId];
-      if (!msgs) return s;
-      return {
-        messages: {
-          ...s.messages,
-          [channelId]: msgs.map((m) => {
-            if (m.id !== messageId) return m;
-            const existingReactions = m.reactions ?? [];
-            return {
-              ...m,
-              reactions: existingReactions.map(r => {
-                if (r.emoji === emoji) {
-                  return { ...r, count: Math.max(0, r.count - 1), selfReacted: isSelf ? false : r.selfReacted };
-                }
-                return r;
-              }).filter(r => r.count > 0)
-            };
-          }),
-        },
-      };
-    });
+  // Applies a gateway reaction event. Counts come straight from the server;
+  // selfReacted only changes for the current user's own actions.
+  applyReactionEvent: (messageId, channelId, emoji, count, actorId, action) => {
+    // A server event supersedes any in-flight optimistic update, so a later
+    // failed request must not roll this back.
+    bumpReactionGeneration(messageId, emoji);
+    const me = useAuthStore.getState().user;
+    const msg = get().messages[channelId]?.find((m) => m.id === messageId);
+    const existing = (msg?.reactions ?? []).find((r) => r.emoji === emoji);
+    let selfReacted = existing?.selfReacted ?? false;
+    if (actorId && me?.id === actorId) {
+      selfReacted = action === "add";
+    }
+    get().setReactionCount(messageId, channelId, emoji, count, selfReacted);
   },
 
   toggleReaction: async (messageId, channelId, emoji) => {
     const msgs = get().messages[channelId];
     if (!msgs) return;
-    const msg = msgs.find(m => m.id === messageId);
+    const msg = msgs.find((m) => m.id === messageId);
     if (!msg) return;
+    const me = useAuthStore.getState().user;
+    if (!me) return;
 
-    const existing = (msg.reactions ?? []).find(r => r.emoji === emoji);
-    const hasReacted = existing?.selfReacted;
+    const existing = (msg.reactions ?? []).find((r) => r.emoji === emoji);
+    const prevCount = existing?.count ?? 0;
+    const prevSelf = existing?.selfReacted ?? false;
+    const wasReacted = prevSelf;
+
+    const generation = bumpReactionGeneration(messageId, emoji);
+
+    // Optimistic change, reverted if the request fails and nothing newer arrived.
+    if (wasReacted) {
+      get().setReactionCount(messageId, channelId, emoji, Math.max(0, prevCount - 1), false);
+    } else {
+      get().setReactionCount(messageId, channelId, emoji, prevCount + 1, true);
+    }
 
     try {
-      if (hasReacted) {
-        // Optimistic update
-        get().removeReaction(messageId, channelId, emoji, useAuthStore.getState().user!.id);
-        await api.delete(`/messages/${messageId}/reactions/${emoji}`);
-      } else {
-        // Optimistic update
-        get().addReaction(messageId, channelId, { emoji, count: (existing?.count ?? 0) + 1, selfReacted: true });
-        await api.put(`/messages/${messageId}/reactions/${emoji}`);
-      }
-    } catch (e) {
-      // Revert optimism implicitly ignored for simplicity, typically would refresh or undo
-      console.error("Failed to toggle reaction", e);
+      const url = `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`;
+      if (wasReacted) await api.delete(url);
+      else await api.put(url);
+    } catch {
+      // Our action did not persist, so restore our own flag. Keep the newest
+      // server count if another event landed while the request was in flight.
+      const current = get().messages[channelId]?.find((m) => m.id === messageId)
+        ?.reactions?.find((r) => r.emoji === emoji);
+      const count = reactionGeneration(messageId, emoji) === generation
+        ? prevCount
+        : current?.count ?? prevCount;
+      get().setReactionCount(messageId, channelId, emoji, count, wasReacted);
     }
   },
 

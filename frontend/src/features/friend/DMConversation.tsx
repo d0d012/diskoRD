@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useFriendStore } from "../../stores/friendStore";
 import { useCallStore } from "../../stores/callStore";
+import { useLiveUser } from "../../hooks/useLiveUser";
 import { MessageList } from "../message/MessageList";
 import { MessageInput } from "../message/MessageInput";
 import { Avatar } from "../../components/ui/Avatar";
+import { UserProfileCard } from "../profile/UserProfileCard";
 import { statusLabel } from "../../lib/avatar";
 import { sendGatewayTyping } from "../../hooks/useGateway";
 
@@ -17,11 +20,14 @@ function PhoneIcon({ size = 20 }: { size?: number }) {
 export function DMConversation() {
   const { dms, activeDMId } = useFriendStore();
   const { state: callState, call, initiateCall, setCallPanelHidden } = useCallStore();
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
 
   const dm = dms.find((d) => d.id === activeDMId);
+  const live = useLiveUser(dm?.recipient.id, dm?.recipient ?? { id: "", username: "", status: "offline" });
   if (!dm) return null;
 
-  const { username, status } = dm.recipient;
+  const { status } = dm.recipient;
+  const username = live.username || dm.recipient.username;
   const callHere = callState !== "idle" && call?.channelId === dm.id;
   const callDisabled = callState !== "idle";
   const startCall = () => initiateCall(dm.id, dm.recipient.id, username);
@@ -29,7 +35,7 @@ export function DMConversation() {
 
   const intro = (
     <div className="px-4 pt-14 pb-4">
-      <Avatar name={username} size={80} />
+      <Avatar name={username} src={live.avatarUrl} size={80} />
       <h2 className="text-3xl font-bold mt-3" style={{ color: "var(--color-dc-header-primary)" }}>
         {username}
       </h2>
@@ -57,13 +63,19 @@ export function DMConversation() {
         className="h-12 px-4 flex items-center gap-3 border-b flex-shrink-0"
         style={{ borderColor: "var(--color-dc-bg-floating)", boxShadow: "0 1px 0 rgba(0,0,0,0.2)" }}
       >
-        <Avatar name={username} size={24} status={status} ringColor="var(--color-dc-bg-primary)" />
-        <span className="font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>
-          {username}
-        </span>
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--color-dc-text-muted)" }}>
-          {statusLabel(status)}
-        </span>
+        <button
+          onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
+          className="flex items-center gap-3 min-w-0 rounded focus:outline-none"
+          aria-label={`View ${username}'s profile`}
+        >
+          <Avatar name={username} src={live.avatarUrl} size={24} status={status} ringColor="var(--color-dc-bg-primary)" />
+          <span className="font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>
+            {username}
+          </span>
+          <span className="text-xs flex-shrink-0" style={{ color: "var(--color-dc-text-muted)" }}>
+            {statusLabel(status)}
+          </span>
+        </button>
 
         <div className="flex-1" />
 
@@ -101,6 +113,15 @@ export function DMConversation() {
         placeholder={`Message @${username}`}
         onTyping={sendGatewayTyping}
       />
+
+      {profileAnchor && (
+        <UserProfileCard
+          userId={dm.recipient.id}
+          anchorRect={profileAnchor}
+          preferredSide="right"
+          onClose={() => setProfileAnchor(null)}
+        />
+      )}
     </div>
   );
 }

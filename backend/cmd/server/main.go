@@ -64,6 +64,7 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		AppName:      "diskord",
+		BodyLimit:    12 * 1024 * 1024, // headroom over the 8MB upload limit for multipart framing
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -97,17 +98,28 @@ func main() {
 		RegisterRateLimit: middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 3, Window: time.Minute}),
 	})
 
-	userRepo := user.NewRepository(pool)
-	userService := user.NewService(userRepo)
-	userHandler := user.NewHandler(userService)
-	user.RegisterRoutes(app, userHandler, authMw)
-
 	presenceSvc := presence.NewService(rdb)
+	hub := gateway.NewHub(rdb, pool, presenceSvc)
+
+	appBaseURL := fmt.Sprintf("http://localhost:%d", cfg.App.Port)
+	if cfg.App.Env == "production" {
+		appBaseURL = "" // nginx serves /uploads directly; relative URL is fine
+	}
+	storageSvc := storage.NewService(cfg.Storage.Path, appBaseURL)
+
+	userRepo := user.NewRepository(pool)
+	userService := user.NewService(userRepo, storageSvc)
+	userService.SetPublisher(hub)
+	userHandler := user.NewHandler(userService)
+	user.RegisterRoutes(app, userHandler, authMw,
+		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
 
 	guildRepo := guild.NewRepository(pool)
 	guildService := guild.NewService(guildRepo, presenceSvc)
+	guildService.SetIconStorage(storageSvc)
 	guildHandler := guild.NewHandler(guildService)
-	guild.RegisterRoutes(app, guildHandler, authMw, pool)
+	guild.RegisterRoutes(app, guildHandler, authMw, pool,
+		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
 
 	channelRepo := channel.NewRepository(pool)
 	channelService := channel.NewService(channelRepo, guildRepo)
@@ -124,7 +136,6 @@ func main() {
 	friendHandler := friend.NewHandler(friendService)
 	friend.RegisterRoutes(app, friendHandler, authMw)
 
-	hub := gateway.NewHub(rdb, pool, presenceSvc)
 	guildService.SetPublisher(hub)
 	channelService.SetPublisher(hub)
 	inviteService.SetNotifier(hub)
@@ -142,12 +153,6 @@ func main() {
 	callSvc.SetNotifier(hub)
 	callHandler := call.NewHandler(callSvc)
 	call.RegisterRoutes(app, callHandler, authMw)
-
-	appBaseURL := fmt.Sprintf("http://localhost:%d", cfg.App.Port)
-	if cfg.App.Env == "production" {
-		appBaseURL = "" // nginx serves /uploads directly; relative URL is fine
-	}
-	storageSvc := storage.NewService(cfg.Storage.Path, appBaseURL)
 
 	msgRepo := message.NewRepository(pool)
 	msgService := message.NewService(msgRepo, guildRepo)
