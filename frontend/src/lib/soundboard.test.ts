@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionState, RoomEvent, type Room, type RemoteParticipant } from "livekit-client";
-import { attachSoundboard, createSoundLimiter, decodeSoundboardPacket, SOUNDBOARD_SOUNDS } from "./soundboard";
+import { attachSoundboard, createFreshnessFilter, createSoundLimiter, decodeSoundboardPacket, SOUNDBOARD_SOUNDS } from "./soundboard";
 import { useSoundboardStore } from "../stores/soundboardStore";
 import { useVoiceStore } from "../stores/voiceStore";
 import { api } from "./api";
@@ -63,12 +63,39 @@ beforeEach(async () => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+describe("soundboard packet freshness", () => {
+  it("accepts a sender whose clock is minutes off, in both directions", () => {
+    const fresh = createFreshnessFilter();
+    const now = 1_000_000;
+    // Sender A runs 3 minutes behind, sender B 2 minutes ahead.
+    expect(fresh("a", now - 180_000 - 40, now)).toBe(true);
+    expect(fresh("a", now + 1000 - 180_000 - 60, now + 1000)).toBe(true);
+    expect(fresh("b", now + 120_000 - 30, now)).toBe(true);
+    expect(fresh("b", now + 2000 + 120_000 - 50, now + 2000)).toBe(true);
+  });
+  it("drops packets delayed beyond five seconds relative to that sender", () => {
+    const fresh = createFreshnessFilter();
+    expect(fresh("a", 0, 100)).toBe(true);
+    expect(fresh("a", 1000, 7200)).toBe(false); // 6.1s slower than the baseline
+    expect(fresh("a", 2000, 2150)).toBe(true);
+  });
+  it("re-learns the baseline when a sender's clock jumps backwards", () => {
+    const fresh = createFreshnessFilter();
+    expect(fresh("a", 0, 100)).toBe(true);
+    // Sender's clock is corrected 60s backwards: every packet now looks 60s late.
+    expect(fresh("a", 1000 - 60_000, 1100)).toBe(false);
+    expect(fresh("a", 2000 - 60_000, 2100)).toBe(false);
+    expect(fresh("a", 3000 - 60_000, 3100)).toBe(true);
+    expect(fresh("a", 4000 - 60_000, 4100)).toBe(true);
+  });
+});
+
 describe("soundboard room session", () => {
-  it("validates bounded packets, rejecting stale, invalid IDs and missing event IDs", () => {
+  it("validates bounded packets, rejecting invalid IDs and missing event IDs", () => {
     expect(decodeSoundboardPacket(packet())?.id).toBe("beep");
     expect(decodeSoundboardPacket(packet("https://evil.test/a.wav"))).toBeNull();
-    expect(decodeSoundboardPacket(packet("beep", Date.now() - 6000))).toBeNull();
-    expect(decodeSoundboardPacket(packet("beep", Date.now() + 6000))).toBeNull();
+    // A skewed sender clock is not a shape error; freshness is judged per sender.
+    expect(decodeSoundboardPacket(packet("beep", Date.now() - 600000))?.id).toBe("beep");
     expect(decodeSoundboardPacket(new Uint8Array(257))).toBeNull();
     expect(decodeSoundboardPacket(new TextEncoder().encode("null"))).toBeNull();
   });

@@ -3,6 +3,7 @@ import { api } from "./api";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useSoundboardStore, type SoundboardSession } from "../stores/soundboardStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import { MAX_SOUND_SECONDS, MAX_SOUND_WAV_BYTES } from "./soundboardUpload";
 
 export const SOUNDBOARD_SOUNDS = [
   { id: "airhorn", name: "Air horn", emoji: "📣", file: "/sounds/soundboard/airhorn.wav" },
@@ -15,15 +16,48 @@ export const SOUNDBOARD_SOUNDS = [
 const TOPIC = "diskord.soundboard.v2";
 const MAX_VOICES = 16;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Base64 length of the largest custom sound (see MAX_SOUND_WAV_BYTES).
+const MAX_SOUND_BASE64 = Math.ceil(MAX_SOUND_WAV_BYTES / 3) * 4;
+const MAX_PACKET_DELAY_MS = 5000;
 interface Packet { id: string; at: number; event: string }
-export function decodeSoundboardPacket(data: Uint8Array, now = Date.now()): Packet | null {
+/** Validates shape only. Freshness is judged per sender by createFreshnessFilter. */
+export function decodeSoundboardPacket(data: Uint8Array): Packet | null {
   if (data.byteLength > 256) return null;
   try {
     const p = JSON.parse(new TextDecoder().decode(data));
     if (!p || typeof p.id !== "string" || (!SOUNDBOARD_SOUNDS.some((s) => s.id === p.id) && !UUID.test(p.id)) ||
-        typeof p.event !== "string" || !UUID.test(p.event) || !Number.isFinite(p.at) || Math.abs(now - p.at) > 5000) return null;
+        typeof p.event !== "string" || !UUID.test(p.event) || !Number.isFinite(p.at)) return null;
     return { id: p.id, at: p.at, event: p.event };
   } catch { return null; }
+}
+
+/**
+ * Drops packets that arrived late without trusting the sender's clock: a sender
+ * whose PC clock is off by minutes would otherwise be silenced in both
+ * directions. The smallest observed (receivedAt - sentAt) per sender is that
+ * sender's clock offset plus the fastest delivery; a packet is late when it
+ * exceeds that baseline by more than MAX_PACKET_DELAY_MS. Repeated rejections
+ * mean the sender's clock jumped backwards, so the baseline is reset.
+ */
+export function createFreshnessFilter() {
+  const senders = new Map<string, { baseline: number; rejected: number }>();
+  return (identity: string, sentAt: number, receivedAt = Date.now()) => {
+    const delta = receivedAt - sentAt;
+    const sender = senders.get(identity);
+    if (!sender || delta < sender.baseline) {
+      senders.set(identity, { baseline: delta, rejected: 0 });
+      return true;
+    }
+    if (delta - sender.baseline <= MAX_PACKET_DELAY_MS) {
+      sender.rejected = 0;
+      return true;
+    }
+    if (++sender.rejected >= 3) {
+      senders.set(identity, { baseline: delta, rejected: 0 });
+      return true;
+    }
+    return false;
+  };
 }
 
 /** Bursts feel instant; sustained flooding is bounded independently at each listener. */
@@ -49,6 +83,7 @@ export function attachSoundboard(room: Room, guildId: string | null = null): () 
   let previousState = room.state;
   const localLimit = createSoundLimiter();
   const remoteLimits = new Map<string, ReturnType<typeof createSoundLimiter>>();
+  const fresh = createFreshnessFilter();
   const seen = new Set<string>();
   const revisions = new Map<string, number>();
   const buffers = new Map<string, Promise<AudioBuffer>>();
@@ -101,12 +136,12 @@ export function attachSoundboard(room: Room, guildId: string | null = null): () 
       })
       : api.get(`/guilds/${guildId}/sounds/${id}`, { signal: requests.signal }).then(({ data }) => {
         const encoded = data.data.audio;
-        if (typeof encoded !== "string" || encoded.length > 320060) throw new Error("Invalid sound");
+        if (typeof encoded !== "string" || encoded.length > MAX_SOUND_BASE64) throw new Error("Invalid sound");
         return Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)).buffer;
       });
     const promise = bytes.then(async (data) => {
       const audio = await ctx.decodeAudioData(data);
-      if (audio.duration <= 0 || audio.duration > 5 || !Number.isFinite(audio.duration)) throw new Error("Invalid duration");
+      if (audio.duration <= 0 || audio.duration > MAX_SOUND_SECONDS || !Number.isFinite(audio.duration)) throw new Error("Invalid duration");
       // Normalize once on decode, not on every rapid retrigger.
       let peak = 0;
       for (let ch = 0; ch < audio.numberOfChannels; ch++) for (const value of audio.getChannelData(ch)) peak = Math.max(peak, Math.abs(value));
@@ -190,7 +225,7 @@ export function attachSoundboard(room: Room, guildId: string | null = null): () 
         room.remoteParticipants.get(participant.identity) !== participant ||
         participant.permissions?.canPublish !== true || participant.permissions.canPublishData !== true) return;
     const packet = decodeSoundboardPacket(data);
-    if (!packet || seen.has(packet.event)) return;
+    if (!packet || seen.has(packet.event) || !fresh(participant.identity, packet.at)) return;
     if (!remoteLimits.has(participant.identity)) remoteLimits.set(participant.identity, createSoundLimiter());
     if (!remoteLimits.get(participant.identity)!()) return;
     seen.add(packet.event);

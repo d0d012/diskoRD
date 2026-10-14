@@ -45,6 +45,9 @@ func (m *mockMembers) GetMemberRole(ctx context.Context, guild, user string) (st
 type mockPublisher struct{ mock.Mock }
 
 func (m *mockPublisher) PublishToGuild(guild, op string, data interface{}) { m.Called(guild, op, data) }
+// maxSamples is the longest clip MaxAudioBytes allows (PCM16 mono, 44-byte header).
+const maxSamples = (MaxAudioBytes - 44) / 2
+
 func wav(samples int) []byte {
 	b := make([]byte, 44+samples*2)
 	copy(b, "RIFF")
@@ -62,9 +65,9 @@ func wav(samples int) []byte {
 	return b
 }
 func TestValidAudio(t *testing.T) {
-	require.True(t, validAudio(wav(120000)))
+	require.True(t, validAudio(wav(maxSamples)))
 	require.True(t, validAudio(wav(1)))
-	for _, b := range [][]byte{nil, {}, wav(0), wav(120001), []byte("not audio")} {
+	for _, b := range [][]byte{nil, {}, wav(0), wav(maxSamples + 1), []byte("not audio")} {
 		require.False(t, validAudio(b))
 	}
 	for _, offset := range []int{0, 4, 8, 12, 16, 20, 22, 24, 28, 32, 34, 36, 40} {
@@ -109,7 +112,7 @@ func TestValidationBeforeRepository(t *testing.T) {
 	members := new(mockMembers)
 	members.On("GetMemberRole", mock.Anything, "guild", "member").Return("member", nil)
 	s := NewService(repo, members, nil)
-	for _, req := range []CreateRequest{{Name: " ", Audio: wav(1)}, {Name: "bad\nname", Audio: wav(1)}, {Name: string(bytes.Repeat([]byte("x"), 33)), Audio: wav(1)}, {Name: "fine", Audio: wav(120001)}} {
+	for _, req := range []CreateRequest{{Name: " ", Audio: wav(1)}, {Name: "bad\nname", Audio: wav(1)}, {Name: string(bytes.Repeat([]byte("x"), 33)), Audio: wav(1)}, {Name: "fine", Audio: wav(maxSamples + 1)}} {
 		_, err := s.Create(context.Background(), "member", "guild", req)
 		require.Error(t, err)
 		require.Equal(t, 400, err.(*fiber.Error).Code)

@@ -78,7 +78,7 @@ func (s *Service) Create(ctx context.Context, userID, guildID string, req Create
 		return nil, fiber.NewError(400, "sound name must be 1–32 characters")
 	}
 	if !validAudio(req.Audio) {
-		return nil, fiber.NewError(400, "sound must be mono 24 kHz PCM16 WAV, at most 5 seconds")
+		return nil, fiber.NewError(400, "sound must be mono 24 kHz PCM16 WAV, at most 15 seconds")
 	}
 	sound, err := s.repo.Create(ctx, guildID, userID, req)
 	if err != nil {

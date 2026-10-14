@@ -27,7 +27,7 @@ Self-hosted Discord-style chat and voice application for private communities.
 - Online/offline presence backed by Redis TTL keys
 - Friend requests, friends list, DM channel creation/listing
 - LiveKit voice token endpoint and Redis-backed voice participant state
-- In-voice soundboard: compact searchable popover, rapid retriggering, local previews, listener volume, and member-uploaded guild sounds (5 seconds, 48 sounds per guild; requires migration `000016`)
+- In-voice soundboard: compact searchable popover, rapid retriggering, local previews, listener volume, and member-uploaded guild sounds (15 seconds, 48 sounds per guild; requires migrations `000016` and `000019`)
 - DM voice/video calls (ring, accept/decline, camera, soundboard) with recovery from dropped clients
 - Desktop call window: a separate, draggable, always-on-top window for DM calls and guild voice, with call controls and soundboard
 - User settings: input/output/camera devices, mic test, permissions with shortcuts to the OS privacy settings

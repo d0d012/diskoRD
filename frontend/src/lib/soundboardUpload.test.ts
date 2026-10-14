@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeSoundWav, toBase64 } from "./soundboardUpload";
+import { encodeSoundWav, MAX_SOUND_WAV_BYTES, toBase64 } from "./soundboardUpload";
 
 describe("sound upload encoding", () => {
   it("encodes canonical mono PCM16/24k WAV with a bounded peak", () => {
@@ -14,9 +14,10 @@ describe("sound upload encoding", () => {
     expect(view.getInt16(50, true)).toBe(0);
     expect(atob(toBase64(data)).length).toBe(data.length);
   });
-  it("rejects empty and overlong media and accepts exactly five seconds", () => {
+  it("rejects empty and overlong media and accepts exactly fifteen seconds", () => {
     expect(() => encodeSoundWav(new Float32Array(0))).toThrow();
-    expect(() => encodeSoundWav(new Float32Array(120001))).toThrow();
-    expect(encodeSoundWav(new Float32Array(120000)).length).toBe(240044);
+    expect(() => encodeSoundWav(new Float32Array(15 * 24000 + 1))).toThrow("15 seconds");
+    expect(encodeSoundWav(new Float32Array(15 * 24000)).length).toBe(720044);
+    expect(MAX_SOUND_WAV_BYTES).toBe(720044); // backend soundboard.MaxAudioBytes
   });
 });
