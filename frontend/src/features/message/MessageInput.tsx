@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useMessageStore } from "../../stores/messageStore";
+import { PixelArtEditor } from "../pixelart/PixelArtEditor";
 
 const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
 const ACCEPTED_TYPES = ACCEPTED.split(",");
@@ -18,6 +19,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [pixelArtOpen, setPixelArtOpen] = useState(false);
   const { sendMessage, uploadImage, typingUsers } = useMessageStore();
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -143,6 +145,21 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           </svg>
         </button>
 
+        <button
+          onClick={() => setPixelArtOpen(true)}
+          disabled={sending}
+          className="flex-shrink-0 p-1 rounded transition-colors mb-0.5"
+          title="Draw pixel art"
+          aria-label="Draw pixel art"
+          style={{ color: "var(--color-dc-interactive-normal)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h4v4h-4v-4zm4 4h4v4h-4v-4z" />
+          </svg>
+        </button>
+
         <textarea
           ref={textareaRef}
           autoFocus
@@ -174,6 +191,16 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           </svg>
         </button>
       </div>
+
+      {pixelArtOpen && (
+        <PixelArtEditor
+          onSend={uploadFile}
+          onClose={() => {
+            setPixelArtOpen(false);
+            textareaRef.current?.focus();
+          }}
+        />
+      )}
 
       {/* Upload error */}
       {uploadError && (

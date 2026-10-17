@@ -37,17 +37,25 @@ interface PixelArtDoc {
 
 Max size: 64×64×8 frames = 32 KB raw, ~44 KB base64. The default palette is our own 16-color palette, defined in `frontend/src/features/pixelart/palette.ts`.
 
-## Phase 1: editor + post to chat (frontend only, shippable alone)
+## Phase 1: editor + post to chat (frontend only, shippable alone) — done
 
 - **Entry point:** a pixel art button in `MessageInput` next to the upload button opens a `PixelArtEditor` modal for the current channel.
 - **Editor UI:** canvas size picker (16/32/64, default 32), tool bar (six tools, keys `B E G I L U`), palette swatches and a color input to replace a swatch, mirror toggle, grid toggle, undo/redo (`Ctrl/Cmd+Z`, `Shift+Ctrl/Cmd+Z`), clear, and **Send**.
 - **Drawing:** pointer events with pointer capture. Interpolate between pointer samples with Bresenham so fast strokes have no gaps. Redraw by writing one `ImageData` at native size and letting CSS scale it, so each change costs at most 4096 pixel writes.
 - **Send:** render to PNG at ×16 nearest-neighbour (32×32 → 512×512, a few KB) via an offscreen canvas and upload it with the existing `uploadImage(channelId, file)`. It then shows up in message history like any image attachment, with no backend change.
+- **Import:** "Import image" accepts any browser-decodable image (PNG/JPEG/GIF first frame/WebP, ≤ 8 MB), e.g. a sprite found online. Steps:
+  - Pick a target size (16/32/64) and a fit: contain or crop.
+  - Downscale on an offscreen canvas, area-averaging when shrinking and nearest-neighbour when the source is already pixel art at an integer scale.
+  - Quantize to the palette with a toggle: "keep my palette" maps to the nearest color, "make a new palette" runs k-means (≤ 32 colors, 8 iterations over ≤ 4096 pixels).
+  - Pixels with alpha below 128 become transparent.
+  - Show a live preview before replacing the canvas, and push the replacement onto undo.
+  - Users are responsible for the rights to what they import. The UI says so in one line.
+- **Export:** "Download PNG" (×1, ×8 or ×16 nearest-neighbour) and "Download .pixel.json" (the `PixelArtDoc`). "Import" also accepts `.pixel.json` for a lossless round trip. In Tauri, downloads go through the existing save path; if there is none, use a plain `<a download>`.
 - **Draft:** autosave the current doc to `localStorage` (guarded with try/catch) so closing the modal doesn't lose work.
 - **Code layout:** `frontend/src/features/pixelart/` holds:
-  - `lib/` with pure, DOM-free functions: `floodFill`, `line`, `pixelPerfect`, `mirror`, `encodeDoc`/`decodeDoc`, `renderToCanvas`, `history`.
-  - `PixelArtEditor.tsx`, `Toolbar.tsx`, `Palette.tsx`.
-  - A small Zustand store (`pixelArtStore`) for editor state.
+  - `lib/` with pure, DOM-free functions: `floodFill`, `line`, `pixelPerfect`, `mirror`, `encodeDoc`/`decodeDoc`, `history`, `quantize` (nearest color + k-means), `downscale`.
+  - `render.ts` for the canvas/PNG glue.
+  - `PixelArtEditor.tsx`. Its state is local to the modal, since nothing else reads it.
 
 ## Phase 2: gallery + profile showcase (backend + frontend)
 
@@ -56,19 +64,19 @@ Max size: 64×64×8 frames = 32 KB raw, ~44 KB base64. The default palette is ou
   - `owner_id` FK → users `ON DELETE CASCADE`, indexed
   - `title` VARCHAR(40)
   - `doc` JSONB NOT NULL
-  - `showcase_position` SMALLINT NULL; values 0–2, unique per owner where not null
+  - `showcase_position` SMALLINT NULL; values 0–14, unique per owner where not null
   - `created_at`, `updated_at` TIMESTAMPTZ
   - Quota of 50 per user, enforced under a user-row lock like the soundboard quota.
 - **Backend `internal/pixelart`:** `handler/service/repository/models/routes`. The server validates the doc: version, allowed sizes, palette length and `#rrggbb` format, base64 decoding to exactly `w*h` bytes, every index ≤ palette length, frame count, total size ≤ 64 KB. Never trust client-supplied PNGs here; the profile renders from the doc.
   - `GET /users/me/pixel-arts` (cursor paginated), `POST /users/me/pixel-arts`, `PATCH /users/me/pixel-arts/:id` (title, doc), `DELETE /users/me/pixel-arts/:id`.
-  - `PUT /users/me/pixel-arts/showcase` with `{ ids: string[] }`, at most 3, in order.
+  - `PUT /users/me/pixel-arts/showcase` with `{ ids: string[] }`, at most 15, in order.
   - `GET /users/:id/pixel-arts/showcase`: auth required, same visibility as the profile.
   - The existing Redis rate limiter applies to writes.
 - **Realtime:** a showcase change emits `USER_UPDATE` with a `showcaseVersion` bump. Open profile cards refetch the showcase; we don't push the docs over the gateway.
 - **Frontend:**
   - The editor gains **Save to gallery** and **Open from gallery**.
-  - Settings → Profile gets a "Pixel art" section: a grid of saved pieces, drag or pick up to 3 to showcase, rename, delete.
-  - `UserProfileCard` shows the showcase row under the bio. Each piece is rendered client-side from the doc to a small canvas (memoized data URL); click opens it enlarged in the existing `AvatarLightbox` style.
+  - Settings → Profile gets a "Pixel art" section: a grid of saved pieces, drag or pick up to 15 to showcase, rename, delete.
+  - `UserProfileCard` shows the first 5 showcase pieces under the bio, plus a "+N" tile that opens the full 15-piece overview grid. Each piece is rendered client-side from the doc to a small canvas (memoized data URL); click opens it enlarged in the existing `AvatarLightbox` style.
 - **Docs:** add a "Pixel art" section to `docs/architecture.md` (doc validation, quota, showcase flow) and the migration to the manual-migration note.
 
 ## Phase 3 (optional): animation
@@ -84,11 +92,12 @@ Max size: 64×64×8 frames = 32 KB raw, ~44 KB base64. The default palette is ou
 ## Acceptance
 
 - **Phase 1:**
+  - Import a photo and an online sprite at 32×32 in both palette modes and export both as PNG and `.pixel.json`. Re-importing the JSON is pixel-identical.
   - Draw a 32×32 piece using all six tools, mirror and undo, then send it. Both clients see a crisp 512×512 image in history. Reopening the editor restores the draft.
-  - Vitest covers each `lib/` function (fill bounds and holes, line endpoints, pixel-perfect corners, encode/decode round trip) and the editor's send path, with `uploadImage` mocked.
+  - Vitest covers each `lib/` function (fill bounds and holes, line endpoints, pixel-perfect corners, encode/decode round trip, quantize nearest/k-means, downscale of transparent pixels) and the editor's send path, with `uploadImage` mocked.
   - `npm run lint` and `npm run test` pass.
 - **Phase 2:**
-  - Save, rename, showcase 3 pieces and delete one. Another user's profile card shows the updated showcase without a reload.
+  - Save, rename, showcase 15 pieces (a 16th is rejected) and delete one. Another user's profile card shows the updated showcase without a reload.
   - A malformed doc (wrong byte count, out-of-range index, 33 colors, 128×128) is rejected with 400.
   - The 51st save is rejected.
   - Go tests (testify, mocked repository) cover validation, quota and showcase ordering. `go test ./...` passes and the migration up/down applies cleanly.
