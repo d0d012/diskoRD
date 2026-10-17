@@ -32,6 +32,8 @@ export function MessageList({ channelId, channelName, intro }: Props) {
   const prevScrollHeightRef = useRef(0);
   const initialLoadedRef = useRef<string | null>(null);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
+  // Whether the view should follow the bottom while images above it load.
+  const pinnedRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const [newCount, setNewCount] = useState(0);
 
@@ -46,6 +48,7 @@ export function MessageList({ channelId, channelName, intro }: Props) {
   }, [channelId]);
 
   const scrollToBottom = useCallback(() => {
+    pinnedRef.current = true;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     setNewCount(0);
   }, []);
@@ -83,7 +86,10 @@ export function MessageList({ channelId, channelName, intro }: Props) {
     if (!el) return;
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowJump(fromBottom > JUMP_BUTTON_THRESHOLD);
-    if (fromBottom < 50) setNewCount(0);
+    if (fromBottom < 50) {
+      pinnedRef.current = true;
+      setNewCount(0);
+    }
 
     if (!more || loadingRef.current) return;
     if (el.scrollTop > 150) return;
@@ -103,6 +109,10 @@ export function MessageList({ channelId, channelName, intro }: Props) {
         ref={containerRef}
         className="flex-1 overflow-y-auto"
         onScroll={handleScroll}
+        onWheel={(e) => { if (e.deltaY < 0) pinnedRef.current = false; }}
+        onKeyDown={(e) => { if (["ArrowUp", "PageUp", "Home"].includes(e.key)) pinnedRef.current = false; }}
+        // Images grow the list after the scroll already ran; keep following the bottom.
+        onLoadCapture={() => { if (pinnedRef.current) bottomRef.current?.scrollIntoView(); }}
       >
         {/* Channel intro */}
         {!more && (intro ?? (

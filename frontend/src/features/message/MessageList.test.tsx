@@ -100,4 +100,20 @@ describe("MessageList jump to latest", () => {
     expect(scrollIntoView).toHaveBeenCalled();
     expect(jumpButton()).not.toHaveTextContent("1");
   });
+
+  it("follows the bottom when images load, unless the user scrolled up", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages(makeMessages(10));
+    const list = screen.getByText("message 0").closest(".overflow-y-auto") as HTMLElement;
+    const img = document.createElement("img");
+    list.appendChild(img);
+    scrollIntoView.mockClear();
+
+    fireEvent.load(img);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    fireEvent.wheel(list, { deltaY: -100 });
+    fireEvent.load(img);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
 });
