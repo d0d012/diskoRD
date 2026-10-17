@@ -1,6 +1,7 @@
 package message
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/go-playground/validator/v10"
@@ -131,6 +132,9 @@ func (h *Handler) Upload(c *fiber.Ctx) error {
 	}
 
 	msg.Attachments = []string{url}
+	if err := h.svc.SetAttachments(c.Context(), msg.ID, msg.Attachments); err != nil {
+		return fmt.Errorf("message.Handler.Upload: %w", err)
+	}
 
 	// Re-publish the message with attachment
 	h.svc.PublishWithAttachment(c.Context(), msg)

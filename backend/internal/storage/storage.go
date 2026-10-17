@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -71,7 +72,62 @@ func (s *Service) Save(mimeType, originalName, messageID string, r io.Reader) (s
 		return "", fmt.Errorf("file exceeds 8MB limit")
 	}
 
-	return fmt.Sprintf("%s/uploads/%s/%s", s.baseURL, messageID, filename), nil
+	return s.messageURL(messageID, filename), nil
+}
+
+func (s *Service) messageURL(messageID, filename string) string {
+	return fmt.Sprintf("%s/uploads/%s/%s", s.baseURL, messageID, filename)
+}
+
+// messageDirRe matches the directories Save creates: one per message UUID.
+// Other top-level directories (avatars/, guild-icons/) never match.
+var messageDirRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// MessageImage is a message attachment found on disk.
+type MessageImage struct {
+	MessageID string
+	URL       string
+}
+
+// ListMessageImages walks the storage root for files written by Save
+// ({basePath}/{messageID}/image.{ext}) and returns their public URLs, built
+// the same way Save builds them. Used to backfill messages.attachments.
+func (s *Service) ListMessageImages() ([]MessageImage, error) {
+	entries, err := os.ReadDir(s.basePath)
+	if err != nil {
+		return nil, fmt.Errorf("storage.Service.ListMessageImages: %w", err)
+	}
+	var images []MessageImage
+	for _, entry := range entries {
+		if !entry.IsDir() || !messageDirRe.MatchString(entry.Name()) {
+			continue
+		}
+		files, err := os.ReadDir(filepath.Join(s.basePath, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("storage.Service.ListMessageImages: %w", err)
+		}
+		for _, f := range files {
+			if f.IsDir() || !isMessageImageName(f.Name()) {
+				continue
+			}
+			images = append(images, MessageImage{MessageID: entry.Name(), URL: s.messageURL(entry.Name(), f.Name())})
+			break // Save writes a single image per message
+		}
+	}
+	return images, nil
+}
+
+func isMessageImageName(name string) bool {
+	ext := strings.TrimPrefix(name, "image")
+	if ext == name {
+		return false
+	}
+	for _, allowed := range allowedMimeTypes {
+		if ext == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 // SaveAvatar writes a user's avatar and returns its public URL. Cleanup of the

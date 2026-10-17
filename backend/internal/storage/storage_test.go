@@ -96,3 +96,44 @@ func TestSaveGuildIconUsesItsOwnDirectory(t *testing.T) {
 	_, err = os.Stat(filepath.Join(base, "guild-icons", "guild-1"))
 	assert.True(t, os.IsNotExist(err))
 }
+
+func TestListMessageImagesFindsSavedImagesOnly(t *testing.T) {
+	base := t.TempDir()
+	svc := NewService(base, "")
+
+	const msgID = "3f2b9c1e-8a7d-4e6f-9b0a-1c2d3e4f5a6b"
+	saved, err := svc.Save("image/png", "pic.png", msgID, strings.NewReader("png"))
+	require.NoError(t, err)
+
+	// Avatars and guild icons live under their own top-level directories.
+	_, err = svc.SaveAvatar("4a1b2c3d-0000-4000-8000-000000000001", "image/png", strings.NewReader("a"))
+	require.NoError(t, err)
+	_, err = svc.SaveGuildIcon("4a1b2c3d-0000-4000-8000-000000000002", "image/png", strings.NewReader("g"))
+	require.NoError(t, err)
+
+	// A message directory without an image, and a non-UUID directory.
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "5b2c3d4e-0000-4000-8000-000000000003"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "5b2c3d4e-0000-4000-8000-000000000003", "notes.txt"), []byte("x"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "tmp"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "tmp", "image.png"), []byte("x"), 0644))
+
+	images, err := svc.ListMessageImages()
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	assert.Equal(t, msgID, images[0].MessageID)
+	assert.Equal(t, "/uploads/"+msgID+"/image.png", images[0].URL)
+	assert.Equal(t, saved, images[0].URL)
+}
+
+func TestListMessageImagesUsesBaseURL(t *testing.T) {
+	svc := NewService(t.TempDir(), "http://localhost:8080")
+	const msgID = "3f2b9c1e-8a7d-4e6f-9b0a-1c2d3e4f5a6b"
+	saved, err := svc.Save("image/webp", "pic.webp", msgID, strings.NewReader("webp"))
+	require.NoError(t, err)
+
+	images, err := svc.ListMessageImages()
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	assert.Equal(t, saved, images[0].URL)
+	assert.Equal(t, "http://localhost:8080/uploads/"+msgID+"/image.webp", images[0].URL)
+}

@@ -135,6 +135,12 @@ rsync -az --exclude .git --exclude node_modules --exclude dist --exclude target 
 ssh root@204.168.224.53 "bash /opt/diskord/scripts/update.sh"
 ```
 
+- **Migration 000021 (message attachments), once per existing server:** `scripts/update.sh` applies the migration; afterwards restore the images of messages uploaded before it with the idempotent backfill (see `docs/architecture.md`, Image attachments):
+
+```bash
+ssh root@204.168.224.53 "cd /opt/diskord && docker compose -f infra/docker-compose.prod.yml --env-file .env.prod exec -T backend ./backfill-attachments"
+```
+
 - `scripts/deploy.sh` provisions a fresh VPS (packages, firewall, TLS); don't use it on a running server.
 
 ## Notes

@@ -102,6 +102,15 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 	return msg, nil
 }
 
+// SetAttachments persists the public URLs of files uploaded for a message, so
+// they survive a reload.
+func (s *Service) SetAttachments(ctx context.Context, messageID string, urls []string) error {
+	if err := s.repo.SetAttachments(ctx, messageID, urls); err != nil {
+		return fmt.Errorf("message.Service.SetAttachments: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) PublishWithAttachment(ctx context.Context, msg *MessageResponse) {
 	if s.pub == nil {
 		return
