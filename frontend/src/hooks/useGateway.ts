@@ -13,7 +13,7 @@ import { useUserStore } from "../stores/userStore";
 import { useToastStore } from "../features/notification/NotificationToast";
 import { playSound } from "../lib/sounds";
 import { storage } from "../lib/storage";
-import type { Message, PreferredStatus, PresenceStatus, PublicUser, User } from "../types";
+import type { Decoration, Message, PreferredStatus, PresenceStatus, PublicUser, User } from "../types";
 
 const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ??
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/gateway`;
@@ -178,6 +178,18 @@ export function useGateway() {
           case "REACTION_ADD": {
             const d = event.d as { messageId: string; channelId: string; emoji: string; userId?: string; count?: number };
             useMessageStore.getState().applyReactionEvent(d.messageId, d.channelId, d.emoji, d.count ?? 1, d.userId, "add");
+            break;
+          }
+
+          case "DECORATION_ADD": {
+            const d = event.d as Decoration & { channelId: string };
+            useMessageStore.getState().applyDecoration(d.channelId, d);
+            break;
+          }
+
+          case "DECORATION_REMOVE": {
+            const d = event.d as { id: string; messageId: string; channelId: string };
+            useMessageStore.getState().removeDecoration(d.channelId, d.messageId, d.id);
             break;
           }
 

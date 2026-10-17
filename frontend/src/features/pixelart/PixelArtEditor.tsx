@@ -40,7 +40,10 @@ interface ImportState {
 }
 
 interface Props {
-  onSend: (file: File) => Promise<void>;
+  /** Sends the art to the chat as a PNG. */
+  onSend?: (file: File) => Promise<void>;
+  /** Replaces sending: hands the art back to be pinned to a message. */
+  onPlace?: (art: Art) => void;
   onClose: () => void;
 }
 
@@ -63,7 +66,7 @@ function saveDraft(art: Art) {
 }
 
 /** Small indexed-color pixel art editor: draw, import, export and send to a channel. */
-export function PixelArtEditor({ onSend, onClose }: Props) {
+export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   const [art, setArt] = useState<Art>(loadDraft);
   const [past, setPast] = useState<Art[]>([]);
   const [future, setFuture] = useState<Art[]>([]);
@@ -243,6 +246,11 @@ export function PixelArtEditor({ onSend, onClose }: Props) {
 
   async function send() {
     if (busy || isEmpty(art)) return;
+    if (onPlace) {
+      onPlace(art);
+      return;
+    }
+    if (!onSend) return;
     setBusy(true);
     try {
       const blob = await artToPng(art, shareScale(art));
@@ -446,7 +454,7 @@ export function PixelArtEditor({ onSend, onClose }: Props) {
                   className="mt-auto rounded py-2 font-medium text-white disabled:opacity-50"
                   style={{ backgroundColor: "var(--color-dc-brand)" }}
                 >
-                  {busy ? "Sending…" : "Send to chat"}
+                  {onPlace ? "Place on message" : busy ? "Sending…" : "Send to chat"}
                 </button>
               </>
             )}

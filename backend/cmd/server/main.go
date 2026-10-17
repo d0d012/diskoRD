@@ -17,6 +17,7 @@ import (
 	"github.com/d0d012/diskord/internal/auth"
 	"github.com/d0d012/diskord/internal/call"
 	"github.com/d0d012/diskord/internal/channel"
+	"github.com/d0d012/diskord/internal/decoration"
 	"github.com/d0d012/diskord/internal/friend"
 	"github.com/d0d012/diskord/internal/gateway"
 	"github.com/d0d012/diskord/internal/guild"
@@ -174,6 +175,13 @@ func main() {
 	reactionService.SetPublisher(hub)
 	reactionHandler := reaction.NewHandler(reactionService)
 	reaction.RegisterRoutes(app, reactionHandler, authMw)
+
+	decorationRepo := decoration.NewRepository(pool)
+	decorationService := decoration.NewService(decorationRepo, guildRepo)
+	decorationService.SetPublisher(hub)
+	decoration.RegisterRoutes(app, decoration.NewHandler(decorationService), authMw,
+		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
+	msgService.SetDecorations(decorationRepo)
 
 	roleRepo := role.NewRepository(pool)
 	roleService := role.NewService(roleRepo, guildRepo)

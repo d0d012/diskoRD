@@ -8,6 +8,11 @@ import { UserProfileCard } from "../profile/UserProfileCard";
 import { AddReactionButton } from "./AddReactionButton";
 import { MessageContextMenu } from "./MessageContextMenu";
 import { MessageContent } from "./MessageContent";
+import { MessageDecorations } from "../pixelart/MessageDecorations";
+import { PixelArtEditor } from "../pixelart/PixelArtEditor";
+import { PlaceDecoration, type Placement } from "../pixelart/PlaceDecoration";
+import { encodeDoc } from "../pixelart/lib/doc";
+import type { Art } from "../pixelart/lib/art";
 
 interface Props {
   message: Message;
@@ -28,7 +33,9 @@ function formatDate(iso: string) {
 }
 
 export function MessageItem({ message, isGrouped }: Props) {
-  const { editMessage, toggleReaction } = useMessageStore();
+  const { editMessage, toggleReaction, placeDecoration } = useMessageStore();
+  // Decorating: pick or draw art in the editor, then position it over this row.
+  const [decorating, setDecorating] = useState<"drawing" | { art: Art; row: HTMLElement } | null>(null);
   const menuOpen = useMessageMenuStore((s) => s.openId === message.id);
   const menuX = useMessageMenuStore((s) => s.x);
   const menuY = useMessageMenuStore((s) => s.y);
@@ -72,6 +79,11 @@ export function MessageItem({ message, isGrouped }: Props) {
     }
   }
 
+  async function handlePlace(art: Art, placement: Placement) {
+    await placeDecoration(message.id, { doc: encodeDoc(art), ...placement });
+    setDecorating(null);
+  }
+
   function handleEditSubmit() {
     if (editContent.trim() && editContent !== message.content) {
       editMessage(message.id, message.channelId, editContent.trim());
@@ -96,6 +108,8 @@ export function MessageItem({ message, isGrouped }: Props) {
       tabIndex={-1}
       className="group flex gap-4 px-4 py-0.5 rounded transition-colors relative outline-none"
       style={{
+        // Own stacking context so decorations (z-index -1) sit above the row background, below its text.
+        isolation: "isolate",
         paddingTop: isGrouped ? "1px" : "16px",
         backgroundColor: hovered || menuOpen ? "var(--color-dc-bg-modifier-hover)" : "transparent",
       }}
@@ -104,6 +118,8 @@ export function MessageItem({ message, isGrouped }: Props) {
       onContextMenu={handleContextMenu}
       onKeyDown={handleRowKeyDown}
     >
+      <MessageDecorations decorations={message.decorations} />
+
       {/* Avatar or spacer */}
       <div className="w-10 flex-shrink-0">
         {!isGrouped ? (
@@ -236,7 +252,22 @@ export function MessageItem({ message, isGrouped }: Props) {
           x={menuX}
           y={menuY}
           onEdit={() => { setEditContent(message.content); setEditing(true); }}
+          onDecorate={() => setDecorating("drawing")}
           onClose={closeMenu}
+        />
+      )}
+      {decorating === "drawing" && (
+        <PixelArtEditor
+          onPlace={(art) => setDecorating(rowRef.current ? { art, row: rowRef.current } : null)}
+          onClose={() => setDecorating(null)}
+        />
+      )}
+      {decorating && decorating !== "drawing" && (
+        <PlaceDecoration
+          art={decorating.art}
+          row={decorating.row}
+          onPlace={(placement) => handlePlace(decorating.art, placement)}
+          onCancel={() => setDecorating(null)}
         />
       )}
     </div>

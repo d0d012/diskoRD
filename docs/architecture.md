@@ -61,6 +61,18 @@ Runtime behavior that isn't obvious from a single file. For the stack and featur
 
 Manual smoke test: use two clients in a guild voice channel; open from sidebar and full voice controls, search and rapidly retrigger a sound, toggle local preview, and keep talking/navigating. Upload as an ordinary member; verify another client sees and hears it without reopening. Exercise invalid/overlong files, quota/network errors, deletion by uploader/moderator vs another member, mute/deafen/volume-zero, simultaneous senders, reconnect, switching guilds, and hangup during download/playback. Repeat built-ins in DM calls. Check WebKit/Tauri autoplay before/after a gesture, and popover positioning at viewport edges.
 
+## Pixel art & decorations (`frontend/src/features/pixelart`, `backend/internal/decoration`, `backend/internal/pixelart`)
+
+- The editor is client-only. Art is indexed color (`PixelArtDoc`: 16/32/64 square, ≤ 32 colors, base64 indices with 0 = transparent). "Send to chat" uploads a 512px nearest-neighbour PNG through the normal image upload; `.pixel.json` is the lossless import/export format. The draft lives in `localStorage`.
+- **Decorations** pin a copy of a doc to a message (`message_decorations`, migration **000020**; apply it manually before deploying a backend that serves them).
+  - `POST /messages/:id/decorations` `{doc, x 0–100 %, y 0–64 px, size 32/48/64/96/128}` and `DELETE /decorations/:id`, both rate limited.
+  - `pixelart.Validate` checks and canonicalizes every doc server-side.
+  - At most 3 per message, enforced under a `FOR UPDATE` lock on the message row.
+  - Removal is allowed for the placer, the message author, or a guild owner/admin/moderator.
+  - `GET /channels/:id/messages` attaches `decorations`. A failure to load them is logged and the page is returned without them.
+  - `DECORATION_ADD` / `DECORATION_REMOVE` use the reaction fanout (guild or DM pair). The client's `updateMessage` keeps existing decorations, because edit events don't carry them.
+- **Rendering:** each decoration is an `<img>` (data URL cached per distinct doc) inside its message row, which sets `isolation: isolate`. The image uses `z-index: -1`, 35 % opacity and `pointer-events: none`. Because `y ≥ 0`, a piece only spills into later rows, which paint over it, so text always stays on top. There are no scroll listeners or measurement passes. "Hide Decorations" is a per-device setting (`settings.showDecorations`).
+
 ## Desktop (`frontend/src-tauri`)
 
 - Closing the main window (title-bar ✕, Alt+F4, Cmd+W) hides it to the system tray / menu bar; voice and the gateway keep running. Left-clicking the tray icon, the tray "Open diskoRD" item, the macOS Dock icon, or a second launch / `diskord://` link shows it again. Only the tray "Quit diskoRD" item (or Cmd+Q on macOS) exits.

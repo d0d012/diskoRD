@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api } from "../lib/api";
 import { useAuthStore } from "./authStore";
 import { useUserStore } from "./userStore";
-import type { Message } from "../types";
+import type { Decoration, Message } from "../types";
 
 // Per message+emoji generation counter. Every change (optimistic or a gateway
 // event) bumps it, so a failed request only rolls back if nothing newer landed.
@@ -54,6 +54,21 @@ interface MessageStore {
   clearTyping: (channelId: string, userId: string) => void;
   markRead: (channelId: string) => void;
   clearChannel: (channelId: string) => void;
+  applyDecoration: (channelId: string, decoration: Decoration) => void;
+  removeDecoration: (channelId: string, messageId: string, decorationId: string) => void;
+  placeDecoration: (messageId: string, placement: Omit<Decoration, "id" | "messageId" | "authorId" | "createdAt">) => Promise<void>;
+  deleteDecoration: (decorationId: string) => Promise<void>;
+}
+
+function withMessage(
+  messages: Record<string, Message[]>,
+  channelId: string,
+  messageId: string,
+  update: (m: Message) => Message,
+): Record<string, Message[]> | null {
+  const msgs = messages[channelId];
+  if (!msgs?.some((m) => m.id === messageId)) return null;
+  return { ...messages, [channelId]: msgs.map((m) => (m.id === messageId ? update(m) : m)) };
 }
 
 export const useMessageStore = create<MessageStore>((set, get) => ({
@@ -161,7 +176,8 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
       return {
         messages: {
           ...s.messages,
-          [msg.channelId]: msgs.map((m) => (m.id === msg.id ? msg : m)),
+          // Edits don't carry decorations; keep the ones already loaded.
+          [msg.channelId]: msgs.map((m) => (m.id === msg.id ? { ...msg, decorations: msg.decorations ?? m.decorations } : m)),
         },
       };
     });
@@ -203,6 +219,35 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   },
 
   // Sets the chip to the server-provided count. A non-positive count removes it.
+  applyDecoration: (channelId, decoration) => {
+    set((s) => {
+      const messages = withMessage(s.messages, channelId, decoration.messageId, (m) => ({
+        ...m,
+        decorations: [...(m.decorations ?? []).filter((d) => d.id !== decoration.id), decoration],
+      }));
+      return messages ? { messages } : s;
+    });
+  },
+
+  removeDecoration: (channelId, messageId, decorationId) => {
+    set((s) => {
+      const messages = withMessage(s.messages, channelId, messageId, (m) => ({
+        ...m,
+        decorations: (m.decorations ?? []).filter((d) => d.id !== decorationId),
+      }));
+      return messages ? { messages } : s;
+    });
+  },
+
+  // The gateway event applies the result for everyone, including us.
+  placeDecoration: async (messageId, placement) => {
+    await api.post(`/messages/${messageId}/decorations`, placement);
+  },
+
+  deleteDecoration: async (decorationId) => {
+    await api.delete(`/decorations/${decorationId}`);
+  },
+
   setReactionCount: (messageId, channelId, emoji, count, selfReacted) => {
     set((s) => {
       const msgs = s.messages[channelId];

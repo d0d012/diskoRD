@@ -1,3 +1,4 @@
+import type { PixelArtDoc } from "../features/pixelart/lib/doc";
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -65,6 +66,22 @@ export interface Message {
   reactions?: { emoji: string; count: number; selfReacted: boolean }[];
   mentions?: string[];
   attachments?: string[]; // public image URLs
+  decorations?: Decoration[];
+}
+
+/** A pixel art piece pinned behind a message (see tasks/features/pixel-art.md). */
+export interface Decoration {
+  id: string;
+  messageId: string;
+  authorId: string | null;
+  doc: PixelArtDoc;
+  /** Horizontal center, % of the row width (0-100). */
+  x: number;
+  /** Top offset in px below the row top (0-64). */
+  y: number;
+  /** Display size in px. */
+  size: number;
+  createdAt: string;
 }
 
 export interface GuildMember {

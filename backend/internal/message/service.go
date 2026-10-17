@@ -6,7 +6,9 @@ import (
 	"regexp"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog/log"
 
+	"github.com/d0d012/diskord/internal/decoration"
 	"github.com/d0d012/diskord/internal/guild"
 )
 
@@ -29,6 +31,16 @@ type Service struct {
 	repo      *Repository
 	guildRepo *guild.Repository
 	pub       EventPublisher // nil until 3.4 wires the gateway
+	decos     DecorationLister
+}
+
+// DecorationLister loads the decorations pinned to a page of messages.
+type DecorationLister interface {
+	ListForMessages(ctx context.Context, messageIDs []string) (map[string][]decoration.Decoration, error)
+}
+
+func (s *Service) SetDecorations(l DecorationLister) {
+	s.decos = l
 }
 
 func NewService(repo *Repository, guildRepo *guild.Repository) *Service {
@@ -172,6 +184,16 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 		if reactions, err := s.repo.GetReactionsForMessages(ctx, ids, userID); err == nil {
 			for i := range msgs {
 				msgs[i].Reactions = reactions[msgs[i].ID]
+			}
+		}
+		// Decorations are cosmetic: a failure leaves the page usable without them.
+		if s.decos != nil {
+			if decos, err := s.decos.ListForMessages(ctx, ids); err == nil {
+				for i := range msgs {
+					msgs[i].Decorations = decos[msgs[i].ID]
+				}
+			} else {
+				log.Warn().Err(err).Str("channelId", channelID).Msg("message.Service.List: load decorations")
 			}
 		}
 	}

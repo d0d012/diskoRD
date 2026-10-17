@@ -14,6 +14,7 @@ interface Props {
   x: number;
   y: number;
   onEdit: () => void;
+  onDecorate: () => void;
   onClose: () => void;
 }
 
@@ -28,6 +29,8 @@ function Icon({ path }: { path: string }) {
 const ICON_EDIT = "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z";
 const ICON_COPY = "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z";
 const ICON_DELETE = "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
+const ICON_DECORATE = "M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h4v4h-4v-4zm4 4h4v4h-4v-4z";
+const ICON_EYE = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
 const ICON_ADD_REACTION = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.5 13H13v3.5h-2V15H7.5v-2H11v-3.5h2V13h3.5v2z";
 
 function MenuItem({
@@ -61,7 +64,7 @@ function MenuItem({
   );
 }
 
-export function MessageContextMenu({ message, x, y, onEdit, onClose }: Props) {
+export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
@@ -73,6 +76,9 @@ export function MessageContextMenu({ message, x, y, onEdit, onClose }: Props) {
   const recordEmoji = useSettingsStore((s) => s.recordEmoji);
   const toggleReaction = useMessageStore((s) => s.toggleReaction);
   const deleteMessage = useMessageStore((s) => s.deleteMessage);
+  const deleteDecoration = useMessageStore((s) => s.deleteDecoration);
+  const showDecorations = useSettingsStore((s) => s.showDecorations);
+  const setShowDecorations = useSettingsStore((s) => s.setShowDecorations);
 
   const isOwn = !!me && message.author?.id === me.id;
   const isGuildOwner =
@@ -80,6 +86,9 @@ export function MessageContextMenu({ message, x, y, onEdit, onClose }: Props) {
   const canDelete = isOwn || isGuildOwner;
   const canEdit = isOwn;
   const hasText = message.content.trim().length > 0;
+  const decorations = message.decorations ?? [];
+  // The server also lets guild admins/moderators remove; the client only knows owners.
+  const removableDecorations = decorations.filter((d) => isOwn || isGuildOwner || (!!me && d.authorId === me.id));
 
   const quickReactions = useMemo(() => {
     const list = [...recentEmojis];
@@ -236,6 +245,32 @@ export function MessageContextMenu({ message, x, y, onEdit, onClose }: Props) {
           icon={ICON_ADD_REACTION}
           onClick={(e) => setPickerAnchor(e.currentTarget.getBoundingClientRect())}
         />
+
+        <MenuItem
+          label="Decorate with Pixel Art"
+          icon={ICON_DECORATE}
+          onClick={() => { onDecorate(); onClose(); }}
+        />
+
+        {removableDecorations.length > 0 && (
+          <MenuItem
+            label={removableDecorations.length === 1 ? "Remove Decoration" : `Remove ${removableDecorations.length} Decorations`}
+            icon={ICON_DELETE}
+            onClick={() => {
+              for (const d of removableDecorations) void deleteDecoration(d.id).catch(() => {});
+              onClose();
+            }}
+          />
+        )}
+
+        {(decorations.length > 0 || !showDecorations) && (
+          <MenuItem
+            label={showDecorations ? "Hide Decorations" : "Show Decorations"}
+            icon={ICON_EYE}
+            title="Only on this device"
+            onClick={() => { setShowDecorations(!showDecorations); onClose(); }}
+          />
+        )}
 
         {(canEdit || hasText) && (
           <div className="my-1 h-px" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />

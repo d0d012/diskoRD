@@ -4,6 +4,7 @@ import { storage } from "../lib/storage";
 const KEY = "settings.media";
 const RECENT_EMOJIS_KEY = "settings.recentEmojis";
 const MAX_RECENT_EMOJIS = 5;
+const SHOW_DECORATIONS_KEY = "settings.showDecorations";
 
 /** Empty string means "use the system default device". */
 interface MediaPrefs {
@@ -15,6 +16,9 @@ interface MediaPrefs {
 interface SettingsState extends MediaPrefs {
   /** Most recently used reactions, newest first. */
   recentEmojis: string[];
+  /** Whether pixel art decorations are drawn behind messages. Local to this device. */
+  showDecorations: boolean;
+  setShowDecorations: (show: boolean) => void;
   load: () => Promise<void>;
   setInputDevice: (id: string) => void;
   setOutputDevice: (id: string) => void;
@@ -39,6 +43,14 @@ function loadRecentEmojis(): string[] {
   }
 }
 
+function loadShowDecorations(): boolean {
+  try {
+    return localStorage.getItem(SHOW_DECORATIONS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 function saveRecentEmojis(emojis: string[]) {
   try {
     localStorage.setItem(RECENT_EMOJIS_KEY, JSON.stringify(emojis));
@@ -52,6 +64,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   outputDeviceId: "",
   videoDeviceId: "",
   recentEmojis: loadRecentEmojis(),
+  showDecorations: loadShowDecorations(),
+  setShowDecorations: (showDecorations) => {
+    set({ showDecorations });
+    try {
+      localStorage.setItem(SHOW_DECORATIONS_KEY, String(showDecorations));
+    } catch {
+      // Storage unavailable — the choice lasts for this session only.
+    }
+  },
   load: async () => {
     try {
       const raw = await storage.get(KEY);

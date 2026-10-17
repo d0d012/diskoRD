@@ -1,6 +1,10 @@
 package message
 
-import "time"
+import (
+	"time"
+
+	"github.com/d0d012/diskord/internal/decoration"
+)
 
 type Message struct {
 	ID        string     `db:"id"`
@@ -30,6 +34,8 @@ type MessageResponse struct {
 	Mentions    []string      `json:"mentions,omitempty"`
 	Attachments []string      `json:"attachments,omitempty"` // public URLs
 	Reactions   []ReactionRef `json:"reactions,omitempty"`
+	// Decorations are pixel art pieces pinned behind the message.
+	Decorations []decoration.Decoration `json:"decorations,omitempty"`
 }
 
 // ReactionRef is the aggregated reaction summary attached to a message for the
