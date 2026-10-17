@@ -142,12 +142,14 @@ func TestCreateRejectsNonMember(t *testing.T) {
 
 func TestCreateValidatesBeforeTouchingTheDatabase(t *testing.T) {
 	cases := map[string]CreateRequest{
-		"x too large": {Doc: validDoc(), X: 101, Y: 0, Size: 32},
-		"y too high":  {Doc: validDoc(), X: 0, Y: MinY - 1, Size: 32},
-		"y too low":   {Doc: validDoc(), X: 0, Y: MaxY + 1, Size: 32},
-		"bad size":    {Doc: validDoc(), X: 0, Y: 0, Size: 40},
-		"invalid doc": {Doc: json.RawMessage(`{"v":1}`), X: 0, Y: 0, Size: 32},
-		"missing doc": {X: 0, Y: 0, Size: 32},
+		"x too large":      {Doc: validDoc(), X: 101, Y: 0, Size: 32},
+		"y too high":       {Doc: validDoc(), X: 0, Y: MinY - 1, Size: 32},
+		"y too low":        {Doc: validDoc(), X: 0, Y: MaxY + 1, Size: 32},
+		"opacity too low":  {Doc: validDoc(), X: 0, Y: 0, Size: 32, Opacity: MinOpacity - 1},
+		"opacity too high": {Doc: validDoc(), X: 0, Y: 0, Size: 32, Opacity: MaxOpacity + 1},
+		"bad size":         {Doc: validDoc(), X: 0, Y: 0, Size: 40},
+		"invalid doc":      {Doc: json.RawMessage(`{"v":1}`), X: 0, Y: 0, Size: 32},
+		"missing doc":      {X: 0, Y: 0, Size: 32},
 	}
 	for name, req := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -242,4 +244,23 @@ func TestDeleteAfterPlacerAccountRemoved(t *testing.T) {
 	members.On("GetMemberRole", ctx, "g1", "u1").Return("member", nil)
 
 	assert.Equal(t, fiber.StatusForbidden, status(svc.Delete(ctx, "u1", "d1")))
+}
+
+func TestCreateDefaultsOpacityForOlderClients(t *testing.T) {
+	svc, repo, members, _ := newService()
+	ctx := context.Background()
+	repo.On("GetMessageContext", ctx, "m1").Return("c1", "g1", nil)
+	members.On("IsMember", ctx, "g1", "u1").Return(true, nil)
+	repo.On("Create", ctx, "m1", "u1", mock.MatchedBy(func(req CreateRequest) bool {
+		return req.Opacity == DefaultOpacity
+	})).Return(&Decoration{ID: "d1"}, nil)
+
+	_, err := svc.Create(ctx, "u1", "m1", CreateRequest{Doc: validDoc(), X: 0, Y: 0, Size: 32})
+	require.NoError(t, err)
+
+	repo.On("Create", ctx, "m1", "u1", mock.MatchedBy(func(req CreateRequest) bool {
+		return req.Opacity == 100
+	})).Return(&Decoration{ID: "d2"}, nil)
+	_, err = svc.Create(ctx, "u1", "m1", CreateRequest{Doc: validDoc(), X: 0, Y: 0, Size: 32, Opacity: 100})
+	require.NoError(t, err)
 }

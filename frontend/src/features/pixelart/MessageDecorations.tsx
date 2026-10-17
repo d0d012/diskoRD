@@ -1,6 +1,6 @@
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { Decoration } from "../../types";
-import { DECORATION_OPACITY, decorationLeft, docImageUrl } from "./decorationImage";
+import { DEFAULT_DECORATION_OPACITY, decorationLeft, docImageUrl } from "./decorationImage";
 
 /**
  * Decorations anchored to a message, drawn behind the whole message list. They
@@ -30,7 +30,7 @@ export function MessageDecorations({ decorations }: { decorations?: Decoration[]
               top: d.y,
               width: d.size,
               height: d.size,
-              opacity: DECORATION_OPACITY,
+              opacity: (d.opacity || DEFAULT_DECORATION_OPACITY) / 100,
               imageRendering: "pixelated",
               zIndex: -1,
             }}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Art } from "./lib/art";
 import { encodeDoc } from "./lib/doc";
-import { DECORATION_MAX_Y, DECORATION_MIN_Y, DECORATION_SIZES, docImageUrl } from "./decorationImage";
+import { DECORATION_MAX_Y, DECORATION_MIN_Y, DECORATION_OPACITIES, DECORATION_SIZES, docImageUrl } from "./decorationImage";
 
 export interface Placement {
   /** The message the piece is anchored to, so it scrolls and paginates with it. */
@@ -10,6 +10,28 @@ export interface Placement {
   x: number;
   y: number;
   size: number;
+  /** Percent. */
+  opacity: number;
+}
+
+const OPACITY_KEY = "pixelart.decorationOpacity";
+
+function loadOpacity(): number {
+  try {
+    const saved = Number(localStorage.getItem(OPACITY_KEY));
+    if ((DECORATION_OPACITIES as readonly number[]).includes(saved)) return saved;
+  } catch {
+    // Storage unavailable: fall through to the default.
+  }
+  return 100;
+}
+
+function saveOpacity(value: number) {
+  try {
+    localStorage.setItem(OPACITY_KEY, String(value));
+  } catch {
+    // Storage unavailable: the choice lasts for this placement only.
+  }
 }
 
 interface Props {
@@ -21,7 +43,7 @@ interface Props {
 }
 
 interface Ghost {
-  placement: Placement;
+  placement: Omit<Placement, "opacity">;
   /** Screen position of the ghost's top-left corner. */
   left: number;
   top: number;
@@ -55,6 +77,7 @@ function rowAt(list: HTMLElement, clientY: number): HTMLElement | null {
 export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
   const url = useMemo(() => docImageUrl(encodeDoc(art)), [art]);
   const [sizeIndex, setSizeIndex] = useState(2); // 64px
+  const [opacity, setOpacity] = useState(loadOpacity);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [bounds, setBounds] = useState(() => list.getBoundingClientRect());
   const [busy, setBusy] = useState(false);
@@ -97,7 +120,7 @@ export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
     setBusy(true);
     setError("");
     try {
-      await onPlace(at.placement);
+      await onPlace({ ...at.placement, opacity });
     } catch (err) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(message ?? "Couldn't place it. Try again.");
@@ -166,12 +189,12 @@ export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
           alt=""
           data-testid="decoration-ghost"
           className="fixed pointer-events-none"
-          style={{ left: ghost.left, top: ghost.top, width: size, height: size, opacity: 0.7, imageRendering: "pixelated" }}
+          style={{ left: ghost.left, top: ghost.top, width: size, height: size, opacity: opacity / 100, imageRendering: "pixelated" }}
         />
       )}
 
       <div
-        className="absolute left-2 top-2 flex items-center gap-2 px-2 py-1.5 rounded-md shadow-lg text-xs"
+        className="absolute left-2 top-2 flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md shadow-lg text-xs max-w-[calc(100%-16px)]"
         style={{ backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)", cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
         onPointerMove={(e) => { e.stopPropagation(); setGhost(null); }}
@@ -180,6 +203,21 @@ export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
         <button onClick={() => resize(-1)} disabled={sizeIndex === 0} aria-label="Smaller" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>−</button>
         <span className="w-10 text-center tabular-nums">{size}px</span>
         <button onClick={() => resize(1)} disabled={sizeIndex === DECORATION_SIZES.length - 1} aria-label="Larger" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>+</button>
+        <div role="radiogroup" aria-label="Opacity" className="flex items-center gap-0.5">
+          {DECORATION_OPACITIES.map((value) => (
+            <button
+              key={value}
+              role="radio"
+              aria-checked={opacity === value}
+              onClick={() => { setOpacity(value); saveOpacity(value); }}
+              title={value === 100 ? "Fully visible" : value === 35 ? "Faint, keeps text easy to read" : undefined}
+              className="px-1.5 h-6 rounded tabular-nums"
+              style={opacity === value ? { backgroundColor: "var(--color-dc-brand)", color: "#fff" } : buttonStyle}
+            >
+              {value}%
+            </button>
+          ))}
+        </div>
         <button onClick={onCancel} className="px-2 h-6 rounded" style={buttonStyle}>Cancel</button>
         {error && <span style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</span>}
       </div>

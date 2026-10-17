@@ -16,6 +16,14 @@ const (
 	MaxY = 1024
 )
 
+// Opacity is a percentage. Clients from before migration 000022 send none
+// and get the original faint default.
+const (
+	MinOpacity     = 10
+	MaxOpacity     = 100
+	DefaultOpacity = 35
+)
+
 // AllowedSizes are the display sizes in CSS pixels.
 var AllowedSizes = map[int]bool{32: true, 48: true, 64: true, 96: true, 128: true}
 
@@ -30,6 +38,7 @@ type Decoration struct {
 	// Y is the top offset in pixels from the anchor row's top (MinY..MaxY).
 	Y         int       `json:"y"`
 	Size      int       `json:"size"`
+	Opacity   int       `json:"opacity"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -38,6 +47,8 @@ type CreateRequest struct {
 	X    int             `json:"x"`
 	Y    int             `json:"y"`
 	Size int             `json:"size"`
+	// Opacity in percent; 0 (omitted) means DefaultOpacity.
+	Opacity int `json:"opacity"`
 }
 
 // Target is what a delete needs to know about a decoration.

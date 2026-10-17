@@ -19,12 +19,12 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-const columns = `id, message_id, author_id, doc, x, y, size, created_at`
+const columns = `id, message_id, author_id, doc, x, y, size, opacity, created_at`
 
 func scan(row pgx.Row) (*Decoration, error) {
 	var d Decoration
 	var doc []byte
-	if err := row.Scan(&d.ID, &d.MessageID, &d.AuthorID, &doc, &d.X, &d.Y, &d.Size, &d.CreatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.MessageID, &d.AuthorID, &doc, &d.X, &d.Y, &d.Size, &d.Opacity, &d.CreatedAt); err != nil {
 		return nil, err
 	}
 	d.Doc = json.RawMessage(doc)
@@ -87,9 +87,9 @@ func (r *Repository) Create(ctx context.Context, messageID, authorID string, req
 		return nil, fiber.NewError(fiber.StatusConflict, fmt.Sprintf("this message already has %d decorations", MaxPerMessage))
 	}
 	d, err := scan(tx.QueryRow(ctx,
-		`INSERT INTO message_decorations (message_id, author_id, doc, x, y, size)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING `+columns,
-		messageID, authorID, []byte(req.Doc), req.X, req.Y, req.Size,
+		`INSERT INTO message_decorations (message_id, author_id, doc, x, y, size, opacity)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+columns,
+		messageID, authorID, []byte(req.Doc), req.X, req.Y, req.Size, req.Opacity,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("decoration.Repository.Create: insert: %w", err)

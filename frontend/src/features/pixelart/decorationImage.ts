@@ -6,7 +6,9 @@ export const DECORATION_SIZES = [32, 48, 64, 96, 128] as const;
 export const DECORATION_MIN_Y = -256;
 export const DECORATION_MAX_Y = 1024;
 
-export const DECORATION_OPACITY = 0.35;
+/** Opacity presets in percent; the first is the original faint default. */
+export const DECORATION_OPACITIES = [35, 60, 100] as const;
+export const DEFAULT_DECORATION_OPACITY = 35;
 
 // Each distinct piece is rasterized once per session, however many times it appears.
 const urlCache = new Map<string, string | null>();

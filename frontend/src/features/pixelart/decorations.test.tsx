@@ -35,7 +35,7 @@ const user = (id: string): User => ({ id, username: id, status: "online", create
 const art = paint(createArt(16), [[1, 1]], 1);
 
 function decoration(id: string, authorId: string | null, x = 50): Decoration {
-  return { id, messageId: "m1", authorId, doc: encodeDoc(art), x, y: 8, size: 64, createdAt: "2026-01-01T00:00:00Z" };
+  return { id, messageId: "m1", authorId, doc: encodeDoc(art), x, y: 8, size: 64, opacity: 35, createdAt: "2026-01-01T00:00:00Z" };
 }
 
 const baseMessage: Message = {
@@ -81,6 +81,12 @@ describe("message decorations", () => {
     expect((document.querySelector("[data-message-id]") as HTMLElement).style.isolation).toBe("");
   });
 
+  it("draws each piece at its own opacity", () => {
+    setMessage({ ...baseMessage, decorations: [{ ...decoration("d1", "other"), opacity: 100 }] });
+    render(<Row />);
+    expect(decorationsShown()[0].style.opacity).toBe("1");
+  });
+
   it("follows live add/remove events and survives message edits", () => {
     render(<Row />);
     act(() => useMessageStore.getState().applyDecoration("c1", decoration("d1", "other")));
@@ -123,6 +129,8 @@ describe("message decorations", () => {
 });
 
 describe("PlaceDecoration", () => {
+  beforeEach(() => localStorage.clear());
+
   /** A list with two 40px rows at y=200 and y=240, 400px wide starting at x=100. */
   function setup(onPlace = vi.fn().mockResolvedValue(undefined)) {
     const list = document.createElement("div");
@@ -145,13 +153,21 @@ describe("PlaceDecoration", () => {
     const { onPlace, overlay } = setup();
     // Centered at (300, 250) with a 64px piece: top-left at (268, 218); row m2 starts at 240.
     fireEvent.click(overlay, { clientX: 300, clientY: 250 });
-    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m2", x: 50, y: -22, size: 64 }));
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m2", x: 50, y: -22, size: 64, opacity: 100 }));
   });
 
   it("uses the nearest message for gaps and the far ends, clamping x", async () => {
     const { onPlace, overlay } = setup();
     fireEvent.click(overlay, { clientX: 900, clientY: 150 }); // above the first row, past the right edge
-    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m1", x: 100, y: -82, size: 64 }));
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m1", x: 100, y: -82, size: 64, opacity: 100 }));
+  });
+
+  it("places with the chosen opacity and remembers it", async () => {
+    const { onPlace, overlay } = setup();
+    fireEvent.click(screen.getByRole("radio", { name: "35%" }));
+    fireEvent.click(overlay, { clientX: 300, clientY: 210 });
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ opacity: 35 })));
+    expect(localStorage.getItem("pixelart.decorationOpacity")).toBe("35");
   });
 
   it("changes size with the buttons without placing", async () => {

@@ -70,7 +70,11 @@ func (s *Service) publish(guildID, dmUserA, dmUserB, op string, event interface{
 }
 
 func (s *Service) Create(ctx context.Context, userID, messageID string, req CreateRequest) (*Decoration, error) {
-	if req.X < 0 || req.X > 100 || req.Y < MinY || req.Y > MaxY || !AllowedSizes[req.Size] {
+	if req.Opacity == 0 {
+		req.Opacity = DefaultOpacity
+	}
+	if req.X < 0 || req.X > 100 || req.Y < MinY || req.Y > MaxY || !AllowedSizes[req.Size] ||
+		req.Opacity < MinOpacity || req.Opacity > MaxOpacity {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid placement")
 	}
 	doc, err := pixelart.Validate(req.Doc)

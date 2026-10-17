@@ -81,6 +81,8 @@ export interface Decoration {
   y: number;
   /** Display size in px. */
   size: number;
+  /** Opacity in percent (10-100). */
+  opacity: number;
   createdAt: string;
 }
 

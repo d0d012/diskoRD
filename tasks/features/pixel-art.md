@@ -65,8 +65,9 @@ Anyone in a channel or DM can drop a pixel art piece anywhere in the chat's hist
   - `x`: 0–100, the position across the row width minus the piece
   - `y`: top offset from the anchor row's top, −256…1024 px
   - `size`: 32/48/64/96/128 px
+  - `opacity`: 10–100 %, picked while placing (35/60/100 presets; migration `000022`, default 35 for older clients)
   - `doc`: a copy of the art, so later gallery edits don't change placed pieces
-- **Rendering:** it is drawn inside its anchor row at `z-index: -1`, 35 % opacity, `pointer-events: none` and `image-rendering: pixelated`. The message list wrapper is the single stacking context, so a piece overlapping any rows stays behind all of their text.
+- **Rendering:** it is drawn inside its anchor row at `z-index: -1` with its own opacity, `pointer-events: none` and `image-rendering: pixelated`. The message list wrapper is the single stacking context, so a piece overlapping any rows stays behind all of their text.
 - **Performance:** each distinct doc is rendered once to a data URL and cached in a module-level map. Only loaded messages render their decorations, there is no scroll listener and no extra layout pass, and decorations arrive with the message page.
 - **Limits:**
   - At most 3 decorations per message, enforced under a lock on the message row.
