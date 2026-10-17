@@ -59,14 +59,14 @@ Max size: 64×64×8 frames = 32 KB raw, ~44 KB base64. The default palette is ou
 
 ## Phase 1b: message decorations (backend + frontend) — done
 
-Anyone in a channel or DM can pin a pixel art piece to a message as a decoration. It is drawn faintly behind the chat and scrolls with the history.
+Anyone in a channel or DM can drop a pixel art piece anywhere in the chat's history; the whole chat is one borderless canvas. It is drawn faintly behind the messages and scrolls with the history.
 
-- **Anchoring:** a decoration belongs to one message and stores:
-  - `x`: horizontal center, 0–100 % of the row width
-  - `y`: top offset, 0–64 px below the row top
+- **Anchoring:** a decoration is anchored to the message under the pointer when placed (so it loads and paginates with it) and stores:
+  - `x`: 0–100, the position across the row width minus the piece
+  - `y`: top offset from the anchor row's top, −256…1024 px
   - `size`: 32/48/64/96/128 px
   - `doc`: a copy of the art, so later gallery edits don't change placed pieces
-- **Rendering:** it is drawn inside its message row, in an isolated stacking context at `z-index: -1`, at 35 % opacity with `pointer-events: none` and `image-rendering: pixelated`. Since `y ≥ 0`, a piece can only spill into *later* rows, which paint over it, so every message's text stays on top.
+- **Rendering:** it is drawn inside its anchor row at `z-index: -1`, 35 % opacity, `pointer-events: none` and `image-rendering: pixelated`. The message list wrapper is the single stacking context, so a piece overlapping any rows stays behind all of their text.
 - **Performance:** each distinct doc is rendered once to a data URL and cached in a module-level map. Only loaded messages render their decorations, there is no scroll listener and no extra layout pass, and decorations arrive with the message page.
 - **Limits:**
   - At most 3 decorations per message, enforced under a lock on the message row.
@@ -80,7 +80,7 @@ Anyone in a channel or DM can pin a pixel art piece to a message as a decoration
   - `GET /channels/:id/messages` items carry `decorations`.
 - **Events:** `DECORATION_ADD` (the decoration plus `channelId`, `guildId`) and `DECORATION_REMOVE` `{id, messageId, channelId, guildId}`, via the same guild/DM fanout as reactions.
 - **Database:** migration `000020_create_message_decorations`, with the message FK `ON DELETE CASCADE` and the author FK `ON DELETE SET NULL`, both indexed.
-- **Placing:** the message context menu has "Decorate with pixel art". It opens the editor with a "Place on message" action; a ghost of the art then follows the pointer over that message, the mouse wheel or the − / + buttons change size, a click places it and Escape cancels. The same menu offers "Remove Decoration(s)" for the pieces the viewer may remove (the client knows owners only; admins and moderators are enforced by the server).
+- **Placing:** "Place in chat" in the editor, opened from the composer or from a message's "Decorate with Pixel Art". A ghost then follows the pointer over the whole chat, the wheel keeps scrolling the history, − / + (or Ctrl/Alt + wheel) change size, a click places it and Escape cancels. The same menu offers "Remove Decoration(s)" for the pieces the viewer may remove (the client knows owners only; admins and moderators are enforced by the server).
 
 ## Phase 2: gallery + profile showcase (backend + frontend)
 

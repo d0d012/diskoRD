@@ -8,6 +8,14 @@ import (
 // MaxPerMessage caps how many decorations one message can carry.
 const MaxPerMessage = 3
 
+// Vertical offset bounds relative to the anchor message's top. Decorations are
+// placed anywhere in the chat and anchored to the message under the pointer,
+// so they may extend above it or down past tall (image) messages.
+const (
+	MinY = -256
+	MaxY = 1024
+)
+
 // AllowedSizes are the display sizes in CSS pixels.
 var AllowedSizes = map[int]bool{32: true, 48: true, 64: true, 96: true, 128: true}
 
@@ -19,7 +27,7 @@ type Decoration struct {
 	Doc       json.RawMessage `json:"doc"`
 	// X is the horizontal center in percent of the message row width (0-100).
 	X int `json:"x"`
-	// Y is the top offset in pixels below the row top (0-64).
+	// Y is the top offset in pixels from the anchor row's top (MinY..MaxY).
 	Y         int       `json:"y"`
 	Size      int       `json:"size"`
 	CreatedAt time.Time `json:"createdAt"`

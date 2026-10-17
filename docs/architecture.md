@@ -64,14 +64,15 @@ Manual smoke test: use two clients in a guild voice channel; open from sidebar a
 ## Pixel art & decorations (`frontend/src/features/pixelart`, `backend/internal/decoration`, `backend/internal/pixelart`)
 
 - The editor is client-only. Art is indexed color (`PixelArtDoc`: 16/32/64 square, ≤ 32 colors, base64 indices with 0 = transparent). "Send to chat" uploads a 512px nearest-neighbour PNG through the normal image upload; `.pixel.json` is the lossless import/export format. The draft lives in `localStorage`.
-- **Decorations** pin a copy of a doc to a message (`message_decorations`, migration **000020**; apply it manually before deploying a backend that serves them).
-  - `POST /messages/:id/decorations` `{doc, x 0–100 %, y 0–64 px, size 32/48/64/96/128}` and `DELETE /decorations/:id`, both rate limited.
+- **Decorations** drop a copy of a doc anywhere in a chat's history. The chat is one borderless canvas, but each piece is anchored to the message under the pointer, so it scrolls and paginates with that message (`message_decorations`, migration **000020**; apply it manually before deploying a backend that serves them).
+  - `POST /messages/:id/decorations` `{doc, x 0–100, y −256…1024 px from the anchor row's top, size 32/48/64/96/128}` and `DELETE /decorations/:id`, both rate limited. x spans the row width minus the piece, so pieces never leave the chat horizontally. The y bounds live in `decoration.MinY/MaxY` and `DECORATION_MIN_Y/MAX_Y`, which must match.
   - `pixelart.Validate` checks and canonicalizes every doc server-side.
   - At most 3 per message, enforced under a `FOR UPDATE` lock on the message row.
   - Removal is allowed for the placer, the message author, or a guild owner/admin/moderator.
   - `GET /channels/:id/messages` attaches `decorations`. A failure to load them is logged and the page is returned without them.
   - `DECORATION_ADD` / `DECORATION_REMOVE` use the reaction fanout (guild or DM pair). The client's `updateMessage` keeps existing decorations, because edit events don't carry them.
-- **Rendering:** each decoration is an `<img>` (data URL cached per distinct doc) inside its message row, which sets `isolation: isolate`. The image uses `z-index: -1`, 35 % opacity and `pointer-events: none`. Because `y ≥ 0`, a piece only spills into later rows, which paint over it, so text always stays on top. There are no scroll listeners or measurement passes. "Hide Decorations" is a per-device setting (`settings.showDecorations`).
+- **Rendering:** each decoration is an `<img>` (data URL cached per distinct doc) inside its anchor row, using `z-index: -1`, 35 % opacity and `pointer-events: none`. The message list wrapper is the only stacking context (`isolation: isolate`); rows must not create their own (no z-index, transform or isolation). That way every piece paints behind every row's text, whichever rows it overlaps. There are no scroll listeners or measurement passes; `MessageList` ignores decoration image loads when following the bottom. "Hide Decorations" is a per-device setting (`settings.showDecorations`).
+- **Placing:** "Place in chat" in the editor (from the composer, or from a message's "Decorate with Pixel Art") sets `decorationPlacementStore`. `MessageList` then shows `PlaceDecoration` over the list: a ghost follows the pointer, the wheel keeps scrolling the history (re-dispatched to the list so it stops following the bottom), +/− or Ctrl/Alt+wheel resize, a click places it and Escape cancels. Switching channels cancels a pending placement.
 
 ## Desktop (`frontend/src-tauri`)
 

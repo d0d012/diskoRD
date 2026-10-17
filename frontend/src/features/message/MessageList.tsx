@@ -1,6 +1,9 @@
 import { useEffect, useRef, useCallback, useState, type ReactNode } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
+import { PlaceDecoration, type Placement } from "../pixelart/PlaceDecoration";
+import { encodeDoc } from "../pixelart/lib/doc";
 import { MessageItem } from "./MessageItem";
 import type { Message } from "../../types";
 
@@ -25,6 +28,11 @@ export function MessageList({ channelId, channelName, intro }: Props) {
   const msgs = messages[channelId] ?? [];
   const more = hasMore[channelId] ?? false;
   const selfId = useAuthStore((s) => s.user?.id);
+  const placeDecoration = useMessageStore((s) => s.placeDecoration);
+  const placingArt = useDecorationPlacementStore((s) => (s.channelId === channelId ? s.art : null));
+  const cancelPlacement = useDecorationPlacementStore((s) => s.cancel);
+  // The list element as state too, so the placement overlay can render against it.
+  const [listEl, setListEl] = useState<HTMLDivElement | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,14 +50,15 @@ export function MessageList({ channelId, channelName, intro }: Props) {
     if (initialLoadedRef.current === channelId) return;
     initialLoadedRef.current = channelId;
     lastMessageIdRef.current = undefined;
+    useDecorationPlacementStore.getState().cancel();
     setShowJump(false);
     setNewCount(0);
     fetchMessages(channelId);
   }, [channelId]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     pinnedRef.current = true;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior });
     setNewCount(0);
   }, []);
 
@@ -66,7 +75,11 @@ export function MessageList({ channelId, channelName, intro }: Props) {
     const appended = prevLastIndex < 0 ? 0 : msgs.length - 1 - prevLastIndex;
 
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    if (isNearBottom || prevLastId == null || (appended > 0 && last.author?.id === selfId)) {
+    if (prevLastId == null) {
+      // Open at the bottom instantly: a smooth scroll from the top would cross the
+      // load-older threshold and the prepend would interrupt it halfway.
+      if (last) scrollToBottom("auto");
+    } else if (isNearBottom || (appended > 0 && last.author?.id === selfId)) {
       scrollToBottom();
     } else if (appended > 0) {
       setNewCount((n) => n + appended);
@@ -106,13 +119,16 @@ export function MessageList({ channelId, channelName, intro }: Props) {
   return (
     <div className="relative flex-1 min-h-0 flex flex-col">
       <div
-        ref={containerRef}
+        ref={(el) => { containerRef.current = el; setListEl(el); }}
         className="flex-1 overflow-y-auto"
         onScroll={handleScroll}
         onWheel={(e) => { if (e.deltaY < 0) pinnedRef.current = false; }}
         onKeyDown={(e) => { if (["ArrowUp", "PageUp", "Home"].includes(e.key)) pinnedRef.current = false; }}
         // Images grow the list after the scroll already ran; keep following the bottom.
-        onLoadCapture={() => { if (pinnedRef.current) bottomRef.current?.scrollIntoView(); }}
+        onLoadCapture={(e) => {
+          // Decorations are absolutely positioned and don't change the layout.
+          if (pinnedRef.current && !(e.target as Element).hasAttribute?.("data-decoration")) bottomRef.current?.scrollIntoView();
+        }}
       >
         {/* Channel intro */}
         {!more && (intro ?? (
@@ -145,8 +161,9 @@ export function MessageList({ channelId, channelName, intro }: Props) {
           </div>
         )}
 
-        {/* Messages */}
-        <div className="pb-4">
+        {/* Messages. One stacking context for the whole list: decorations (z-index -1)
+            from any row paint behind every row's content, so text always stays on top. */}
+        <div className="pb-4" style={{ isolation: "isolate" }}>
           {msgs.map((msg, i) => {
             const prev = i > 0 ? msgs[i - 1] : null;
             const grouped = prev != null && isSameAuthorAndClose(prev, msg);
@@ -157,10 +174,22 @@ export function MessageList({ channelId, channelName, intro }: Props) {
         <div ref={bottomRef} />
       </div>
 
+      {placingArt && listEl && (
+        <PlaceDecoration
+          art={placingArt}
+          list={listEl}
+          onPlace={async ({ messageId, ...placement }: Placement) => {
+            await placeDecoration(messageId, { doc: encodeDoc(placingArt), ...placement });
+            cancelPlacement();
+          }}
+          onCancel={cancelPlacement}
+        />
+      )}
+
       {(showJump || newCount > 0) && (
         <button
           type="button"
-          onClick={scrollToBottom}
+          onClick={() => scrollToBottom()}
           aria-label="Jump to latest message"
           title="Jump to latest message"
           className="absolute bottom-3 right-5 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors hover:brightness-110"

@@ -116,4 +116,24 @@ describe("MessageList jump to latest", () => {
     fireEvent.load(img);
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
+
+  it("opens at the bottom instantly on first load", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    scrollIntoView.mockClear();
+    setMessages(makeMessages(60));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto" });
+  });
+
+  it("does not follow the bottom when a decoration image loads", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages(makeMessages(10));
+    const list = screen.getByText("message 0").closest(".overflow-y-auto") as HTMLElement;
+    const decoration = document.createElement("img");
+    decoration.dataset.decoration = "";
+    list.appendChild(decoration);
+    scrollIntoView.mockClear();
+
+    fireEvent.load(decoration);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

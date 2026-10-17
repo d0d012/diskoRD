@@ -3,9 +3,9 @@ import type { Decoration } from "../../types";
 import { DECORATION_OPACITY, decorationLeft, docImageUrl } from "./decorationImage";
 
 /**
- * Decorations drawn behind a message's content. The row must be an isolated
- * stacking context (`isolation: isolate`) so z-index -1 stays above the row's
- * own background but below its text.
+ * Decorations anchored to a message, drawn behind the whole message list. They
+ * rely on the list wrapper being the stacking context (`isolation: isolate`) and
+ * on rows not creating their own, so z-index -1 lands behind every row.
  */
 export function MessageDecorations({ decorations }: { decorations?: Decoration[] }) {
   const show = useSettingsStore((s) => s.showDecorations);
@@ -23,6 +23,7 @@ export function MessageDecorations({ decorations }: { decorations?: Decoration[]
             aria-hidden="true"
             draggable={false}
             data-testid="message-decoration"
+            data-decoration
             className="absolute pointer-events-none select-none"
             style={{
               left: decorationLeft(d.x, d.size),

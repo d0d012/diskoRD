@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 import { PixelArtEditor } from "../pixelart/PixelArtEditor";
+import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
 
 const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
 const ACCEPTED_TYPES = ACCEPTED.split(",");
@@ -20,6 +21,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const [sending, setSending] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [pixelArtOpen, setPixelArtOpen] = useState(false);
+  const startPlacement = useDecorationPlacementStore((s) => s.start);
   const { sendMessage, uploadImage, typingUsers } = useMessageStore();
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -195,6 +197,10 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
       {pixelArtOpen && (
         <PixelArtEditor
           onSend={uploadFile}
+          onPlace={(art) => {
+            setPixelArtOpen(false);
+            startPlacement(channelId, art);
+          }}
           onClose={() => {
             setPixelArtOpen(false);
             textareaRef.current?.focus();

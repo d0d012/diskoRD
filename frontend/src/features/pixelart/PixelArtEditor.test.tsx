@@ -89,4 +89,15 @@ describe("PixelArtEditor", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("offers placing in chat next to sending", () => {
+    const onPlace = vi.fn();
+    render(<PixelArtEditor onSend={vi.fn()} onPlace={onPlace} onClose={vi.fn()} />);
+    pointer("pointerDown", 2, 2);
+    pointer("pointerUp", 2, 2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Place in chat" }));
+    expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ size: 32 }));
+    expect(screen.getByRole("button", { name: "Send to chat" })).toBeInTheDocument();
+  });
 });

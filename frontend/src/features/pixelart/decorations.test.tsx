@@ -77,7 +77,8 @@ describe("message decorations", () => {
     expect(img.style.zIndex).toBe("-1");
     expect(img).toHaveClass("pointer-events-none");
     expect(img.style.left).toBe(decorationLeft(100, 64));
-    expect((document.querySelector(".group") as HTMLElement).style.isolation).toBe("isolate");
+    // Rows must not create stacking contexts, or pieces would cover neighbouring rows' text.
+    expect((document.querySelector("[data-message-id]") as HTMLElement).style.isolation).toBe("");
   });
 
   it("follows live add/remove events and survives message edits", () => {
@@ -122,27 +123,52 @@ describe("message decorations", () => {
 });
 
 describe("PlaceDecoration", () => {
+  /** A list with two 40px rows at y=200 and y=240, 400px wide starting at x=100. */
   function setup(onPlace = vi.fn().mockResolvedValue(undefined)) {
-    const row = document.createElement("div");
-    row.getBoundingClientRect = () => ({ left: 100, top: 200, width: 400, height: 40, right: 500, bottom: 240, x: 100, y: 200, toJSON: () => ({}) }) as DOMRect;
+    const list = document.createElement("div");
+    const rect = (top: number, height: number) =>
+      () => ({ left: 100, top, width: 400, height, right: 500, bottom: top + height, x: 100, y: top, toJSON: () => ({}) }) as DOMRect;
+    list.getBoundingClientRect = rect(100, 400);
+    for (const [id, top] of [["m1", 200], ["m2", 240]] as const) {
+      const row = document.createElement("div");
+      row.dataset.messageId = id;
+      row.getBoundingClientRect = rect(top, 40);
+      list.appendChild(row);
+    }
+    document.body.appendChild(list);
     const onCancel = vi.fn();
-    render(<PlaceDecoration art={art} row={row} onPlace={onPlace} onCancel={onCancel} />);
-    return { onPlace, onCancel, overlay: screen.getByRole("dialog", { name: "Place pixel art on message" }) };
+    render(<PlaceDecoration art={art} list={list} onPlace={onPlace} onCancel={onCancel} />);
+    return { onPlace, onCancel, list, overlay: screen.getByRole("dialog", { name: "Place pixel art in chat" }) };
   }
 
-  it("places at the clicked spot, clamped to the allowed band", async () => {
+  it("anchors to the message under the pointer, centered on it", async () => {
     const { onPlace, overlay } = setup();
-    // Far right and far below: x clamps to 100, y to 64.
-    fireEvent.click(overlay, { clientX: 900, clientY: 900 });
-    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ x: 100, y: 64, size: 64 }));
+    // Centered at (300, 250) with a 64px piece: top-left at (268, 218); row m2 starts at 240.
+    fireEvent.click(overlay, { clientX: 300, clientY: 250 });
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m2", x: 50, y: -22, size: 64 }));
   });
 
-  it("changes size with the buttons", async () => {
+  it("uses the nearest message for gaps and the far ends, clamping x", async () => {
+    const { onPlace, overlay } = setup();
+    fireEvent.click(overlay, { clientX: 900, clientY: 150 }); // above the first row, past the right edge
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ messageId: "m1", x: 100, y: -82, size: 64 }));
+  });
+
+  it("changes size with the buttons without placing", async () => {
     const { onPlace, overlay } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Larger" }));
-    expect(onPlace).not.toHaveBeenCalled(); // toolbar clicks don't place
-    fireEvent.click(overlay, { clientX: 300, clientY: 200 });
-    await waitFor(() => expect(onPlace).toHaveBeenCalledWith({ x: 50, y: 0, size: 96 }));
+    expect(onPlace).not.toHaveBeenCalled();
+    fireEvent.click(overlay, { clientX: 300, clientY: 210 });
+    await waitFor(() => expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ messageId: "m1", size: 96 })));
+  });
+
+  it("lets the wheel scroll the history underneath", () => {
+    const { list, overlay } = setup();
+    const seen = vi.fn();
+    list.addEventListener("wheel", seen);
+    fireEvent.wheel(overlay, { deltaY: 120 });
+    expect(list.scrollTop).toBe(120);
+    expect(seen).toHaveBeenCalled(); // the list learns it was a user scroll
   });
 
   it("shows the server's error and stays open", async () => {

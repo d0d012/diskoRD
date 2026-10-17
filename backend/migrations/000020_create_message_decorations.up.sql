@@ -4,7 +4,7 @@ CREATE TABLE message_decorations (
     author_id  UUID REFERENCES users(id) ON DELETE SET NULL,
     doc        JSONB NOT NULL,
     x          SMALLINT NOT NULL CHECK (x BETWEEN 0 AND 100),
-    y          SMALLINT NOT NULL CHECK (y BETWEEN 0 AND 64),
+    y          SMALLINT NOT NULL CHECK (y BETWEEN -256 AND 1024),
     size       SMALLINT NOT NULL CHECK (size IN (32, 48, 64, 96, 128)),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

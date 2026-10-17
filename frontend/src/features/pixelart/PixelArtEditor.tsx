@@ -42,7 +42,7 @@ interface ImportState {
 interface Props {
   /** Sends the art to the chat as a PNG. */
   onSend?: (file: File) => Promise<void>;
-  /** Replaces sending: hands the art back to be pinned to a message. */
+  /** Hands the art back to be dropped somewhere in the chat as a decoration. */
   onPlace?: (art: Art) => void;
   onClose: () => void;
 }
@@ -245,12 +245,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   }
 
   async function send() {
-    if (busy || isEmpty(art)) return;
-    if (onPlace) {
-      onPlace(art);
-      return;
-    }
-    if (!onSend) return;
+    if (busy || isEmpty(art) || !onSend) return;
     setBusy(true);
     try {
       const blob = await artToPng(art, shareScale(art));
@@ -448,14 +443,29 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                   </div>
                 </div>
 
-                <button
-                  onClick={send}
-                  disabled={busy || isEmpty(art)}
-                  className="mt-auto rounded py-2 font-medium text-white disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-dc-brand)" }}
-                >
-                  {onPlace ? "Place on message" : busy ? "Sending…" : "Send to chat"}
-                </button>
+                <div className="mt-auto flex flex-col gap-1">
+                  {onPlace && (
+                    <button
+                      onClick={() => onPlace(art)}
+                      disabled={busy || isEmpty(art)}
+                      title="Drop it anywhere in the chat's history as a decoration"
+                      className="rounded py-2 font-medium disabled:opacity-50"
+                      style={onSend ? buttonStyle : { backgroundColor: "var(--color-dc-brand)", color: "#fff" }}
+                    >
+                      Place in chat
+                    </button>
+                  )}
+                  {onSend && (
+                    <button
+                      onClick={send}
+                      disabled={busy || isEmpty(art)}
+                      className="rounded py-2 font-medium text-white disabled:opacity-50"
+                      style={{ backgroundColor: "var(--color-dc-brand)" }}
+                    >
+                      {busy ? "Sending…" : "Send to chat"}
+                    </button>
+                  )}
+                </div>
               </>
             )}
             {error && <p className="text-xs" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}

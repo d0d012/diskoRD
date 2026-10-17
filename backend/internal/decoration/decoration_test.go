@@ -143,8 +143,8 @@ func TestCreateRejectsNonMember(t *testing.T) {
 func TestCreateValidatesBeforeTouchingTheDatabase(t *testing.T) {
 	cases := map[string]CreateRequest{
 		"x too large": {Doc: validDoc(), X: 101, Y: 0, Size: 32},
-		"negative y":  {Doc: validDoc(), X: 0, Y: -1, Size: 32},
-		"y too large": {Doc: validDoc(), X: 0, Y: 65, Size: 32},
+		"y too high":  {Doc: validDoc(), X: 0, Y: MinY - 1, Size: 32},
+		"y too low":   {Doc: validDoc(), X: 0, Y: MaxY + 1, Size: 32},
 		"bad size":    {Doc: validDoc(), X: 0, Y: 0, Size: 40},
 		"invalid doc": {Doc: json.RawMessage(`{"v":1}`), X: 0, Y: 0, Size: 32},
 		"missing doc": {X: 0, Y: 0, Size: 32},
