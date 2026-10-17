@@ -61,6 +61,18 @@ Runtime behavior that isn't obvious from a single file. For the stack and featur
 
 Manual smoke test: use two clients in a guild voice channel; open from sidebar and full voice controls, search and rapidly retrigger a sound, toggle local preview, and keep talking/navigating. Upload as an ordinary member; verify another client sees and hears it without reopening. Exercise invalid/overlong files, quota/network errors, deletion by uploader/moderator vs another member, mute/deafen/volume-zero, simultaneous senders, reconnect, switching guilds, and hangup during download/playback. Repeat built-ins in DM calls. Check WebKit/Tauri autoplay before/after a gesture, and popover positioning at viewport edges.
 
+## Image attachments (`backend/internal/message`, `backend/internal/storage`)
+
+- `POST /channels/:id/upload` creates the message, writes the file to `{STORAGE_PATH}/{messageId}/image.{ext}` (`storage.Service.Save`), stores the public URL in `messages.attachments` (`TEXT[]`, migration **000021**), then publishes `MESSAGE_CREATE` with it. Pasted images and pixel art "Send to chat" use the same endpoint.
+- URLs are `{baseURL}/uploads/{messageId}/image.{ext}`; `baseURL` is empty in production (nginx serves `/uploads`), `http://localhost:{APP_PORT}` otherwise. List, get, create and edit all return `attachments`.
+- Before 000021 the URL was never stored, so older image messages lost their image on reload although the file stayed on disk. **Deploying 000021 to an existing server:** run the migration (`scripts/update.sh` does), then the one-off backfill inside the backend container. It scans the uploads volume for message-UUID directories (skipping `avatars/` and `guild-icons/`) and fills `attachments` only where it is empty, so re-running it is harmless; `-dry-run` only counts.
+
+  ```bash
+  docker compose -f infra/docker-compose.prod.yml --env-file .env.prod exec -T backend ./backfill-attachments
+  ```
+
+  Locally: `cd backend && go run ./cmd/backfill-attachments` (reads `.env` / `STORAGE_PATH` like the server).
+
 ## Pixel art & decorations (`frontend/src/features/pixelart`, `backend/internal/decoration`, `backend/internal/pixelart`)
 
 - The editor is client-only. Art is indexed color (`PixelArtDoc`: 16/32/64 square, ≤ 32 colors, base64 indices with 0 = transparent). "Send to chat" uploads a 512px nearest-neighbour PNG through the normal image upload; `.pixel.json` is the lossless import/export format. The draft lives in `localStorage`.
