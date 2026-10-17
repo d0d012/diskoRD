@@ -2,6 +2,8 @@ import { useState, useRef } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 
 const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
+const ACCEPTED_TYPES = ACCEPTED.split(",");
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 interface Props {
   channelId: string;
@@ -19,6 +21,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const { sendMessage, uploadImage, typingUsers } = useMessageStore();
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const typing = (typingUsers[channelId] ?? []).filter(
     (u) => Date.now() - u.at < 5000
@@ -40,21 +43,26 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     try {
       await sendMessage(channelId, trimmed);
     } catch {
-      setContent(trimmed);
+      // Don't clobber anything typed while the send was in flight.
+      setContent((current) => current || trimmed);
     } finally {
       setSending(false);
     }
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!fileInputRef.current) return;
-    fileInputRef.current.value = "";
-    if (!file) return;
+  function showUploadError(message: string) {
+    setUploadError(message);
+    setTimeout(() => setUploadError(""), 3000);
+  }
 
-    if (file.size > 8 * 1024 * 1024) {
-      setUploadError("File exceeds 8MB limit.");
-      setTimeout(() => setUploadError(""), 3000);
+  async function uploadFile(file: File) {
+    if (sending) return;
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      showUploadError("Only JPEG, PNG, GIF and WebP images are supported.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showUploadError("File exceeds 8MB limit.");
       return;
     }
 
@@ -63,11 +71,26 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     try {
       await uploadImage(channelId, file);
     } catch {
-      setUploadError("Upload failed.");
-      setTimeout(() => setUploadError(""), 3000);
+      showUploadError("Upload failed.");
     } finally {
       setSending(false);
+      textareaRef.current?.focus();
     }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = "";
+    if (!file) return;
+    await uploadFile(file);
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const image = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+    if (!image) return; // plain text paste keeps the default behavior
+    e.preventDefault();
+    void uploadFile(image);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -121,6 +144,8 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         </button>
 
         <textarea
+          ref={textareaRef}
+          autoFocus
           rows={1}
           className="flex-1 bg-transparent text-sm outline-none resize-none max-h-36 overflow-y-auto leading-5"
           style={{
@@ -131,7 +156,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          disabled={sending}
+          onPaste={handlePaste}
         />
         <button
           onClick={handleSubmit}
