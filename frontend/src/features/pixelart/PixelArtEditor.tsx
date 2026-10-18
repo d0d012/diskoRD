@@ -7,6 +7,8 @@ import {
 import { decodeDoc, encodeDoc } from "./lib/doc";
 import { renderImport, suggestImport, type ImportState, type Rgba } from "./lib/importImage";
 import { artToPng, downloadBlob, drawArt, loadImageRgba, shareScale } from "./render";
+import { Icon } from "./Icon";
+import type { IconName } from "./iconPaths";
 
 const HISTORY_LIMIT = 100;
 const DRAFT_KEY = "diskord.pixelart.draft";
@@ -18,13 +20,13 @@ const MAX_CELL_PX = 48;
 
 type Tool = "pencil" | "eraser" | "fill" | "picker" | "line" | "rect";
 
-const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
-  { id: "pencil", label: "Pencil", key: "b", icon: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" },
-  { id: "eraser", label: "Eraser", key: "e", icon: "M16.24 3.56l4.95 4.94a2 2 0 0 1 0 2.83L12 20.52H21v2H8.5l-5.69-5.69a2 2 0 0 1 0-2.83L13.41 3.56a2 2 0 0 1 2.83 0zM4.22 15.58 8.9 20.27h.27l3.54-3.54-4.95-4.95-3.54 3.8z" },
-  { id: "fill", label: "Fill", key: "g", icon: "M16.56 8.94 7.62 0 6.21 1.41l2.38 2.38-5.15 5.15a1.49 1.49 0 0 0 0 2.12l5.5 5.5c.29.29.68.44 1.06.44s.77-.15 1.06-.44l5.5-5.5c.59-.58.59-1.53 0-2.12zM5.21 10 10 5.21 14.79 10H5.21zM19 11.5s-2 2.17-2 3.5a2 2 0 0 0 4 0c0-1.33-2-3.5-2-3.5z" },
-  { id: "picker", label: "Color picker", key: "i", icon: "M20.71 5.63l-2.34-2.34a1 1 0 0 0-1.41 0l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L3 16.25V21h4.75l8.92-8.92 1.42 1.42 1.41-1.41-1.92-1.92 3.12-3.12a1 1 0 0 0 .01-1.42zM6.92 19 5 17.08l8.06-8.06 1.92 1.92L6.92 19z" },
-  { id: "line", label: "Line", key: "l", icon: "M3.5 19.09 19.09 3.5l1.41 1.41L4.91 20.5z" },
-  { id: "rect", label: "Rectangle", key: "u", icon: "M3 3h18v18H3V3zm2 2v14h14V5H5z" },
+const TOOLS: { id: Tool; label: string; key: string; icon: IconName }[] = [
+  { id: "pencil", label: "Pencil", key: "b", icon: "pencil" },
+  { id: "eraser", label: "Eraser", key: "e", icon: "eraser" },
+  { id: "fill", label: "Fill", key: "g", icon: "fill" },
+  { id: "picker", label: "Color picker", key: "i", icon: "picker" },
+  { id: "line", label: "Line", key: "l", icon: "line" },
+  { id: "rect", label: "Rectangle", key: "u", icon: "rect" },
 ];
 
 interface Stroke {
@@ -47,6 +49,10 @@ interface Props {
   onSend?: (file: File) => Promise<void>;
   /** Hands the art back to be dropped somewhere in the chat as a decoration. */
   onPlace?: (art: Art) => void;
+  /** Opens the user's gallery (shown when provided). */
+  onOpenGallery?: () => void;
+  /** Saves the current art to the gallery (shown when provided). */
+  onSaveToGallery?: (art: Art) => void;
   onClose: () => void;
 }
 
@@ -93,7 +99,7 @@ function rgbaThumb(src: Rgba): string | null {
 }
 
 /** Indexed-color pixel art editor: draw, import, export, send to a channel or place in it. */
-export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
+export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery, onClose }: Props) {
   const [art, setArt] = useState<Art>(loadDraft);
   const [past, setPast] = useState<Art[]>([]);
   const [future, setFuture] = useState<Art[]>([]);
@@ -105,6 +111,8 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   const [zoom, setZoom] = useState(1);
   const [view, setView] = useState(viewSize);
   const [hover, setHover] = useState<Point | null>(null);
+  /** Space held or a pan in progress: shows the grab cursor. */
+  const [panning, setPanning] = useState(false);
   const [importing, setImporting] = useState<ImportState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -116,6 +124,10 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   const spaceRef = useRef(false);
   const zoomAnchorRef = useRef<{ fx: number; fy: number; x: number; y: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  /** The art from before a Clear, while its undo toast is showing. */
+  const [clearedFrom, setClearedFrom] = useState<Art | null>(null);
 
   // Deferred so dragging the color slider stays smooth on big canvases.
   const deferredImport = useDeferredValue(importing);
@@ -255,6 +267,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
       e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
       panRef.current = { x: e.clientX, y: e.clientY, left: vp.scrollLeft, top: vp.scrollTop };
+      setPanning(true);
       return;
     }
     if (importing || (e.button !== 0 && e.button !== 2)) return;
@@ -298,7 +311,10 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   }
 
   function handlePointerUp() {
-    panRef.current = null;
+    if (panRef.current) {
+      panRef.current = null;
+      setPanning(spaceRef.current);
+    }
     const stroke = strokeRef.current;
     if (!stroke) return;
     strokeRef.current = null;
@@ -361,6 +377,34 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
     setImporting(null);
   }
 
+  function clearCanvas() {
+    if (isEmpty(art)) return;
+    setClearedFrom(art);
+    commit(createArt(art.size, art.palette));
+  }
+
+  function undoClear() {
+    undo();
+    setClearedFrom(null);
+  }
+
+  // The clear toast goes away on its own, or as soon as the art changes again.
+  useEffect(() => {
+    if (!clearedFrom) return;
+    const timer = setTimeout(() => setClearedFrom(null), 6000);
+    return () => clearTimeout(timer);
+  }, [clearedFrom]);
+
+  // Close the export menu on any outside click.
+  useEffect(() => {
+    if (!exportOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [exportOpen]);
+
   async function exportPng(scale: number) {
     try {
       downloadBlob(await artToPng(art, scale), `pixel-art-${art.size * scale}.png`);
@@ -408,7 +452,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
       if (mod && key === "z") { e.preventDefault(); if (e.shiftKey) l.redo(); else l.undo(); return; }
       if (mod && key === "y") { e.preventDefault(); l.redo(); return; }
       if (mod) return;
-      if (e.key === " ") { e.preventDefault(); spaceRef.current = true; return; }
+      if (e.key === " ") { e.preventDefault(); spaceRef.current = true; setPanning(true); return; }
       if (key === "[") { setBrush((b) => Math.max(1, b - 1)); return; }
       if (key === "]") { setBrush((b) => Math.min(MAX_BRUSH, b + 1)); return; }
       if (key === "+" || key === "=") { l.zoomStep(1); return; }
@@ -419,7 +463,10 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
       else if (key === "m") setMirror((m) => !m);
     }
     function onKeyUp(e: KeyboardEvent) {
-      if (e.key === " ") spaceRef.current = false;
+      if (e.key === " ") {
+        spaceRef.current = false;
+        setPanning(false);
+      }
     }
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("keyup", onKeyUp, true);
@@ -431,15 +478,11 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
 
   // ── UI ───────────────────────────────────────────────────────────────────
 
-  const buttonStyle = { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" };
-  const muted = { color: "var(--color-dc-text-muted)" };
-  const toggleStyle = (on: boolean) => ({
-    backgroundColor: on ? "var(--color-dc-brand)" : "var(--color-dc-bg-secondary)",
-    color: on ? "#fff" : "var(--color-dc-interactive-normal)",
-  });
   const brushTools = tool === "pencil" || tool === "eraser" || tool === "line" || tool === "rect";
   const hoverSpan = brushTools ? brush : 1;
   const hoverOffset = brushTools ? -Math.floor((brush - 1) / 2) : 0;
+  const empty = isEmpty(art);
+  const actionsDisabled = busy || empty || !!importing;
 
   return createPortal(
     <div
@@ -450,69 +493,56 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
       aria-label="Pixel art"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="max-w-full max-h-full overflow-auto rounded-lg shadow-2xl p-4" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>Pixel art</h3>
-          <button onClick={onClose} aria-label="Close" className="p-1 rounded hover:bg-[var(--color-dc-bg-modifier-hover)]" style={{ color: "var(--color-dc-interactive-normal)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.7 2.88 18.3 9.17 12 2.88 5.71 4.29 4.3l6.3 6.29 6.29-6.3z" />
-            </svg>
+      <div
+        className="max-w-full max-h-full overflow-auto rounded-xl shadow-2xl flex flex-col"
+        style={{ backgroundColor: "var(--color-dc-bg-primary)", border: "1px solid var(--color-dc-bg-modifier-selected)" }}
+      >
+        {/* Top bar */}
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: "var(--color-dc-bg-modifier-selected)" }}>
+          <h3 className="text-[15px] font-semibold mr-1" style={{ color: "var(--color-dc-header-primary)" }}>Pixel art</h3>
+          <select
+            value={art.size}
+            onChange={(e) => { commit(resize(art, Number(e.target.value))); setZoom(1); }}
+            disabled={!!importing}
+            aria-label="Canvas size"
+            title="Canvas size"
+            className="rounded-md px-2 py-1 text-xs cursor-pointer disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}
+          >
+            {SIZES.map((s) => <option key={s} value={s}>{s} × {s}</option>)}
+          </select>
+          <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
+          <IconButton icon="undo" label="Undo" shortcut="Ctrl+Z" onClick={undo} disabled={!past.length} />
+          <IconButton icon="redo" label="Redo" shortcut="Ctrl+Shift+Z" onClick={redo} disabled={!future.length} />
+          <div className="flex-1" />
+          <IconButton icon="gallery" label="My art" onClick={() => onOpenGallery?.()} hidden={!onOpenGallery} />
+          <IconButton icon="save" label="Save to gallery" onClick={() => onSaveToGallery?.(art)} disabled={empty} hidden={!onSaveToGallery} />
+          {(onOpenGallery || onSaveToGallery) && <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />}
+          <TextButton label="−" ariaLabel="Zoom out" title="Zoom out (−)" onClick={() => zoomStep(-1)} disabled={zoom <= 1} />
+          <button onClick={() => setZoom(1)} title="Fit to view (0)" className="px-1.5 h-7 rounded-md text-xs tabular-nums min-w-12 hover:bg-[var(--color-dc-bg-modifier-hover)]" style={{ color: "var(--color-dc-text-muted)" }}>
+            {Math.round(Math.min(zoom, maxZoom) * 100)}%
           </button>
+          <TextButton label="+" ariaLabel="Zoom in" title="Zoom in (+, Ctrl/⌘ + wheel)" onClick={() => zoomStep(1)} disabled={zoom >= maxZoom} />
+          <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
+          <IconButton icon="close" label="Close" shortcut="Esc" onClick={onClose} />
         </div>
 
-        <div className="flex gap-3 flex-wrap">
-          {/* Tools */}
-          <div className="flex flex-col gap-1" role="toolbar" aria-label="Tools">
+        <div className="flex gap-4 p-4 flex-wrap">
+          {/* Tool rail */}
+          <div className="flex flex-col gap-1 p-1 rounded-lg self-start" role="toolbar" aria-label="Tools" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
             {TOOLS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTool(t.id)}
-                title={`${t.label} (${t.key.toUpperCase()})`}
-                aria-label={t.label}
-                aria-pressed={tool === t.id}
-                className="w-9 h-9 rounded flex items-center justify-center"
-                style={toggleStyle(tool === t.id)}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={t.icon} /></svg>
-              </button>
+              <RailButton key={t.id} icon={t.icon} label={t.label} hint={t.key.toUpperCase()} active={tool === t.id} onClick={() => setTool(t.id)} />
             ))}
-            <div className="h-px my-1" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
-            <button
-              onClick={() => setBrush((b) => (b % MAX_BRUSH) + 1)}
-              title="Brush size ([ and ])"
-              aria-label={`Brush size ${brush}`}
-              className="w-9 h-9 rounded flex items-center justify-center"
-              style={buttonStyle}
-            >
-              <span className="rounded-sm" style={{ width: 4 + brush * 3, height: 4 + brush * 3, backgroundColor: "currentColor" }} />
-            </button>
-            <button
-              onClick={() => setMirror((m) => !m)}
-              title="Mirror horizontally (M)"
-              aria-label="Mirror"
-              aria-pressed={mirror}
-              className="w-9 h-9 rounded text-xs font-bold"
-              style={toggleStyle(mirror)}
-            >
-              ⇋
-            </button>
-            <button
-              onClick={() => setGrid((g) => !g)}
-              title="Show grid"
-              aria-label="Grid"
-              aria-pressed={grid}
-              className="w-9 h-9 rounded text-xs font-bold"
-              style={toggleStyle(grid)}
-            >
-              #
-            </button>
+            <span className="h-px mx-1 my-1" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
+            <RailButton icon="mirror" label="Mirror" hint="M" active={mirror} onClick={() => setMirror((m) => !m)} />
+            <RailButton icon="grid" label="Grid" active={grid} onClick={() => setGrid((g) => !g)} />
           </div>
 
           {/* Canvas */}
           <div className="flex flex-col gap-1.5">
             <div
               ref={viewportRef}
-              className="flex overflow-auto rounded"
+              className="flex overflow-auto rounded-lg"
               style={{ width: view, height: view, backgroundColor: "var(--color-dc-bg-tertiary)" }}
             >
               <div
@@ -521,7 +551,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                 style={{
                   width: contentPx,
                   height: contentPx,
-                  cursor: spaceRef.current || panRef.current ? "grab" : importing ? "default" : "crosshair",
+                  cursor: panning ? "grab" : importing ? "default" : "crosshair",
                   background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 16px 16px",
                 }}
                 onPointerDown={handlePointerDown}
@@ -542,6 +572,12 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                     }}
                   />
                 )}
+                {empty && !importing && !hover && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none" style={{ color: "var(--color-dc-text-muted)" }}>
+                    <Icon name="brush" size={26} />
+                    <span className="text-sm">Start drawing, or import an image</span>
+                  </div>
+                )}
                 {hover && !importing && tool !== "picker" && (
                   <div
                     className="absolute pointer-events-none"
@@ -560,19 +596,16 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                 )}
               </div>
             </div>
-
-            {/* Status bar */}
-            <div className="flex items-center gap-2 text-xs tabular-nums" style={muted}>
-              <span className="w-16">{hover ? `${hover[0]}, ${hover[1]}` : "—"}</span>
-              <span className="flex-1">{size}×{size}{brushTools && brush > 1 ? ` · brush ${brush}` : ""}</span>
-              <button onClick={() => zoomStep(-1)} disabled={zoom <= 1} aria-label="Zoom out" title="Zoom out (−)" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>−</button>
-              <button onClick={() => setZoom(1)} title="Fit (0)" className="px-1.5 h-6 rounded min-w-12" style={buttonStyle}>{Math.round(Math.min(zoom, maxZoom) * 100)}%</button>
-              <button onClick={() => zoomStep(1)} disabled={zoom >= maxZoom} aria-label="Zoom in" title="Zoom in (+, Ctrl/⌘ + wheel)" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>+</button>
+            <div className="flex items-center gap-3 text-[11px] tabular-nums px-0.5" style={{ width: view, color: "var(--color-dc-text-muted)" }}>
+              <span className="flex-shrink-0">{hover ? `${hover[0]}, ${hover[1]}` : `${size} × ${size}`}</span>
+              <span className="ml-auto truncate" title="Right-click erases · Space + drag pans · [ ] brush size">
+                Right-click erases · Space + drag pans · [ ] brush size
+              </span>
             </div>
           </div>
 
           {/* Side panel */}
-          <div className="w-56 flex flex-col gap-3 text-sm" style={{ color: "var(--color-dc-text-normal)" }}>
+          <div className="w-52 flex flex-col gap-4 text-sm" style={{ color: "var(--color-dc-text-normal)" }}>
             {importing ? (
               <ImportOptions
                 state={importing}
@@ -584,24 +617,26 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
               />
             ) : (
               <>
-                <label className="flex items-center justify-between gap-2">
-                  <span className="text-xs uppercase font-bold" style={muted}>Size</span>
-                  <select
-                    value={art.size}
-                    onChange={(e) => { commit(resize(art, Number(e.target.value))); setZoom(1); }}
-                    className="rounded px-2 py-1 text-sm"
-                    style={buttonStyle}
-                  >
-                    {SIZES.map((s) => <option key={s} value={s}>{s}×{s}</option>)}
-                  </select>
-                </label>
-
-                <div>
-                  <div className="flex items-baseline justify-between mb-1">
-                    <span className="text-xs uppercase font-bold" style={muted}>Palette</span>
-                    <span className="text-xs tabular-nums" style={muted}>{art.palette.length}/{MAX_COLORS}</span>
-                  </div>
-                  <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto p-0.5" role="radiogroup" aria-label="Palette">
+                <Section title="Color" aside={`${art.palette.length}/${MAX_COLORS}`}>
+                  <label className="flex items-center gap-2.5 mb-2.5 cursor-pointer" title="Edit selected color">
+                    <span
+                      className="relative w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"
+                      style={{ backgroundColor: art.palette[color - 1], boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.15)" }}
+                    >
+                      <input
+                        type="color"
+                        value={art.palette[color - 1] ?? "#000000"}
+                        onChange={(e) => setSwatch(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        aria-label="Edit selected color"
+                      />
+                    </span>
+                    <span className="flex flex-col leading-tight">
+                      <span className="font-mono text-xs">{art.palette[color - 1]}</span>
+                      <span className="text-[11px]" style={{ color: "var(--color-dc-text-muted)" }}>Click to edit</span>
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-8 gap-1 max-h-36 overflow-y-auto p-0.5" role="radiogroup" aria-label="Palette">
                     {art.palette.map((c, i) => (
                       <button
                         key={i}
@@ -610,77 +645,249 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                         aria-label={`Color ${c}`}
                         title={c}
                         onClick={() => { setColor(i + 1); if (tool === "eraser" || tool === "picker") setTool("pencil"); }}
-                        className="w-5 h-5 rounded-sm"
-                        style={{ backgroundColor: c, outline: color === i + 1 ? "2px solid #fff" : "1px solid rgba(0,0,0,0.4)", outlineOffset: color === i + 1 ? 1 : 0 }}
+                        className="w-5 h-5 rounded"
+                        style={{ backgroundColor: c, outline: color === i + 1 ? "2px solid #fff" : "1px solid rgba(0,0,0,0.35)", outlineOffset: color === i + 1 ? 1 : 0 }}
                       />
                     ))}
                     {art.palette.length < MAX_COLORS && (
-                      <button onClick={addSwatch} aria-label="Add color" title="Add color" className="w-5 h-5 rounded-sm text-xs leading-none" style={buttonStyle}>+</button>
+                      <button
+                        onClick={addSwatch}
+                        aria-label="Add color"
+                        title="Add color"
+                        className="w-5 h-5 rounded text-xs leading-none hover:bg-[var(--color-dc-bg-modifier-hover)]"
+                        style={{ border: "1px dashed var(--color-dc-text-muted)", color: "var(--color-dc-text-muted)" }}
+                      >
+                        +
+                      </button>
                     )}
                   </div>
-                  <label className="flex items-center gap-2 mt-2 text-xs" style={muted}>
-                    <input
-                      type="color"
-                      value={art.palette[color - 1] ?? "#000000"}
-                      onChange={(e) => setSwatch(e.target.value)}
-                      className="w-8 h-6 bg-transparent cursor-pointer"
-                      aria-label="Edit selected color"
-                    />
-                    Edit selected color
-                  </label>
-                </div>
+                </Section>
 
-                <div className="flex gap-1">
-                  <button onClick={undo} disabled={!past.length} className="flex-1 rounded py-1 disabled:opacity-40" style={buttonStyle} title="Undo (Ctrl+Z)">Undo</button>
-                  <button onClick={redo} disabled={!future.length} className="flex-1 rounded py-1 disabled:opacity-40" style={buttonStyle} title="Redo (Ctrl+Shift+Z)">Redo</button>
-                  <button onClick={() => commit(createArt(art.size, art.palette))} disabled={isEmpty(art)} className="flex-1 rounded py-1 disabled:opacity-40" style={buttonStyle}>Clear</button>
-                </div>
+                {brushTools && (
+                  <Section title="Brush" aside="[ ]">
+                    <div className="flex gap-1" role="radiogroup" aria-label="Brush size">
+                      {Array.from({ length: MAX_BRUSH }, (_, i) => i + 1).map((b) => (
+                        <button
+                          key={b}
+                          role="radio"
+                          aria-checked={brush === b}
+                          aria-label={`Brush ${b}`}
+                          onClick={() => setBrush(b)}
+                          className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-[var(--color-dc-bg-modifier-hover)]"
+                          style={brush === b ? { backgroundColor: "var(--color-dc-brand)", color: "#fff" } : { color: "var(--color-dc-interactive-normal)" }}
+                        >
+                          <span style={{ width: 2 + b * 3, height: 2 + b * 3, backgroundColor: "currentColor" }} />
+                        </button>
+                      ))}
+                    </div>
+                  </Section>
+                )}
 
-                <div className="flex flex-col gap-1">
+                <Section title="File">
                   <input ref={fileRef} type="file" accept="image/*,.json" className="hidden" onChange={handleImportFile} />
-                  <button onClick={() => fileRef.current?.click()} className="rounded py-1" style={buttonStyle}>Import image or .pixel.json</button>
-                  <div className="flex gap-1">
-                    <button onClick={() => exportPng(1)} className="flex-1 rounded py-1 text-xs" style={buttonStyle} title="Download PNG at native size">PNG ×1</button>
-                    <button onClick={() => exportPng(shareScale(art))} className="flex-1 rounded py-1 text-xs" style={buttonStyle} title="Download 512px PNG">PNG 512</button>
-                    <button onClick={exportDoc} className="flex-1 rounded py-1 text-xs" style={buttonStyle} title="Download editable file">.json</button>
+                  <div className="flex gap-1.5">
+                    <PanelButton icon="upload" label="Import" title="Import an image or a .pixel.json file" onClick={() => fileRef.current?.click()} />
+                    <div className="relative flex-1" ref={exportRef}>
+                      <PanelButton icon="download" label="Export" title="Download your art" onClick={() => setExportOpen((o) => !o)} trailing="chevronDown" />
+                      {exportOpen && (
+                        <div
+                          role="menu"
+                          className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md py-1 shadow-xl text-xs"
+                          style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
+                        >
+                          {([
+                            ["PNG, original size", () => exportPng(1)],
+                            [`PNG, ${art.size * shareScale(art)}px`, () => exportPng(shareScale(art))],
+                            ["Editable .pixel.json", exportDoc],
+                          ] as const).map(([label, run]) => (
+                            <button
+                              key={label}
+                              role="menuitem"
+                              onClick={() => { setExportOpen(false); void run(); }}
+                              className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--color-dc-brand)] hover:text-white"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                <p className="text-[11px] leading-snug" style={muted}>
-                  Right-click erases · Space+drag pans · Ctrl/⌘+wheel zooms · [ ] brush size
-                </p>
-
-                <div className="mt-auto flex flex-col gap-1">
-                  {onPlace && (
-                    <button
-                      onClick={() => onPlace(art)}
-                      disabled={busy || isEmpty(art)}
-                      title="Drop it anywhere in the chat's history as a decoration"
-                      className="rounded py-2 font-medium disabled:opacity-50"
-                      style={onSend ? buttonStyle : { backgroundColor: "var(--color-dc-brand)", color: "#fff" }}
-                    >
-                      Place in chat
-                    </button>
-                  )}
-                  {onSend && (
-                    <button
-                      onClick={send}
-                      disabled={busy || isEmpty(art)}
-                      className="rounded py-2 font-medium text-white disabled:opacity-50"
-                      style={{ backgroundColor: "var(--color-dc-brand)" }}
-                    >
-                      {busy ? "Sending…" : "Send to chat"}
-                    </button>
-                  )}
-                </div>
+                </Section>
               </>
             )}
             {error && <p className="text-xs" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}
           </div>
         </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-2 px-4 py-3 border-t flex-wrap" style={{ borderColor: "var(--color-dc-bg-modifier-selected)" }}>
+          <button
+            onClick={clearCanvas}
+            disabled={empty || !!importing}
+            className="flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs font-medium disabled:opacity-40 hover:bg-[rgba(237,66,69,0.12)]"
+            style={{ color: "var(--color-dc-red, #ed4245)" }}
+          >
+            <Icon name="trash" size={16} />
+            Clear canvas
+          </button>
+          {clearedFrom && (
+            <span className="flex items-center gap-2 text-xs px-2.5 h-8 rounded-md" role="status" style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}>
+              Canvas cleared
+              <button onClick={undoClear} className="font-medium hover:underline" style={{ color: "var(--color-dc-text-link, #00a8fc)" }}>Undo</button>
+            </span>
+          )}
+          <div className="flex-1" />
+          {onPlace && (
+            <ActionButton
+              icon="sticker"
+              title="Stick in chat"
+              subtitle="Behind messages, like a sticker"
+              onClick={() => onPlace(art)}
+              disabled={actionsDisabled}
+              primary={!onSend}
+            />
+          )}
+          {onSend && (
+            <ActionButton
+              icon="send"
+              title={busy ? "Sending…" : "Send as message"}
+              subtitle="Posts it as an image"
+              onClick={send}
+              disabled={actionsDisabled}
+              primary
+            />
+          )}
+        </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+function Section({ title, aside, children }: { title: string; aside?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-2">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>{title}</h4>
+        {aside && <span className="text-[11px] tabular-nums" style={{ color: "var(--color-dc-text-muted)" }}>{aside}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function IconButton({ icon, label, shortcut, onClick, disabled, hidden }: {
+  icon: IconName;
+  label: string;
+  shortcut?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  hidden?: boolean;
+}) {
+  if (hidden) return null;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-35 disabled:hover:bg-transparent"
+      style={{ color: "var(--color-dc-interactive-normal)" }}
+    >
+      <Icon name={icon} />
+    </button>
+  );
+}
+
+function TextButton({ label, ariaLabel, title, onClick, disabled }: {
+  label: string;
+  ariaLabel: string;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={title}
+      className="w-7 h-7 rounded-md text-base leading-none hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-35 disabled:hover:bg-transparent"
+      style={{ color: "var(--color-dc-interactive-normal)" }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RailButton({ icon, label, hint, active, onClick }: {
+  icon: IconName;
+  label: string;
+  hint?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={hint ? `${label} (${hint})` : label}
+      aria-label={label}
+      aria-pressed={active}
+      className={`relative w-9 h-9 rounded-md flex items-center justify-center transition-colors ${active ? "" : "hover:bg-[var(--color-dc-bg-modifier-hover)]"}`}
+      style={active ? { backgroundColor: "var(--color-dc-brand)", color: "#fff" } : { color: "var(--color-dc-interactive-normal)" }}
+    >
+      <Icon name={icon} />
+      {hint && <span className="absolute right-0.5 bottom-0 text-[9px] font-semibold leading-none opacity-60">{hint}</span>}
+    </button>
+  );
+}
+
+function PanelButton({ icon, label, title, onClick, trailing }: {
+  icon: IconName;
+  label: string;
+  title: string;
+  onClick: () => void;
+  trailing?: IconName;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="w-full flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium hover:brightness-110"
+      style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}
+    >
+      <Icon name={icon} size={16} />
+      {label}
+      {trailing && <Icon name={trailing} size={14} />}
+    </button>
+  );
+}
+
+function ActionButton({ icon, title, subtitle, onClick, disabled, primary }: {
+  icon: IconName;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      className="flex items-center gap-2.5 pl-3 pr-4 py-1.5 rounded-lg text-left transition-[filter] hover:brightness-110 disabled:opacity-45 disabled:hover:brightness-100"
+      style={primary
+        ? { backgroundColor: "var(--color-dc-brand)", color: "#fff" }
+        : { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)", boxShadow: "inset 0 0 0 1px var(--color-dc-bg-modifier-selected)" }}
+    >
+      <Icon name={icon} size={20} />
+      <span className="flex flex-col leading-tight">
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-[11px]" style={{ opacity: 0.75 }}>{subtitle}</span>
+      </span>
+    </button>
   );
 }
 

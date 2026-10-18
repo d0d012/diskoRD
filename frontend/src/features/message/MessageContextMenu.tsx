@@ -247,14 +247,14 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
         />
 
         <MenuItem
-          label="Decorate with Pixel Art"
+          label="Stick Pixel Art"
           icon={ICON_DECORATE}
           onClick={() => { onDecorate(); onClose(); }}
         />
 
         {removableDecorations.length > 0 && (
           <MenuItem
-            label={removableDecorations.length === 1 ? "Remove Decoration" : `Remove ${removableDecorations.length} Decorations`}
+            label={removableDecorations.length === 1 ? "Remove Sticker" : `Remove ${removableDecorations.length} Stickers`}
             icon={ICON_DELETE}
             onClick={() => {
               for (const d of removableDecorations) void deleteDecoration(d.id).catch(() => {});
@@ -265,7 +265,7 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
 
         {(decorations.length > 0 || !showDecorations) && (
           <MenuItem
-            label={showDecorations ? "Hide Decorations" : "Show Decorations"}
+            label={showDecorations ? "Hide Stickers" : "Show Stickers"}
             icon={ICON_EYE}
             title="Only on this device"
             onClick={() => { setShowDecorations(!showDecorations); onClose(); }}

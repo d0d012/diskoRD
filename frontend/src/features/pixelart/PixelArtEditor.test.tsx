@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PixelArtEditor } from "./PixelArtEditor";
 import type { Art } from "./lib/art";
 
@@ -70,7 +70,7 @@ describe("PixelArtEditor", () => {
     const onClose = vi.fn();
     render(<PixelArtEditor onSend={onSend} onClose={onClose} />);
 
-    const sendButton = screen.getByRole("button", { name: "Send to chat" });
+    const sendButton = screen.getByRole("button", { name: "Send as message" });
     expect(sendButton).toBeDisabled(); // empty canvas
 
     pointer("pointerDown", 3, 3);
@@ -90,15 +90,15 @@ describe("PixelArtEditor", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("offers placing in chat next to sending", () => {
+  it("offers sticking in chat next to sending", () => {
     const onPlace = vi.fn();
     render(<PixelArtEditor onSend={vi.fn()} onPlace={onPlace} onClose={vi.fn()} />);
     pointer("pointerDown", 2, 2);
     pointer("pointerUp", 2, 2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Place in chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stick in chat" }));
     expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ size: 32 }));
-    expect(screen.getByRole("button", { name: "Send to chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send as message" })).toBeInTheDocument();
   });
 
   it("paints brush-sized squares and previews the brush under the cursor", () => {
@@ -130,5 +130,28 @@ describe("PixelArtEditor", () => {
     render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
     const options = Array.from(screen.getByRole("combobox").querySelectorAll("option")).map((o) => o.value);
     expect(options).toEqual(["16", "32", "64", "128", "256"]);
+  });
+
+  it("clears the canvas with an undo toast", () => {
+    render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
+    pointer("pointerDown", 4, 4);
+    pointer("pointerUp", 4, 4);
+
+    fireEvent.click(screen.getByRole("button", { name: /Clear canvas/ }));
+    expect(at(4, 4)).toBe(0);
+    expect(screen.getByRole("status")).toHaveTextContent("Canvas cleared");
+
+    fireEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
+    expect(at(4, 4)).toBe(1);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows an empty-state hint until something is drawn", () => {
+    render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText("Start drawing, or import an image")).toBeInTheDocument();
+    pointer("pointerDown", 1, 1);
+    pointer("pointerUp", 1, 1);
+    pointer("pointerLeave" as "pointerUp", 1, 1);
+    expect(screen.queryByText("Start drawing, or import an image")).toBeNull();
   });
 });

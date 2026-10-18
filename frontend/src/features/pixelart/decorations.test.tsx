@@ -114,7 +114,7 @@ describe("message decorations", () => {
     render(<Row />);
 
     fireEvent.contextMenu(document.querySelector(".group")!, { clientX: 10, clientY: 10 });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove Decoration" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove Sticker" }));
 
     expect(deleteDecoration).toHaveBeenCalledTimes(1);
     expect(deleteDecoration).toHaveBeenCalledWith("mine");
@@ -124,7 +124,7 @@ describe("message decorations", () => {
     setMessage({ ...baseMessage, author: user("me"), decorations: [decoration("a", "x"), decoration("b", "y")] });
     render(<Row />);
     fireEvent.contextMenu(document.querySelector(".group")!, { clientX: 10, clientY: 10 });
-    expect(await screen.findByRole("menuitem", { name: "Remove 2 Decorations" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Remove 2 Stickers" })).toBeInTheDocument();
   });
 });
 
