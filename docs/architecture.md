@@ -75,7 +75,7 @@ Manual smoke test: use two clients in a guild voice channel; open from sidebar a
 
 ## Pixel art & decorations (`frontend/src/features/pixelart`, `backend/internal/decoration`, `backend/internal/pixelart`)
 
-- The editor is client-only. Art is indexed color (`PixelArtDoc`: 16/32/64/128/256 square, ≤ 64 colors, base64 indices with 0 = transparent). The server caps a doc at 128 KB and width×height×frames at 256², so a 256 canvas carries one frame. The view zooms (Ctrl/⌘+wheel, ±, 0) and pans (Space or middle drag); brushes are 1–4 px.
+- The editor is client-only. Art is indexed color (`PixelArtDoc`: width × height from `CANVAS_PRESETS` (16–256 squares, plus the banners 100 × 32 and 150 × 48), ≤ 64 colors, base64 indices with 0 = transparent). The server's `allowedSizes` must list the same shapes. The server caps a doc at 128 KB and width×height×frames at 256², so a 256 canvas carries one frame. The view zooms (Ctrl/⌘+wheel, ±, 0) and pans (Space or middle drag); brushes are 1–4 px.
 - **Import** (`lib/importImage.ts`): `suggestImport` detects pixel art saved at an integer zoom (uniform blocks, `detectPixelScale`), undoes the zoom losslessly and suggests a 1:1 import on the smallest canvas that fits. Other images get smooth area-averaged scaling into 64×64. "All" colors keeps exact colors up to 64; "Fewer" runs k-means seeded with farthest-point colors. Images load with nearest-neighbour scaling (≤ 2048 px) so block detection survives. "Send to chat" uploads a 512px nearest-neighbour PNG through the normal image upload; `.pixel.json` is the lossless import/export format. The draft lives in `localStorage`.
 - **Decorations** drop a copy of a doc anywhere in a chat's history. The chat is one borderless canvas, but each piece is anchored to the message under the pointer, so it scrolls and paginates with that message (`message_decorations`, migration **000020**; apply it manually before deploying a backend that serves them).
   - `POST /messages/:id/decorations` `{doc, x 0–100, y −256…1024 px from the anchor row's top, size 32/48/64/96/128/192/256 (migration **000023**), opacity 10–100 %}` and `DELETE /decorations/:id`, both rate limited. x spans the row width minus the piece, so pieces never leave the chat horizontally. The y bounds live in `decoration.MinY/MaxY` and `DECORATION_MIN_Y/MAX_Y`, which must match.
@@ -104,6 +104,20 @@ Manual smoke test: use two clients in a guild voice channel; open from sidebar a
   - Arrange mode on your own card has a toolbar next to the card. Sizes snap to whole-number zooms of the trimmed art.
   - The card stays open while the viewer, editor or arrange mode is on top; Escape closes only the topmost.
 - **Display.** Thumbnails and buddies use `trimmedImage`, which crops transparent borders, and `fitScale` (whole numbers when enlarging, smooth when shrinking).
+
+### Banners and the showcase museum
+
+- **Banners (migration 000025).**
+  - `profile_banners` holds one row per user, with exactly one of `builtin` (an id from `pixelart.BuiltinBanners`) or `doc` (a 100 × 32 or 150 × 48 drawing).
+  - `PUT /users/me/banner {builtin | doc}` and `DELETE /users/me/banner`; `pixel-profile` returns `banner`.
+  - The six built-in scenes are drawn in code by `lib/banners.ts`, for both banner sizes. Its ids must match the Go allowlist.
+  - The card shows the banner at ×3 (100 × 32) or ×2 (150 × 48). The Banner picker sits beside your own card. "Edit or draw your own" opens the current banner in the editor with a "Use as banner" `primaryAction`.
+  - The editor only autosaves the chat draft when it was opened without `initial` art.
+- **Showcase museum.**
+  - `ShowcaseMuseumHost` (mounted in `AppPage`) shows `ShowcaseMuseum` for `useShowcaseOverlayStore.userId`. It is opened by "View all" on the card, "My showcase" in both user panels (`ChannelSidebar`, `FriendsSidebar`), and "View Showcase" in the message menu.
+  - **Rendering.** Everything is pixel art at one room zoom `S` (×2–×4 from the window size). `museumArt.ts` generates tiny tiles and sprites (wallpaper, wainscot, floor, carpet, lamp, light cone, glass streaks, glint) that CSS scales with `image-rendering: pixelated`. Light cones stop above the art so the piece stays clean.
+  - **Layout and text.** The first showcase piece is the hero case. The banner hangs as a framed painting. Plaques and signs use the bundled Silkscreen font (`@fontsource/silkscreen`, OFL).
+  - **Interaction.** Owners reorder with native drag and drop ("Arrange" → "Save order" → `PUT /users/me/showcase`). Escape closes the topmost layer: viewer, then arranging, then the museum.
 
 ## Desktop (`frontend/src-tauri`)
 
