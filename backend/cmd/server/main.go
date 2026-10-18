@@ -24,6 +24,7 @@ import (
 	"github.com/d0d012/diskord/internal/invite"
 	"github.com/d0d012/diskord/internal/linkpreview"
 	"github.com/d0d012/diskord/internal/message"
+	"github.com/d0d012/diskord/internal/pixelart"
 	"github.com/d0d012/diskord/internal/presence"
 	"github.com/d0d012/diskord/internal/reaction"
 	"github.com/d0d012/diskord/internal/role"
@@ -182,6 +183,11 @@ func main() {
 	decoration.RegisterRoutes(app, decoration.NewHandler(decorationService), authMw,
 		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
 	msgService.SetDecorations(decorationRepo)
+
+	pixelArtService := pixelart.NewService(pixelart.NewRepository(pool))
+	pixelArtService.SetPublisher(hub)
+	pixelart.RegisterRoutes(app, pixelart.NewHandler(pixelArtService), authMw,
+		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 30, Window: time.Minute}))
 
 	roleRepo := role.NewRepository(pool)
 	roleService := role.NewService(roleRepo, guildRepo)

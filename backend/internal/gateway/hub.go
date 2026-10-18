@@ -364,6 +364,19 @@ func (h *Hub) PublishUserUpdate(userID string, public any, self any) {
 	h.notifyUser(userID, OpUserUpdate, self)
 }
 
+// PublishToUserAudience sends op to everyone who sees the user's profile updates:
+// their guilds, DM partners and their own connections (the USER_UPDATE audience).
+func (h *Hub) PublishToUserAudience(userID, op string, data any) {
+	ctx := context.Background()
+	for _, guildID := range h.guildIDsForUser(ctx, userID) {
+		h.PublishToGuild(guildID, op, data)
+	}
+	for _, partnerID := range h.dmPartnersForUser(ctx, userID) {
+		h.notifyUser(partnerID, op, data)
+	}
+	h.notifyUser(userID, op, data)
+}
+
 // PublishPresenceChange hands the status change to the hub goroutine so it is
 // ordered against connect/disconnect lifecycle events, then echoes the self copy
 // to the user's own sessions.
