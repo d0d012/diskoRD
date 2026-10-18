@@ -13,14 +13,16 @@ import (
 )
 
 const (
-	// MaxDocBytes bounds the raw JSON of one document.
-	MaxDocBytes = 64 * 1024
-	MaxColors   = 32
+	// MaxDocBytes bounds the raw JSON of one document (a 256×256 frame is ~87 KB of base64).
+	MaxDocBytes = 128 * 1024
+	MaxColors   = 64
 	MaxFrames   = 8
+	// MaxPixels bounds width*height*frames, so big canvases can't also carry many frames.
+	MaxPixels = 256 * 256
 )
 
 var (
-	allowedSizes = map[int]bool{16: true, 32: true, 64: true}
+	allowedSizes = map[int]bool{16: true, 32: true, 64: true, 128: true, 256: true}
 	hexColor     = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 )
 
@@ -56,7 +58,7 @@ func Validate(raw []byte) (json.RawMessage, error) {
 		return nil, invalid("unsupported size")
 	}
 	if len(doc.Palette) < 1 || len(doc.Palette) > MaxColors {
-		return nil, invalid("palette must have 1 to 32 colors")
+		return nil, invalid("palette must have 1 to 64 colors")
 	}
 	for i, c := range doc.Palette {
 		if !hexColor.MatchString(c) {
@@ -66,6 +68,9 @@ func Validate(raw []byte) (json.RawMessage, error) {
 	}
 	if len(doc.Frames) < 1 || len(doc.Frames) > MaxFrames {
 		return nil, invalid("must have 1 to 8 frames")
+	}
+	if doc.Width*doc.Height*len(doc.Frames) > MaxPixels {
+		return nil, invalid("too many pixels")
 	}
 	for _, frame := range doc.Frames {
 		pixels, err := base64.StdEncoding.DecodeString(frame)

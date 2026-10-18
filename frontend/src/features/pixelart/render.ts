@@ -38,8 +38,12 @@ export async function artToPng(art: Art, scale: number): Promise<Blob> {
   return blob;
 }
 
-/** Decodes any browser-supported image file into RGBA, capped to keep import cheap. */
-export async function loadImageRgba(file: File, maxSide = 1024): Promise<Rgba> {
+/**
+ * Decodes any browser-supported image file into RGBA, capped to keep import
+ * cheap. Scaling uses nearest-neighbour so upscaled pixel art keeps hard edges;
+ * the importer does its own smoothing for photos.
+ */
+export async function loadImageRgba(file: File, maxSide = 2048): Promise<Rgba> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -49,6 +53,7 @@ export async function loadImageRgba(file: File, maxSide = 1024): Promise<Rgba> {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is not available.");
+  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
   return { width, height, data: ctx.getImageData(0, 0, width, height).data };

@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  MAX_COLORS, SIZES, TRANSPARENT, createArt, floodFill, isEmpty, linePoints, mirrorPoints, paint,
-  pixelPerfect, rectPoints, resize, type Art, type Point,
+  MAX_BRUSH, MAX_COLORS, SIZES, TRANSPARENT, createArt, floodFill, isEmpty, linePoints, mirrorPoints, paint,
+  pixelPerfect, rectPoints, resize, stampPoints, type Art, type Point,
 } from "./lib/art";
 import { decodeDoc, encodeDoc } from "./lib/doc";
-import { downscale, quantizeNewPalette, quantizeToPalette, type Fit, type Rgba } from "./lib/importImage";
+import { renderImport, suggestImport, type ImportState, type Rgba } from "./lib/importImage";
 import { artToPng, downloadBlob, drawArt, loadImageRgba, shareScale } from "./render";
 
-const DISPLAY = 448; // px; divisible by every canvas size
 const HISTORY_LIMIT = 100;
 const DRAFT_KEY = "diskord.pixelart.draft";
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
+/** Zoom steps, relative to "whole canvas fits the view". */
+const ZOOMS = [1, 1.5, 2, 3, 4, 6, 8, 12, 16];
+/** Cells never get bigger than this when zooming in. */
+const MAX_CELL_PX = 48;
 
 type Tool = "pencil" | "eraser" | "fill" | "picker" | "line" | "rect";
 
@@ -32,11 +35,11 @@ interface Stroke {
   tool: Tool;
 }
 
-interface ImportState {
-  rgba: Rgba;
-  fit: Fit;
-  palette: "keep" | "new";
-  colors: number;
+interface Pan {
+  x: number;
+  y: number;
+  left: number;
+  top: number;
 }
 
 interface Props {
@@ -61,35 +64,72 @@ function saveDraft(art: Art) {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(encodeDoc(art)));
   } catch {
-    // Storage blocked; the draft just isn't kept.
+    // Storage blocked or full; the draft just isn't kept.
   }
 }
 
-/** Small indexed-color pixel art editor: draw, import, export and send to a channel. */
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** Square canvas area that fits the window next to the tool and side panels. */
+function viewSize(): number {
+  if (typeof window === "undefined") return 448;
+  return Math.round(clamp(Math.min(window.innerWidth - 400, window.innerHeight - 190), 288, 640));
+}
+
+function rgbaThumb(src: Rgba): string | null {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = src.width;
+    canvas.height = src.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(src.data), src.width, src.height), 0, 0);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+/** Indexed-color pixel art editor: draw, import, export, send to a channel or place in it. */
 export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   const [art, setArt] = useState<Art>(loadDraft);
   const [past, setPast] = useState<Art[]>([]);
   const [future, setFuture] = useState<Art[]>([]);
   const [tool, setTool] = useState<Tool>("pencil");
   const [color, setColor] = useState(1);
+  const [brush, setBrush] = useState(1);
   const [mirror, setMirror] = useState(false);
   const [grid, setGrid] = useState(true);
+  const [zoom, setZoom] = useState(1);
+  const [view, setView] = useState(viewSize);
+  const [hover, setHover] = useState<Point | null>(null);
   const [importing, setImporting] = useState<ImportState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const strokeRef = useRef<Stroke | null>(null);
+  const panRef = useRef<Pan | null>(null);
+  const spaceRef = useRef(false);
+  const zoomAnchorRef = useRef<{ fx: number; fy: number; x: number; y: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const preview = useMemo(() => {
-    if (!importing) return null;
-    const rgba = downscale(importing.rgba, art.size, importing.fit);
-    return importing.palette === "keep"
-      ? quantizeToPalette(rgba, art.size, art.palette)
-      : quantizeNewPalette(rgba, art.size, importing.colors);
-  }, [importing, art.size, art.palette]);
+  // Deferred so dragging the color slider stays smooth on big canvases.
+  const deferredImport = useDeferredValue(importing);
+  const imported = useMemo(
+    () => (deferredImport ? renderImport(deferredImport, art.palette) : null),
+    [deferredImport, art.palette],
+  );
+  const shown = imported?.art ?? art;
+  const size = shown.size;
 
-  const shown = preview ?? art;
+  const baseCell = view / size;
+  const maxZoom = Math.max(1, MAX_CELL_PX / baseCell);
+  const cell = baseCell * Math.min(zoom, maxZoom);
+  const contentPx = Math.round(size * cell);
 
   useEffect(() => {
     if (canvasRef.current) drawArt(canvasRef.current, shown);
@@ -98,6 +138,24 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   useEffect(() => {
     if (!strokeRef.current) saveDraft(art);
   }, [art]);
+
+  useEffect(() => {
+    const onResize = () => setView(viewSize());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Keep the point under the cursor in place when zooming.
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    const vp = viewportRef.current;
+    const content = contentRef.current;
+    zoomAnchorRef.current = null;
+    if (!anchor || !vp || !content) return;
+    const rect = content.getBoundingClientRect();
+    vp.scrollLeft += rect.left + anchor.fx * rect.width - anchor.x;
+    vp.scrollTop += rect.top + anchor.fy * rect.height - anchor.y;
+  }, [zoom]);
 
   function commit(next: Art, before = art) {
     if (next === before) return;
@@ -125,27 +183,80 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
     setTimeout(() => setError(""), 4000);
   }
 
+  // ── View ─────────────────────────────────────────────────────────────────
+
+  function zoomTo(next: number, clientX?: number, clientY?: number) {
+    const target = clamp(next, 1, maxZoom);
+    const content = contentRef.current;
+    if (content && clientX !== undefined && clientY !== undefined) {
+      const rect = content.getBoundingClientRect();
+      zoomAnchorRef.current = {
+        fx: rect.width ? (clientX - rect.left) / rect.width : 0.5,
+        fy: rect.height ? (clientY - rect.top) / rect.height : 0.5,
+        x: clientX,
+        y: clientY,
+      };
+    }
+    setZoom(target);
+  }
+
+  function zoomStep(direction: 1 | -1, clientX?: number, clientY?: number) {
+    const current = Math.min(zoom, maxZoom);
+    const next = direction > 0
+      ? ZOOMS.find((z) => z > current + 0.01) ?? maxZoom
+      : [...ZOOMS].reverse().find((z) => z < current - 0.01) ?? 1;
+    zoomTo(next, clientX, clientY);
+  }
+
+  // Ctrl/⌘ + wheel zooms (non-passive so the page doesn't zoom or scroll).
+  const zoomStepRef = useRef(zoomStep);
+  useEffect(() => {
+    zoomStepRef.current = zoomStep;
+  });
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      zoomStepRef.current(e.deltaY < 0 ? 1 : -1, e.clientX, e.clientY);
+    }
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, []);
+
   // ── Drawing ──────────────────────────────────────────────────────────────
 
   function cellAt(e: React.PointerEvent): Point {
     const rect = e.currentTarget.getBoundingClientRect();
     return [
-      Math.floor(((e.clientX - rect.left) / rect.width) * art.size),
-      Math.floor(((e.clientY - rect.top) / rect.height) * art.size),
+      clamp(Math.floor(((e.clientX - rect.left) / rect.width) * size), 0, size - 1),
+      clamp(Math.floor(((e.clientY - rect.top) / rect.height) * size), 0, size - 1),
     ];
   }
 
   /** Re-applies the whole stroke on top of the snapshot taken at pointer down. */
   function renderStroke(stroke: Stroke): Art {
     let points: Point[];
-    if (stroke.tool === "line") points = linePoints(...stroke.start, ...stroke.points[stroke.points.length - 1]);
-    else if (stroke.tool === "rect") points = rectPoints(...stroke.start, ...stroke.points[stroke.points.length - 1]);
-    else if (stroke.value === TRANSPARENT) points = stroke.points;
+    const end = stroke.points[stroke.points.length - 1];
+    if (stroke.tool === "line") points = linePoints(...stroke.start, ...end);
+    else if (stroke.tool === "rect") points = rectPoints(...stroke.start, ...end);
+    // Pixel-perfect only makes sense for 1px freehand strokes.
+    else if (stroke.value === TRANSPARENT || brush > 1) points = stroke.points;
     else points = pixelPerfect(stroke.points);
+    points = stampPoints(points, brush);
     return paint(stroke.before, mirror ? mirrorPoints(points, art.size) : points, stroke.value);
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const vp = viewportRef.current;
+    // Middle button or Space + drag pans the view.
+    if (vp && (e.button === 1 || spaceRef.current)) {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      panRef.current = { x: e.clientX, y: e.clientY, left: vp.scrollLeft, top: vp.scrollTop };
+      return;
+    }
     if (importing || (e.button !== 0 && e.button !== 2)) return;
     const [x, y] = cellAt(e);
     if (tool === "picker") {
@@ -167,18 +278,27 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const pan = panRef.current;
+    const vp = viewportRef.current;
+    if (pan && vp) {
+      vp.scrollLeft = pan.left - (e.clientX - pan.x);
+      vp.scrollTop = pan.top - (e.clientY - pan.y);
+      return;
+    }
+    const at = cellAt(e);
+    if (!hover || hover[0] !== at[0] || hover[1] !== at[1]) setHover(at);
     const stroke = strokeRef.current;
     if (!stroke) return;
-    const cell = cellAt(e);
     const last = stroke.points[stroke.points.length - 1];
-    if (last[0] === cell[0] && last[1] === cell[1]) return;
+    if (last[0] === at[0] && last[1] === at[1]) return;
     // Fill the gap between pointer samples so fast strokes stay connected.
-    if (stroke.tool === "pencil") stroke.points.push(...linePoints(...last, ...cell).slice(1));
-    else stroke.points.push(cell);
+    if (stroke.tool === "pencil") stroke.points.push(...linePoints(...last, ...at).slice(1));
+    else stroke.points.push(at);
     setArt(renderStroke(stroke));
   }
 
   function handlePointerUp() {
+    panRef.current = null;
     const stroke = strokeRef.current;
     if (!stroke) return;
     strokeRef.current = null;
@@ -214,20 +334,29 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
     }
     try {
       if (file.name.endsWith(".json")) {
-        const imported = decodeDoc(JSON.parse(await file.text()));
-        commit(imported);
+        const doc = decodeDoc(JSON.parse(await file.text()));
+        commit(doc);
         setColor(1);
+        setZoom(1);
         return;
       }
-      setImporting({ rgba: await loadImageRgba(file), fit: "contain", palette: "new", colors: 16 });
+      const suggestion = suggestImport(await loadImageRgba(file));
+      setImporting({
+        ...suggestion,
+        thumb: rgbaThumb(suggestion.source),
+        palette: "new",
+        colors: "all",
+      });
+      setZoom(1);
     } catch (err) {
       showError(err instanceof Error && err.message.length < 60 ? err.message : "Could not read that file.");
     }
   }
 
   function applyImport() {
-    if (!preview) return;
-    commit(preview);
+    if (!importing) return;
+    // Render from the latest options, not the deferred preview.
+    commit(renderImport(importing, art.palette).art);
     setColor(1);
     setImporting(null);
   }
@@ -260,35 +389,57 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
 
   // ── Keyboard ─────────────────────────────────────────────────────────────
 
-  const latest = useRef({ onClose, undo, redo, importing, setImporting });
-  latest.current = { onClose, undo, redo, importing, setImporting };
+  const latest = useRef({ onClose, undo, redo, importing, zoomStep });
+  useEffect(() => {
+    latest.current = { onClose, undo, redo, importing, zoomStep };
+  });
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const l = latest.current;
       if (e.key === "Escape") {
         e.stopPropagation();
-        if (l.importing) l.setImporting(null);
+        if (l.importing) setImporting(null);
         else l.onClose();
         return;
       }
-      if (e.target instanceof HTMLInputElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
       if (mod && key === "z") { e.preventDefault(); if (e.shiftKey) l.redo(); else l.undo(); return; }
       if (mod && key === "y") { e.preventDefault(); l.redo(); return; }
       if (mod) return;
+      if (e.key === " ") { e.preventDefault(); spaceRef.current = true; return; }
+      if (key === "[") { setBrush((b) => Math.max(1, b - 1)); return; }
+      if (key === "]") { setBrush((b) => Math.min(MAX_BRUSH, b + 1)); return; }
+      if (key === "+" || key === "=") { l.zoomStep(1); return; }
+      if (key === "-") { l.zoomStep(-1); return; }
+      if (key === "0") { setZoom(1); return; }
       const match = TOOLS.find((t) => t.key === key);
       if (match) setTool(match.id);
       else if (key === "m") setMirror((m) => !m);
     }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.key === " ") spaceRef.current = false;
+    }
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+    };
   }, []);
 
   // ── UI ───────────────────────────────────────────────────────────────────
 
-  const cell = DISPLAY / art.size;
   const buttonStyle = { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" };
+  const muted = { color: "var(--color-dc-text-muted)" };
+  const toggleStyle = (on: boolean) => ({
+    backgroundColor: on ? "var(--color-dc-brand)" : "var(--color-dc-bg-secondary)",
+    color: on ? "#fff" : "var(--color-dc-interactive-normal)",
+  });
+  const brushTools = tool === "pencil" || tool === "eraser" || tool === "line" || tool === "rect";
+  const hoverSpan = brushTools ? brush : 1;
+  const hoverOffset = brushTools ? -Math.floor((brush - 1) / 2) : 0;
 
   return createPortal(
     <div
@@ -299,7 +450,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
       aria-label="Pixel art"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="max-w-full max-h-full overflow-auto rounded-lg shadow-2xl p-5" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+      <div className="max-w-full max-h-full overflow-auto rounded-lg shadow-2xl p-4" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>Pixel art</h3>
           <button onClick={onClose} aria-label="Close" className="p-1 rounded hover:bg-[var(--color-dc-bg-modifier-hover)]" style={{ color: "var(--color-dc-interactive-normal)" }}>
@@ -309,7 +460,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
           </button>
         </div>
 
-        <div className="flex gap-4 flex-wrap">
+        <div className="flex gap-3 flex-wrap">
           {/* Tools */}
           <div className="flex flex-col gap-1" role="toolbar" aria-label="Tools">
             {TOOLS.map((t) => (
@@ -320,22 +471,28 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                 aria-label={t.label}
                 aria-pressed={tool === t.id}
                 className="w-9 h-9 rounded flex items-center justify-center"
-                style={{
-                  backgroundColor: tool === t.id ? "var(--color-dc-brand)" : "var(--color-dc-bg-secondary)",
-                  color: tool === t.id ? "#fff" : "var(--color-dc-interactive-normal)",
-                }}
+                style={toggleStyle(tool === t.id)}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={t.icon} /></svg>
               </button>
             ))}
             <div className="h-px my-1" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
             <button
+              onClick={() => setBrush((b) => (b % MAX_BRUSH) + 1)}
+              title="Brush size ([ and ])"
+              aria-label={`Brush size ${brush}`}
+              className="w-9 h-9 rounded flex items-center justify-center"
+              style={buttonStyle}
+            >
+              <span className="rounded-sm" style={{ width: 4 + brush * 3, height: 4 + brush * 3, backgroundColor: "currentColor" }} />
+            </button>
+            <button
               onClick={() => setMirror((m) => !m)}
               title="Mirror horizontally (M)"
               aria-label="Mirror"
               aria-pressed={mirror}
               className="w-9 h-9 rounded text-xs font-bold"
-              style={{ backgroundColor: mirror ? "var(--color-dc-brand)" : "var(--color-dc-bg-secondary)", color: mirror ? "#fff" : "var(--color-dc-interactive-normal)" }}
+              style={toggleStyle(mirror)}
             >
               ⇋
             </button>
@@ -345,51 +502,93 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
               aria-label="Grid"
               aria-pressed={grid}
               className="w-9 h-9 rounded text-xs font-bold"
-              style={{ backgroundColor: grid ? "var(--color-dc-brand)" : "var(--color-dc-bg-secondary)", color: grid ? "#fff" : "var(--color-dc-interactive-normal)" }}
+              style={toggleStyle(grid)}
             >
               #
             </button>
           </div>
 
           {/* Canvas */}
-          <div
-            className="relative touch-none select-none rounded overflow-hidden"
-            style={{
-              width: DISPLAY,
-              height: DISPLAY,
-              cursor: importing ? "default" : "crosshair",
-              background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 16px 16px",
-            }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onContextMenu={(e) => e.preventDefault()}
-            data-testid="pixel-canvas"
-          >
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ imageRendering: "pixelated" }} />
-            {grid && cell >= 7 && (
+          <div className="flex flex-col gap-1.5">
+            <div
+              ref={viewportRef}
+              className="flex overflow-auto rounded"
+              style={{ width: view, height: view, backgroundColor: "var(--color-dc-bg-tertiary)" }}
+            >
               <div
-                className="absolute inset-0 pointer-events-none"
+                ref={contentRef}
+                className="relative touch-none select-none flex-shrink-0 m-auto"
                 style={{
-                  backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.07) 1px, transparent 1px)",
-                  backgroundSize: `${cell}px ${cell}px`,
+                  width: contentPx,
+                  height: contentPx,
+                  cursor: spaceRef.current || panRef.current ? "grab" : importing ? "default" : "crosshair",
+                  background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 16px 16px",
                 }}
-              />
-            )}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                onPointerLeave={() => setHover(null)}
+                onContextMenu={(e) => e.preventDefault()}
+                data-testid="pixel-canvas"
+              >
+                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ imageRendering: "pixelated" }} />
+                {grid && cell >= 6 && (
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.07) 1px, transparent 1px)",
+                      backgroundSize: `${cell}px ${cell}px`,
+                    }}
+                  />
+                )}
+                {hover && !importing && tool !== "picker" && (
+                  <div
+                    className="absolute pointer-events-none"
+                    data-testid="brush-preview"
+                    style={{
+                      left: (hover[0] + hoverOffset) * cell,
+                      top: (hover[1] + hoverOffset) * cell,
+                      width: hoverSpan * cell,
+                      height: hoverSpan * cell,
+                      backgroundColor: tool === "eraser" ? "transparent" : art.palette[color - 1],
+                      opacity: tool === "eraser" ? 1 : 0.6,
+                      outline: "1px solid rgba(255,255,255,0.8)",
+                      boxShadow: "0 0 0 1px rgba(0,0,0,0.6)",
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Status bar */}
+            <div className="flex items-center gap-2 text-xs tabular-nums" style={muted}>
+              <span className="w-16">{hover ? `${hover[0]}, ${hover[1]}` : "—"}</span>
+              <span className="flex-1">{size}×{size}{brushTools && brush > 1 ? ` · brush ${brush}` : ""}</span>
+              <button onClick={() => zoomStep(-1)} disabled={zoom <= 1} aria-label="Zoom out" title="Zoom out (−)" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>−</button>
+              <button onClick={() => setZoom(1)} title="Fit (0)" className="px-1.5 h-6 rounded min-w-12" style={buttonStyle}>{Math.round(Math.min(zoom, maxZoom) * 100)}%</button>
+              <button onClick={() => zoomStep(1)} disabled={zoom >= maxZoom} aria-label="Zoom in" title="Zoom in (+, Ctrl/⌘ + wheel)" className="w-6 h-6 rounded disabled:opacity-40" style={buttonStyle}>+</button>
+            </div>
           </div>
 
           {/* Side panel */}
-          <div className="w-48 flex flex-col gap-3 text-sm" style={{ color: "var(--color-dc-text-normal)" }}>
+          <div className="w-56 flex flex-col gap-3 text-sm" style={{ color: "var(--color-dc-text-normal)" }}>
             {importing ? (
-              <ImportOptions state={importing} onChange={setImporting} onApply={applyImport} onCancel={() => setImporting(null)} />
+              <ImportOptions
+                state={importing}
+                sourceColors={imported?.sourceColors ?? null}
+                resultColors={imported?.art.palette.length ?? null}
+                onChange={setImporting}
+                onApply={applyImport}
+                onCancel={() => setImporting(null)}
+              />
             ) : (
               <>
                 <label className="flex items-center justify-between gap-2">
-                  <span className="text-xs uppercase font-bold" style={{ color: "var(--color-dc-text-muted)" }}>Size</span>
+                  <span className="text-xs uppercase font-bold" style={muted}>Size</span>
                   <select
                     value={art.size}
-                    onChange={(e) => commit(resize(art, Number(e.target.value)))}
+                    onChange={(e) => { commit(resize(art, Number(e.target.value))); setZoom(1); }}
                     className="rounded px-2 py-1 text-sm"
                     style={buttonStyle}
                   >
@@ -398,14 +597,18 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                 </label>
 
                 <div>
-                  <div className="text-xs uppercase font-bold mb-1" style={{ color: "var(--color-dc-text-muted)" }}>Palette</div>
-                  <div className="grid grid-cols-8 gap-1" role="radiogroup" aria-label="Palette">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="text-xs uppercase font-bold" style={muted}>Palette</span>
+                    <span className="text-xs tabular-nums" style={muted}>{art.palette.length}/{MAX_COLORS}</span>
+                  </div>
+                  <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto p-0.5" role="radiogroup" aria-label="Palette">
                     {art.palette.map((c, i) => (
                       <button
                         key={i}
                         role="radio"
                         aria-checked={color === i + 1}
                         aria-label={`Color ${c}`}
+                        title={c}
                         onClick={() => { setColor(i + 1); if (tool === "eraser" || tool === "picker") setTool("pencil"); }}
                         className="w-5 h-5 rounded-sm"
                         style={{ backgroundColor: c, outline: color === i + 1 ? "2px solid #fff" : "1px solid rgba(0,0,0,0.4)", outlineOffset: color === i + 1 ? 1 : 0 }}
@@ -415,7 +618,7 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                       <button onClick={addSwatch} aria-label="Add color" title="Add color" className="w-5 h-5 rounded-sm text-xs leading-none" style={buttonStyle}>+</button>
                     )}
                   </div>
-                  <label className="flex items-center gap-2 mt-2 text-xs" style={{ color: "var(--color-dc-text-muted)" }}>
+                  <label className="flex items-center gap-2 mt-2 text-xs" style={muted}>
                     <input
                       type="color"
                       value={art.palette[color - 1] ?? "#000000"}
@@ -442,6 +645,10 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
                     <button onClick={exportDoc} className="flex-1 rounded py-1 text-xs" style={buttonStyle} title="Download editable file">.json</button>
                   </div>
                 </div>
+
+                <p className="text-[11px] leading-snug" style={muted}>
+                  Right-click erases · Space+drag pans · Ctrl/⌘+wheel zooms · [ ] brush size
+                </p>
 
                 <div className="mt-auto flex flex-col gap-1">
                   {onPlace && (
@@ -477,34 +684,114 @@ export function PixelArtEditor({ onSend, onPlace, onClose }: Props) {
   );
 }
 
-function ImportOptions({ state, onChange, onApply, onCancel }: {
+function ImportOptions({ state, sourceColors, resultColors, onChange, onApply, onCancel }: {
   state: ImportState;
+  sourceColors: number | null;
+  resultColors: number | null;
   onChange: (s: ImportState) => void;
   onApply: () => void;
   onCancel: () => void;
 }) {
   const muted = { color: "var(--color-dc-text-muted)" };
   const buttonStyle = { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" };
+  const { source } = state;
+  const fitsOneToOne = Math.max(source.width, source.height) <= state.size;
+  const exact = state.palette === "new" && state.colors === "all" && sourceColors !== null && sourceColors <= MAX_COLORS
+    && (state.fit === "actual" || state.sharp);
+
+  function setSize(size: number) {
+    const fits = Math.max(source.width, source.height) <= size;
+    // 1:1 only works when the image fits; otherwise fall back to scaling.
+    onChange({ ...state, size, fit: state.fit === "actual" && !fits ? "contain" : state.fit });
+  }
+
+  function chip(active: boolean) {
+    return active ? { backgroundColor: "var(--color-dc-brand)", color: "#fff" } : buttonStyle;
+  }
+
   return (
     <>
-      <div className="text-xs uppercase font-bold" style={muted}>Import preview</div>
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-xs mb-1" style={muted}>Fit</legend>
-        {(["contain", "cover"] as const).map((fit) => (
-          <label key={fit} className="flex items-center gap-2">
-            <input type="radio" name="fit" checked={state.fit === fit} onChange={() => onChange({ ...state, fit })} />
-            {fit === "contain" ? "Fit whole image" : "Crop to square"}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-xs mb-1" style={muted}>Colors</legend>
-        <label className="flex items-center gap-2">
-          <input type="radio" name="palette" checked={state.palette === "new"} onChange={() => onChange({ ...state, palette: "new" })} />
-          New palette from image
-        </label>
-        {state.palette === "new" && (
-          <label className="flex items-center gap-2 pl-5 text-xs" style={muted}>
+      <div className="text-xs uppercase font-bold" style={muted}>Import</div>
+
+      <div className="flex gap-2 items-center">
+        <div
+          className="w-16 h-16 rounded flex items-center justify-center overflow-hidden flex-shrink-0"
+          style={{ background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 8px 8px" }}
+        >
+          {state.thumb && <img src={state.thumb} alt="Original" className="max-w-full max-h-full" style={{ imageRendering: "pixelated" }} />}
+        </div>
+        <div className="text-xs leading-snug" style={muted}>
+          <div style={{ color: "var(--color-dc-text-normal)" }}>Original</div>
+          {state.scale > 1
+            ? <>Pixel art, {source.width}×{source.height} (saved at ×{state.scale})</>
+            : <>{source.width}×{source.height}</>}
+          {sourceColors !== null && <div>{sourceColors >= 4096 ? "4096+" : sourceColors} colors at this size</div>}
+        </div>
+      </div>
+
+      <label className="flex items-center justify-between gap-2">
+        <span className="text-xs" style={muted}>Canvas</span>
+        <select value={state.size} onChange={(e) => setSize(Number(e.target.value))} className="rounded px-2 py-1 text-sm" style={buttonStyle} aria-label="Canvas size">
+          {SIZES.map((s) => <option key={s} value={s}>{s}×{s}</option>)}
+        </select>
+      </label>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-xs" style={muted}>Fit</span>
+        <div className="flex gap-1" role="radiogroup" aria-label="Fit">
+          {([["actual", "1:1"], ["contain", "Fit"], ["cover", "Crop"]] as const).map(([fit, label]) => (
+            <button
+              key={fit}
+              role="radio"
+              aria-checked={state.fit === fit}
+              disabled={fit === "actual" && !fitsOneToOne}
+              title={fit === "actual" ? (fitsOneToOne ? "One image pixel per canvas pixel" : "Image is bigger than the canvas") : fit === "contain" ? "Scale the whole image into the canvas" : "Fill the canvas, cropping the edges"}
+              onClick={() => onChange({ ...state, fit })}
+              className="flex-1 rounded py-1 text-xs disabled:opacity-40"
+              style={chip(state.fit === fit)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {state.fit !== "actual" && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs" style={muted}>Scaling</span>
+          <div className="flex gap-1" role="radiogroup" aria-label="Scaling">
+            {([[true, "Sharp"], [false, "Smooth"]] as const).map(([sharp, label]) => (
+              <button
+                key={label}
+                role="radio"
+                aria-checked={state.sharp === sharp}
+                title={sharp ? "Keeps hard pixel edges and the original colors (pixel art, logos)" : "Blends pixels when shrinking (photos, gradients)"}
+                onClick={() => onChange({ ...state, sharp })}
+                className="flex-1 rounded py-1 text-xs"
+                style={chip(state.sharp === sharp)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <span className="text-xs" style={muted}>Colors</span>
+        <div className="flex gap-1" role="radiogroup" aria-label="Colors">
+          <button role="radio" aria-checked={state.palette === "new" && state.colors === "all"} onClick={() => onChange({ ...state, palette: "new", colors: "all" })} className="flex-1 rounded py-1 text-xs" style={chip(state.palette === "new" && state.colors === "all")} title={`Keep every color, up to ${MAX_COLORS}`}>
+            All
+          </button>
+          <button role="radio" aria-checked={state.palette === "new" && state.colors !== "all"} onClick={() => onChange({ ...state, palette: "new", colors: Math.min(16, Math.max(2, (sourceColors ?? 16) - 1)) })} className="flex-1 rounded py-1 text-xs" style={chip(state.palette === "new" && state.colors !== "all")} title="Reduce to fewer colors for a more retro look">
+            Fewer
+          </button>
+          <button role="radio" aria-checked={state.palette === "keep"} onClick={() => onChange({ ...state, palette: "keep" })} className="flex-1 rounded py-1 text-xs" style={chip(state.palette === "keep")} title="Use the colors already in your palette">
+            Mine
+          </button>
+        </div>
+        {state.palette === "new" && state.colors !== "all" && (
+          <label className="flex items-center gap-2 text-xs" style={muted}>
             <input
               type="range"
               min={2}
@@ -514,15 +801,19 @@ function ImportOptions({ state, onChange, onApply, onCancel }: {
               className="flex-1 accent-[var(--color-dc-brand)]"
               aria-label="Number of colors"
             />
-            {state.colors}
+            <span className="w-5 text-right tabular-nums">{state.colors}</span>
           </label>
         )}
-        <label className="flex items-center gap-2">
-          <input type="radio" name="palette" checked={state.palette === "keep"} onChange={() => onChange({ ...state, palette: "keep" })} />
-          Keep my palette
-        </label>
-      </fieldset>
-      <p className="text-xs" style={muted}>Only import images you have the right to use.</p>
+      </div>
+
+      <p className="text-xs leading-snug" style={muted}>
+        {exact
+          ? "Exact copy: every pixel and color is kept."
+          : resultColors !== null
+            ? `Result uses ${resultColors} color${resultColors === 1 ? "" : "s"}${sourceColors !== null && sourceColors > MAX_COLORS && state.palette === "new" && state.colors === "all" ? ` (palette holds at most ${MAX_COLORS})` : ""}.`
+            : ""}
+      </p>
+      <p className="text-[11px]" style={muted}>Only import images you have the right to use.</p>
       <div className="flex gap-1 mt-auto">
         <button onClick={onCancel} className="flex-1 rounded py-2" style={buttonStyle}>Cancel</button>
         <button onClick={onApply} className="flex-1 rounded py-2 font-medium text-white" style={{ backgroundColor: "var(--color-dc-brand)" }}>Apply</button>

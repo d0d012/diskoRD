@@ -41,11 +41,17 @@ func TestValidateAcceptsAndNormalizes(t *testing.T) {
 
 func TestValidateRejects(t *testing.T) {
 	cases := map[string]func(d map[string]any){
-		"wrong version":      func(d map[string]any) { d["v"] = 2 },
-		"non-square":         func(d map[string]any) { d["height"] = 32 },
-		"unsupported size":   func(d map[string]any) { d["width"], d["height"] = 128, 128 },
-		"empty palette":      func(d map[string]any) { d["palette"] = []string{} },
-		"too many colors":    func(d map[string]any) { d["palette"] = make([]string, 33) },
+		"wrong version":    func(d map[string]any) { d["v"] = 2 },
+		"non-square":       func(d map[string]any) { d["height"] = 32 },
+		"unsupported size": func(d map[string]any) { d["width"], d["height"] = 512, 512 },
+		"empty palette":    func(d map[string]any) { d["palette"] = []string{} },
+		"too many colors":  func(d map[string]any) { d["palette"] = make([]string, 65) },
+		"too many pixels": func(d map[string]any) {
+			// 128×128×5 frames is over the pixel budget but under the byte limit.
+			d["width"], d["height"] = 128, 128
+			f := frame(128, 1)
+			d["frames"] = []string{f, f, f, f, f}
+		},
 		"bad color":          func(d map[string]any) { d["palette"] = []string{"red"} },
 		"no frames":          func(d map[string]any) { d["frames"] = []string{} },
 		"wrong byte count":   func(d map[string]any) { d["frames"] = []string{frame(8, 1)} },
@@ -67,4 +73,12 @@ func TestValidateRejectsOversizedAndMalformed(t *testing.T) {
 	assert.Error(t, err)
 	_, err = Validate(nil)
 	assert.Error(t, err)
+}
+
+func TestValidateAcceptsLargestCanvas(t *testing.T) {
+	_, err := Validate(docJSON(t, func(d map[string]any) {
+		d["width"], d["height"] = 256, 256
+		d["frames"] = []string{frame(256, 2)}
+	}))
+	assert.NoError(t, err)
 }

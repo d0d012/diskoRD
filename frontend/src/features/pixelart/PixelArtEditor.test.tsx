@@ -100,4 +100,35 @@ describe("PixelArtEditor", () => {
     expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ size: 32 }));
     expect(screen.getByRole("button", { name: "Send to chat" })).toBeInTheDocument();
   });
+
+  it("paints brush-sized squares and previews the brush under the cursor", () => {
+    render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.keyDown(window, { key: "]" });
+    fireEvent.keyDown(window, { key: "]" }); // brush 3
+    pointer("pointerMove", 10, 10);
+    expect(screen.getByTestId("brush-preview").style.width).toBe(screen.getByTestId("brush-preview").style.height);
+
+    pointer("pointerDown", 10, 10);
+    pointer("pointerUp", 10, 10);
+    for (const [x, y] of [[9, 9], [10, 10], [11, 11], [9, 11]]) expect(at(x, y)).toBe(1);
+    expect(at(12, 10)).toBe(0);
+  });
+
+  it("zooms in and back to fit", () => {
+    render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
+    const canvas = screen.getByTestId("pixel-canvas");
+    const fitWidth = parseFloat(canvas.style.width);
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(parseFloat(canvas.style.width)).toBeGreaterThan(fitWidth);
+
+    fireEvent.keyDown(window, { key: "0" });
+    expect(parseFloat(canvas.style.width)).toBe(fitWidth);
+  });
+
+  it("offers every canvas size up to 256", () => {
+    render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
+    const options = Array.from(screen.getByRole("combobox").querySelectorAll("option")).map((o) => o.value);
+    expect(options).toEqual(["16", "32", "64", "128", "256"]);
+  });
 });

@@ -25,7 +25,7 @@ const (
 )
 
 // AllowedSizes are the display sizes in CSS pixels.
-var AllowedSizes = map[int]bool{32: true, 48: true, 64: true, 96: true, 128: true}
+var AllowedSizes = map[int]bool{32: true, 48: true, 64: true, 96: true, 128: true, 192: true, 256: true}
 
 // Decoration is a pixel art piece pinned behind a message.
 type Decoration struct {

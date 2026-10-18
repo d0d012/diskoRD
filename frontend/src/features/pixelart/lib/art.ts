@@ -9,8 +9,10 @@ export interface Art {
   pixels: Uint8Array;
 }
 
-export const SIZES = [16, 32, 64] as const;
-export const MAX_COLORS = 32;
+export const SIZES = [16, 32, 64, 128, 256] as const;
+/** Pixels are stored as bytes, so up to 255 would fit; 64 keeps the palette UI usable. */
+export const MAX_COLORS = 64;
+export const MAX_BRUSH = 4;
 export const TRANSPARENT = 0;
 
 /** Our own 16-color starter palette. */
@@ -89,6 +91,19 @@ export function pixelPerfect(points: readonly Point[]): Point[] {
     const [a, b, c] = out.slice(-3);
     const elbow = (a[0] === b[0] || a[1] === b[1]) && (b[0] === c[0] || b[1] === c[1]);
     if (elbow && a[0] !== c[0] && a[1] !== c[1]) out.splice(out.length - 2, 1);
+  }
+  return out;
+}
+
+/** Expands each point into a brush×brush square centered on it (top-left biased for even sizes). */
+export function stampPoints(points: readonly Point[], brush: number): Point[] {
+  if (brush <= 1) return [...points];
+  const from = -Math.floor((brush - 1) / 2);
+  const out: Point[] = [];
+  for (const [x, y] of points) {
+    for (let dy = 0; dy < brush; dy++) {
+      for (let dx = 0; dx < brush; dx++) out.push([x + from + dx, y + from + dy]);
+    }
   }
   return out;
 }
