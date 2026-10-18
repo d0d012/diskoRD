@@ -83,7 +83,7 @@ Anyone in a channel or DM can drop a pixel art piece anywhere in the chat's hist
 - **Database:** migration `000020_create_message_decorations`, with the message FK `ON DELETE CASCADE` and the author FK `ON DELETE SET NULL`, both indexed.
 - **Placing:** "Place in chat" in the editor, opened from the composer or from a message's "Decorate with Pixel Art". A ghost then follows the pointer over the whole chat, the wheel keeps scrolling the history, − / + (or Ctrl/Alt + wheel) change size, a click places it and Escape cancels. The same menu offers "Remove Decoration(s)" for the pieces the viewer may remove (the client knows owners only; admins and moderators are enforced by the server).
 
-## Phase 2: gallery + profile showcase (backend + frontend)
+## Phase 2: gallery + profile showcase (backend + frontend) — done (see docs/architecture.md; adds remix credit and up to 5 profile buddies, migration 000024)
 
 - **Database (migration `000021_pixel_arts`)**: table `pixel_arts`
   - `id` UUID PK

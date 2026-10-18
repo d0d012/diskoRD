@@ -87,6 +87,24 @@ Manual smoke test: use two clients in a guild voice channel; open from sidebar a
 - **Rendering:** each decoration is an `<img>` (data URL cached per distinct doc) inside its anchor row, using `z-index: -1`, its own opacity (migration **000022**; the placement bar offers 35/60/100 %, the last choice is remembered per device, and requests without one get 35 %) and `pointer-events: none`. The message list wrapper is the only stacking context (`isolation: isolate`); rows must not create their own (no z-index, transform or isolation). That way every piece paints behind every row's text, whichever rows it overlaps. There are no scroll listeners or measurement passes; `MessageList` ignores decoration image loads when following the bottom. "Hide Decorations" is a per-device setting (`settings.showDecorations`).
 - **Placing:** "Place in chat" in the editor (from the composer, or from a message's "Decorate with Pixel Art") sets `decorationPlacementStore`. `MessageList` then shows `PlaceDecoration` over the list: a ghost follows the pointer, the wheel keeps scrolling the history (re-dispatched to the list so it stops following the bottom), +/− or Ctrl/Alt+wheel resize, a click places it and Escape cancels. Switching channels cancels a pending placement.
 
+### Gallery, showcase, remix and buddies (`backend/internal/pixelart`, `frontend/src/stores/pixelArtStore.ts`)
+
+- Migration **000024** adds `pixel_arts` and `profile_buddies`.
+  - `pixel_arts`: a gallery of up to 50 pieces per user, with the quota enforced under a `FOR UPDATE` lock on the user row. `showcase_position` is 0–14, with a unique partial index per owner. `remix_of` and `remix_author_id` survive the source being deleted.
+  - `profile_buddies`: up to 5 per user; `x` is % of the card width, `y` is px from the card top, `height` is 16–128, plus `flip` and `front`.
+- **Routes.** The `/users/me/...` routes are registered one by one, never through a `Group` with middleware: Fiber runs group middleware for every route under the prefix, including other packages' routes.
+  - `GET/POST /users/me/pixel-arts`, `PATCH/DELETE /users/me/pixel-arts/:id`, `PUT /users/me/showcase {ids}` (ordered, own pieces only) and `PUT /users/me/buddies {buddies}` replace the stored values.
+  - `GET /users/:id/pixel-profile` returns `{showcase, buddies}` (buddies with their docs) to any signed-in user, like the profile itself.
+- **Remix.** A remix must come from a showcased piece or one of your own. It credits the source's owner, and remixing your own remix keeps the original credit.
+- **Live updates.** Every change emits `PIXEL_PROFILE_UPDATE {userId}` through `Hub.PublishToUserAudience`, which reaches the same audience as `USER_UPDATE`. It is a separate op so partial payloads can't clobber profile fields. Clients refetch only the profiles they have loaded.
+- **Editor.** The editor reads the gallery from `pixelArtStore`: My art (open, star onto the profile, delete) and Save (title, show on profile, save changes or a copy, Ctrl/⌘+S). It can start from a given piece, for opening one or for a credited remix.
+- **Profile card.**
+  - `ProfileShowcase` shows five 46px tiles and a "+N" tile that expands in place. Tiles open `ShowcaseViewer`: integer-scaled and pixel-perfect, with prev/next, Remix (others' pieces) or Edit and reorder (your own), and PNG download.
+  - `ProfileBuddies` draws the buddies. The card is one stacking context: banner < behind buddies (z 1) < card content (z 2) < front buddies (z 3). Tops use `min(y, 100% − height)` so buddies never leave a short card.
+  - Arrange mode on your own card has a toolbar next to the card. Sizes snap to whole-number zooms of the trimmed art.
+  - The card stays open while the viewer, editor or arrange mode is on top; Escape closes only the topmost.
+- **Display.** Thumbnails and buddies use `trimmedImage`, which crops transparent borders, and `fitScale` (whole numbers when enlarging, smooth when shrinking).
+
 ## Desktop (`frontend/src-tauri`)
 
 - Closing the main window (title-bar ✕, Alt+F4, Cmd+W) hides it to the system tray / menu bar; voice and the gateway keep running. Left-clicking the tray icon, the tray "Open diskoRD" item, the macOS Dock icon, or a second launch / `diskord://` link shows it again. Only the tray "Quit diskoRD" item (or Cmd+Q on macOS) exits.
