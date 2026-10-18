@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import { useGuildStore } from "../../stores/guildStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useMessageStore } from "../../stores/messageStore";
@@ -484,7 +485,20 @@ function UserPanel() {
           </span>
         </div>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center">
+          <button
+            onClick={() => user && useShowcaseOverlayStore.getState().open(user.id)}
+            className="p-1 rounded transition-colors"
+            title="My showcase"
+            aria-label="My showcase"
+            style={{ color: "var(--color-dc-interactive-normal)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M4 3h16v2H4V3zm1 4h14v10H5V7zm2 2v6h10V9H7zm-3 10h16v2H4v-2z" />
+            </svg>
+          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="p-1 rounded transition-colors"

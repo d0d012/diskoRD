@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { api } from "../../lib/api";
 import { usePixelArtStore } from "../../stores/pixelArtStore";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import { ProfileShowcase } from "./ProfileShowcase";
 import { createArt, paint } from "./lib/art";
 import { encodeDoc } from "./lib/doc";
@@ -117,4 +118,12 @@ describe("ProfileShowcase", () => {
     expect(screen.getByRole("button", { name: /Edit/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Move →/ })).toBeInTheDocument();
   });
+
+  it("View all opens the showcase museum", async () => {
+    serve(pieces(2));
+    render(<ProfileShowcase userId="friend" isSelf={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "View all →" }));
+    expect(useShowcaseOverlayStore.getState().userId).toBe("friend");
+  });
 });
+

@@ -5,6 +5,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useGuildStore } from "../../stores/guildStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import { EmojiPicker } from "./EmojiPicker";
 
 const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
@@ -30,6 +31,7 @@ const ICON_EDIT = "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 
 const ICON_COPY = "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z";
 const ICON_DELETE = "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
 const ICON_DECORATE = "M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h4v4h-4v-4zm4 4h4v4h-4v-4z";
+const ICON_SHOWCASE = "M4 3h16v2H4V3zm1 4h14v10H5V7zm2 2v6h10V9H7zm-3 10h16v2H4v-2z";
 const ICON_EYE = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
 const ICON_ADD_REACTION = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.5 13H13v3.5h-2V15H7.5v-2H11v-3.5h2V13h3.5v2z";
 
@@ -245,6 +247,14 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
           icon={ICON_ADD_REACTION}
           onClick={(e) => setPickerAnchor(e.currentTarget.getBoundingClientRect())}
         />
+
+        {message.author?.id && (
+          <MenuItem
+            label="View Showcase"
+            icon={ICON_SHOWCASE}
+            onClick={() => { useShowcaseOverlayStore.getState().open(message.author.id); onClose(); }}
+          />
+        )}
 
         <MenuItem
           label="Stick Pixel Art"

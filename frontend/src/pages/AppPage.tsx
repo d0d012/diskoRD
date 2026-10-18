@@ -13,6 +13,7 @@ import { VoicePanel } from "../features/voice/VoicePanel";
 import { GlobalVoiceAudio } from "../features/voice/GlobalVoiceAudio";
 import { NotificationToastContainer } from "../features/notification/NotificationToast";
 import { IncomingCallOverlay } from "../features/call/IncomingCallOverlay";
+import { ShowcaseMuseumHost } from "../features/pixelart/museum/ShowcaseMuseum";
 import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
 import { DMCallPanel } from "../features/call/DMCallPanel";
 import { VoiceCallViewHost } from "../features/voice/VoiceCallViewHost";
@@ -117,6 +118,7 @@ export function AppPage() {
       <GlobalVoiceAudio participants={participants} />
       <NotificationToastContainer />
       <IncomingCallOverlay />
+      <ShowcaseMuseumHost />
       <OutgoingCallOverlay />
       <DMCallPanel />
       <VoiceCallViewHost />

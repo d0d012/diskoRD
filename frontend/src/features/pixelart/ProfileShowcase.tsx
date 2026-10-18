@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { showcaseOrder, usePixelArtStore } from "../../stores/pixelArtStore";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import type { PixelArtPiece } from "../../types";
 import { ArtThumb } from "./ArtThumb";
 import { Icon } from "./Icon";
@@ -53,9 +54,20 @@ export function ProfileShowcase({ userId, isSelf, onOverlayChange }: Props) {
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold uppercase" style={{ color: "var(--color-dc-header-secondary, var(--color-dc-text-muted))" }}>Showcase</span>
-        {expanded && (
-          <button onClick={() => setExpanded(false)} className="text-[11px] hover:underline" style={{ color: "var(--color-dc-text-muted)" }}>Show less</button>
-        )}
+        <div className="flex items-center gap-2">
+          {expanded && (
+            <button onClick={() => setExpanded(false)} className="text-[11px] hover:underline" style={{ color: "var(--color-dc-text-muted)" }}>Show less</button>
+          )}
+          {pieces.length > 0 && (
+            <button
+              onClick={() => useShowcaseOverlayStore.getState().open(userId)}
+              className="text-[11px] font-semibold hover:underline"
+              style={{ color: "var(--color-dc-text-link, #00a8fc)" }}
+            >
+              View all →
+            </button>
+          )}
+        </div>
       </div>
 
       {pieces.length === 0 ? (

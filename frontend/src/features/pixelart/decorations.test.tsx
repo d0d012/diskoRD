@@ -11,6 +11,7 @@ import { useMessageMenuStore } from "../../stores/messageMenuStore";
 import { useGuildStore } from "../../stores/guildStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import type { Decoration, Message, User } from "../../types";
 
 vi.mock("../../lib/api", () => ({
@@ -125,6 +126,15 @@ describe("message decorations", () => {
     render(<Row />);
     fireEvent.contextMenu(document.querySelector(".group")!, { clientX: 10, clientY: 10 });
     expect(await screen.findByRole("menuitem", { name: "Remove 2 Stickers" })).toBeInTheDocument();
+  });
+});
+
+describe("message menu", () => {
+  it("opens the author's showcase", async () => {
+    render(<Row />);
+    fireEvent.contextMenu(document.querySelector("[data-message-id]")!, { clientX: 10, clientY: 10 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View Showcase" }));
+    expect(useShowcaseOverlayStore.getState().userId).toBe("other");
   });
 });
 
