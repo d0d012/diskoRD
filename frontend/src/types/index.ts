@@ -115,3 +115,36 @@ export interface Member {
   createdAt?: string;
   status: PresenceStatus;
 }
+
+/** A saved piece in a user's pixel art gallery. */
+export interface PixelArtPiece {
+  id: string;
+  ownerId: string;
+  title: string;
+  doc: PixelArtDoc;
+  /** 0-14 when shown on the profile, null otherwise. */
+  showcasePosition: number | null;
+  remixOf: string | null;
+  remixAuthor: { id: string; username: string; displayName?: string | null } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A gallery piece placed on its owner's profile card. */
+export interface ProfileBuddy {
+  artId: string;
+  /** Left edge in % of the card width. */
+  x: number;
+  /** Px from the card top. */
+  y: number;
+  height: number;
+  flip: boolean;
+  /** Drawn over the card's content boxes instead of behind them. */
+  front: boolean;
+}
+
+export interface PixelProfile {
+  showcase: PixelArtPiece[];
+  buddies: (ProfileBuddy & { doc: PixelArtDoc })[];
+}
+

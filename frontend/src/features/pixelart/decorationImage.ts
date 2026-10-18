@@ -34,3 +34,64 @@ export function docImageUrl(doc: PixelArtDoc): string | null {
 export function decorationLeft(x: number, size: number): string {
   return `calc(${x}% - ${(size * x) / 100}px)`;
 }
+
+export interface TrimmedImage {
+  url: string;
+  /** Size of the non-transparent area, in art pixels. */
+  width: number;
+  height: number;
+}
+
+const trimCache = new Map<string, TrimmedImage | null>();
+
+/**
+ * The art cropped to its non-transparent pixels, so a small character drawn in
+ * the corner of a big canvas shows at a useful size. Cached per doc.
+ */
+export function trimmedImage(doc: PixelArtDoc): TrimmedImage | null {
+  const key = `${doc.width}|${doc.palette.join(",")}|${doc.frames[0]}`;
+  const cached = trimCache.get(key);
+  if (cached !== undefined) return cached;
+  let result: TrimmedImage | null = null;
+  try {
+    const art = decodeDoc(doc);
+    let minX = art.size, minY = art.size, maxX = -1, maxY = -1;
+    for (let y = 0; y < art.size; y++) {
+      for (let x = 0; x < art.size; x++) {
+        if (!art.pixels[y * art.size + x]) continue;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxX >= 0) {
+      const full = document.createElement("canvas");
+      drawArt(full, art);
+      const width = maxX - minX + 1;
+      const height = maxY - minY + 1;
+      const crop = document.createElement("canvas");
+      crop.width = width;
+      crop.height = height;
+      const ctx = crop.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(full, minX, minY, width, height, 0, 0, width, height);
+        result = { url: crop.toDataURL("image/png"), width, height };
+      }
+    }
+  } catch {
+    result = null;
+  }
+  trimCache.set(key, result);
+  return result;
+}
+
+/**
+ * Display scale for fitting w×h art pixels into a box: whole numbers when
+ * enlarging (crisp pixels), exact fractions when it has to shrink.
+ */
+export function fitScale(width: number, height: number, boxWidth: number, boxHeight: number): number {
+  const scale = Math.min(boxWidth / width, boxHeight / height);
+  return scale >= 1 ? Math.floor(scale) : scale;
+}
+

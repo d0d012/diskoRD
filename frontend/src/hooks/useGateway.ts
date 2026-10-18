@@ -9,6 +9,7 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useCallStore } from "../stores/callStore";
 import { useSoundboardStore } from "../stores/soundboardStore";
 import { useNotificationStore } from "../stores/notificationStore";
+import { usePixelArtStore } from "../stores/pixelArtStore";
 import { useUserStore } from "../stores/userStore";
 import { useToastStore } from "../features/notification/NotificationToast";
 import { playSound } from "../lib/sounds";
@@ -280,6 +281,12 @@ export function useGateway() {
             const d = event.d as { userId: string; status: PresenceStatus };
             updatePresence(d.userId, d.status);
             setPresenceStatus(d.userId, d.status);
+            break;
+          }
+
+          case "PIXEL_PROFILE_UPDATE": {
+            const d = event.d as { userId: string };
+            usePixelArtStore.getState().profileChanged(d.userId, useAuthStore.getState().user?.id);
             break;
           }
 

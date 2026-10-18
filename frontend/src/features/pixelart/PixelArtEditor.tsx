@@ -8,6 +8,9 @@ import { decodeDoc, encodeDoc } from "./lib/doc";
 import { renderImport, suggestImport, type ImportState, type Rgba } from "./lib/importImage";
 import { artToPng, downloadBlob, drawArt, loadImageRgba, shareScale } from "./render";
 import { Icon } from "./Icon";
+import { GalleryPicker, SaveDialog, type SaveTarget } from "./GalleryDialogs";
+import { showcaseOrder, usePixelArtStore } from "../../stores/pixelArtStore";
+import type { PixelArtPiece } from "../../types";
 import type { IconName } from "./iconPaths";
 
 const HISTORY_LIMIT = 100;
@@ -49,10 +52,8 @@ interface Props {
   onSend?: (file: File) => Promise<void>;
   /** Hands the art back to be dropped somewhere in the chat as a decoration. */
   onPlace?: (art: Art) => void;
-  /** Opens the user's gallery (shown when provided). */
-  onOpenGallery?: () => void;
-  /** Saves the current art to the gallery (shown when provided). */
-  onSaveToGallery?: (art: Art) => void;
+  /** Start from this art instead of the draft (opening a saved piece, remixing). */
+  initial?: { art: Art; title?: string; galleryId?: string | null; remixOf?: string | null };
   onClose: () => void;
 }
 
@@ -99,8 +100,17 @@ function rgbaThumb(src: Rgba): string | null {
 }
 
 /** Indexed-color pixel art editor: draw, import, export, send to a channel or place in it. */
-export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery, onClose }: Props) {
-  const [art, setArt] = useState<Art>(loadDraft);
+export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
+  const [art, setArt] = useState<Art>(() => initial?.art ?? loadDraft());
+  /** Which gallery piece (if any) the canvas holds, for Save and remix credit. */
+  const [saveTarget, setSaveTarget] = useState<SaveTarget>({
+    id: initial?.galleryId ?? null,
+    title: initial?.title ?? "",
+    remixOf: initial?.remixOf ?? null,
+  });
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const [past, setPast] = useState<Art[]>([]);
   const [future, setFuture] = useState<Art[]>([]);
   const [tool, setTool] = useState<Tool>("pencil");
@@ -377,6 +387,39 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
     setImporting(null);
   }
 
+  function openFromGallery(piece: PixelArtPiece) {
+    try {
+      commit(decodeDoc(piece.doc));
+    } catch {
+      showError("That piece couldn't be opened.");
+      return;
+    }
+    setSaveTarget({ id: piece.id, title: piece.title, remixOf: piece.remixOf });
+    setGalleryOpen(false);
+    setColor(1);
+    setZoom(1);
+  }
+
+  async function saveToGallery({ title, showOnProfile, asCopy }: { title: string; showOnProfile: boolean; asCopy: boolean }) {
+    const store = usePixelArtStore.getState();
+    const doc = encodeDoc(art);
+    const piece = saveTarget.id && !asCopy
+      ? await store.updateArt(saveTarget.id, { title, doc })
+      : await store.saveArt({ title, doc, remixOf: saveTarget.remixOf });
+    setSaveTarget({ id: piece.id, title: piece.title, remixOf: piece.remixOf });
+    if (showOnProfile && piece.showcasePosition === null) {
+      const order = showcaseOrder(usePixelArtStore.getState().gallery ?? []);
+      await store.setShowcase([...order.filter((id) => id !== piece.id), piece.id]);
+    }
+    setNotice(showOnProfile ? "Saved and added to your profile" : "Saved to My art");
+  }
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   function clearCanvas() {
     if (isEmpty(art)) return;
     setClearedFrom(art);
@@ -433,13 +476,16 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
 
   // ── Keyboard ─────────────────────────────────────────────────────────────
 
-  const latest = useRef({ onClose, undo, redo, importing, zoomStep });
+  const openSave = () => { if (!isEmpty(art) && !importing) setSaveOpen(true); };
+  const dialogOpen = galleryOpen || saveOpen;
+  const latest = useRef({ onClose, undo, redo, importing, zoomStep, openSave, dialogOpen });
   useEffect(() => {
-    latest.current = { onClose, undo, redo, importing, zoomStep };
+    latest.current = { onClose, undo, redo, importing, zoomStep, openSave, dialogOpen };
   });
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const l = latest.current;
+      if (l.dialogOpen) return; // the gallery/save dialog handles its own keys
       if (e.key === "Escape") {
         e.stopPropagation();
         if (l.importing) setImporting(null);
@@ -451,6 +497,7 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
       const key = e.key.toLowerCase();
       if (mod && key === "z") { e.preventDefault(); if (e.shiftKey) l.redo(); else l.undo(); return; }
       if (mod && key === "y") { e.preventDefault(); l.redo(); return; }
+      if (mod && key === "s") { e.preventDefault(); l.openSave(); return; }
       if (mod) return;
       if (e.key === " ") { e.preventDefault(); spaceRef.current = true; setPanning(true); return; }
       if (key === "[") { setBrush((b) => Math.max(1, b - 1)); return; }
@@ -515,9 +562,9 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
           <IconButton icon="undo" label="Undo" shortcut="Ctrl+Z" onClick={undo} disabled={!past.length} />
           <IconButton icon="redo" label="Redo" shortcut="Ctrl+Shift+Z" onClick={redo} disabled={!future.length} />
           <div className="flex-1" />
-          <IconButton icon="gallery" label="My art" onClick={() => onOpenGallery?.()} hidden={!onOpenGallery} />
-          <IconButton icon="save" label="Save to gallery" onClick={() => onSaveToGallery?.(art)} disabled={empty} hidden={!onSaveToGallery} />
-          {(onOpenGallery || onSaveToGallery) && <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />}
+          <IconButton icon="gallery" label="My art" onClick={() => setGalleryOpen(true)} disabled={!!importing} />
+          <IconButton icon="save" label="Save to gallery" shortcut="Ctrl+S" onClick={() => setSaveOpen(true)} disabled={empty || !!importing} />
+          <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
           <TextButton label="−" ariaLabel="Zoom out" title="Zoom out (−)" onClick={() => zoomStep(-1)} disabled={zoom <= 1} />
           <button onClick={() => setZoom(1)} title="Fit to view (0)" className="px-1.5 h-7 rounded-md text-xs tabular-nums min-w-12 hover:bg-[var(--color-dc-bg-modifier-hover)]" style={{ color: "var(--color-dc-text-muted)" }}>
             {Math.round(Math.min(zoom, maxZoom) * 100)}%
@@ -597,7 +644,11 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
               </div>
             </div>
             <div className="flex items-center gap-3 text-[11px] tabular-nums px-0.5" style={{ width: view, color: "var(--color-dc-text-muted)" }}>
-              <span className="flex-shrink-0">{hover ? `${hover[0]}, ${hover[1]}` : `${size} × ${size}`}</span>
+              {notice ? (
+                <span className="flex-shrink-0 font-medium" role="status" style={{ color: "var(--color-dc-green, #23a55a)" }}>✓ {notice}</span>
+              ) : (
+                <span className="flex-shrink-0">{hover ? `${hover[0]}, ${hover[1]}` : `${size} × ${size}`}</span>
+              )}
               <span className="ml-auto truncate" title="Right-click erases · Space + drag pans · [ ] brush size">
                 Right-click erases · Space + drag pans · [ ] brush size
               </span>
@@ -738,6 +789,16 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
             </span>
           )}
           <div className="flex-1" />
+          {!onPlace && !onSend && (
+            <ActionButton
+              icon="save"
+              title={saveTarget.id ? "Save changes" : "Save to gallery"}
+              subtitle={saveTarget.remixOf ? "Keeps credit to the original" : "Keeps it in My art"}
+              onClick={() => setSaveOpen(true)}
+              disabled={empty || !!importing}
+              primary
+            />
+          )}
           {onPlace && (
             <ActionButton
               icon="sticker"
@@ -760,6 +821,8 @@ export function PixelArtEditor({ onSend, onPlace, onOpenGallery, onSaveToGallery
           )}
         </div>
       </div>
+      {galleryOpen && <GalleryPicker onOpen={openFromGallery} onClose={() => setGalleryOpen(false)} />}
+      {saveOpen && <SaveDialog target={saveTarget} onSave={saveToGallery} onClose={() => setSaveOpen(false)} />}
     </div>,
     document.body,
   );
@@ -777,15 +840,13 @@ function Section({ title, aside, children }: { title: string; aside?: string; ch
   );
 }
 
-function IconButton({ icon, label, shortcut, onClick, disabled, hidden }: {
+function IconButton({ icon, label, shortcut, onClick, disabled }: {
   icon: IconName;
   label: string;
   shortcut?: string;
   onClick: () => void;
   disabled?: boolean;
-  hidden?: boolean;
 }) {
-  if (hidden) return null;
   return (
     <button
       onClick={onClick}
