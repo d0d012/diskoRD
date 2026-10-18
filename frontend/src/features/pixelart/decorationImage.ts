@@ -1,7 +1,7 @@
 import { decodeDoc, type PixelArtDoc } from "./lib/doc";
 import { drawArt } from "./render";
 
-export const DECORATION_SIZES = [32, 48, 64, 96, 128] as const;
+export const DECORATION_SIZES = [32, 48, 64, 96, 128, 192, 256] as const;
 /** Offset bounds from the anchor message's top; must match decoration.MinY/MaxY on the server. */
 export const DECORATION_MIN_Y = -256;
 export const DECORATION_MAX_Y = 1024;
