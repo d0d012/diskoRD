@@ -63,7 +63,7 @@ describe("snapHeight", () => {
 describe("ProfileBuddies", () => {
   it("draws buddies behind or in front, never past the card's bottom", () => {
     usePixelArtStore.setState({
-      profiles: { me: { showcase: [], buddies: [
+      profiles: { me: { showcase: [], banner: null, buddies: [
         { artId: "a", doc, x: 10, y: 900, height: 48, flip: true, front: false },
         { artId: "b", doc, x: 90, y: 10, height: 32, flip: false, front: true },
       ] } },
@@ -78,7 +78,7 @@ describe("ProfileBuddies", () => {
   });
 
   it("adds a buddy from the gallery, adjusts it and saves", async () => {
-    usePixelArtStore.setState({ profiles: { me: { showcase: [], buddies: [] } } });
+    usePixelArtStore.setState({ profiles: { me: { showcase: [], buddies: [], banner: null } } });
     mocked.get.mockImplementation(async (url: string) =>
       url === "/users/me/pixel-arts"
         ? { data: { data: [galleryPiece("art1", "Hamster")] } }
@@ -103,7 +103,7 @@ describe("ProfileBuddies", () => {
   it("caps buddies at five and Escape cancels without saving", async () => {
     usePixelArtStore.setState({
       gallery: [galleryPiece("art1", "Hamster")],
-      profiles: { me: { showcase: [], buddies: Array.from({ length: 5 }, (_, i) => ({ artId: "art1", doc, x: i * 20, y: 0, height: 32, flip: false, front: false })) } },
+      profiles: { me: { showcase: [], banner: null, buddies: Array.from({ length: 5 }, (_, i) => ({ artId: "art1", doc, x: i * 20, y: 0, height: 32, flip: false, front: false })) } },
     });
     render(<Card startEditing />);
     expect(screen.getByRole("button", { name: "+ Add buddy" })).toBeDisabled();

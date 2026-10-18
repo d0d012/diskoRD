@@ -52,6 +52,14 @@ interface Props {
   onSend?: (file: File) => Promise<void>;
   /** Hands the art back to be dropped somewhere in the chat as a decoration. */
   onPlace?: (art: Art) => void;
+  /** A main footer action for where the editor was opened from (e.g. "Use as banner"). */
+  primaryAction?: {
+    label: string;
+    subtitle: string;
+    icon: IconName;
+    /** Returns an error message to show, or nothing on success. */
+    run: (art: Art) => Promise<string | void> | string | void;
+  };
   /** Start from this art instead of the draft (opening a saved piece, remixing). */
   initial?: { art: Art; title?: string; galleryId?: string | null; remixOf?: string | null };
   onClose: () => void;
@@ -100,7 +108,7 @@ function rgbaThumb(src: Rgba): string | null {
 }
 
 /** Indexed-color pixel art editor: draw, import, export, send to a channel or place in it. */
-export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
+export function PixelArtEditor({ onSend, onPlace, primaryAction, initial, onClose }: Props) {
   const [art, setArt] = useState<Art>(() => initial?.art ?? loadDraft());
   /** Which gallery piece (if any) the canvas holds, for Save and remix credit. */
   const [saveTarget, setSaveTarget] = useState<SaveTarget>({
@@ -160,9 +168,12 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     if (canvasRef.current) drawArt(canvasRef.current, shown);
   }, [shown]);
 
+  // Only the free drawing session owns the draft; editing a saved piece, a
+  // remix or a banner mustn't overwrite what you were drawing for chat.
+  const ownsDraft = !initial;
   useEffect(() => {
-    if (!strokeRef.current) saveDraft(art);
-  }, [art]);
+    if (ownsDraft && !strokeRef.current) saveDraft(art);
+  }, [art, ownsDraft]);
 
   useEffect(() => {
     const onResize = () => setView(viewSize());
@@ -422,6 +433,19 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     const timer = setTimeout(() => setNotice(""), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  async function runPrimary() {
+    if (!primaryAction || busy) return;
+    setBusy(true);
+    try {
+      const problem = await primaryAction.run(art);
+      if (problem) showError(problem);
+    } catch {
+      showError("That didn't work. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function clearCanvas() {
     if (isEmpty(art)) return;
@@ -803,6 +827,16 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
               subtitle={saveTarget.remixOf ? "Keeps credit to the original" : "Keeps it in My art"}
               onClick={() => setSaveOpen(true)}
               disabled={empty || !!importing}
+              primary={!primaryAction}
+            />
+          )}
+          {primaryAction && (
+            <ActionButton
+              icon={primaryAction.icon}
+              title={busy ? "Working…" : primaryAction.label}
+              subtitle={primaryAction.subtitle}
+              onClick={() => void runPrimary()}
+              disabled={actionsDisabled}
               primary
             />
           )}

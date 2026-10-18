@@ -24,7 +24,12 @@ type repository interface {
 	SetBuddies(ctx context.Context, ownerID string, buddies []Buddy) error
 	Profile(ctx context.Context, userID string) (*Profile, error)
 	UserExists(ctx context.Context, userID string) (bool, error)
+	SetBanner(ctx context.Context, userID string, builtin *string, doc json.RawMessage) error
+	DeleteBanner(ctx context.Context, userID string) error
 }
+
+// bannerSizes are the canvases that fill the 300×96 card banner at ×3 and ×2.
+var bannerSizes = map[[2]int]bool{{100, 32}: true, {150, 48}: true}
 
 type Service struct {
 	repo repository
@@ -175,6 +180,46 @@ func (s *Service) SetBuddies(ctx context.Context, userID string, req BuddiesRequ
 		}
 	}
 	if err := s.repo.SetBuddies(ctx, userID, req.Buddies); err != nil {
+		return err
+	}
+	s.changed(userID)
+	return nil
+}
+
+// SetBanner sets a built-in scene or a banner-shaped drawing as the profile banner.
+func (s *Service) SetBanner(ctx context.Context, userID string, req Banner) error {
+	hasDoc := len(req.Doc) > 0 && string(req.Doc) != "null"
+	if (req.Builtin != nil) == hasDoc {
+		return badRequest("choose either a built-in banner or your own drawing")
+	}
+	var doc json.RawMessage
+	if req.Builtin != nil {
+		if !BuiltinBanners[*req.Builtin] {
+			return badRequest("unknown banner")
+		}
+	} else {
+		v, err := Validate(req.Doc)
+		if err != nil {
+			return err
+		}
+		var dims struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		}
+		if err := json.Unmarshal(v, &dims); err != nil || !bannerSizes[[2]int{dims.Width, dims.Height}] {
+			return badRequest("banners must be 100 × 32 or 150 × 48")
+		}
+		doc = v
+	}
+	if err := s.repo.SetBanner(ctx, userID, req.Builtin, doc); err != nil {
+		return err
+	}
+	s.changed(userID)
+	return nil
+}
+
+func (s *Service) DeleteBanner(ctx context.Context, userID string) error {
+	if err := s.repo.DeleteBanner(ctx, userID); err != nil {
 		return err
 	}
 	s.changed(userID)

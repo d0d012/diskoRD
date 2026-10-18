@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import type { PixelArtDoc } from "../features/pixelart/lib/doc";
-import type { PixelArtPiece, PixelProfile, ProfileBuddy } from "../types";
+import type { PixelArtPiece, PixelProfile, ProfileBannerArt, ProfileBuddy } from "../types";
 
 export const MAX_GALLERY = 50;
 export const MAX_SHOWCASE = 15;
@@ -20,6 +20,8 @@ interface PixelArtStore {
   /** Replaces the showcase with these gallery ids, in order. */
   setShowcase: (ids: string[]) => Promise<void>;
   setBuddies: (buddies: ProfileBuddy[]) => Promise<void>;
+  /** Sets the own banner (a built-in id or a banner-sized doc), or clears it with null. */
+  setBanner: (userId: string, banner: ProfileBannerArt | null) => Promise<void>;
   loadProfile: (userId: string) => Promise<PixelProfile>;
   /** PIXEL_PROFILE_UPDATE: refetch a profile someone has open, drop it otherwise. */
   profileChanged: (userId: string, selfId?: string) => void;
@@ -76,6 +78,15 @@ export const usePixelArtStore = create<PixelArtStore>((set, get) => ({
 
   setBuddies: async (buddies) => {
     await api.put("/users/me/buddies", { buddies });
+  },
+
+  setBanner: async (userId, banner) => {
+    if (banner) await api.put("/users/me/banner", banner);
+    else await api.delete("/users/me/banner");
+    set((s) => {
+      const profile = s.profiles[userId];
+      return profile ? { profiles: { ...s.profiles, [userId]: { ...profile, banner } } } : s;
+    });
   },
 
   loadProfile: async (userId) => {

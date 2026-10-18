@@ -58,10 +58,23 @@ type PlacedBuddy struct {
 	Doc json.RawMessage `json:"doc"`
 }
 
+// BuiltinBanners are the scene ids the client can draw (frontend lib/banners.ts).
+var BuiltinBanners = map[string]bool{
+	"meadow": true, "sunset": true, "night": true, "snow": true, "beach": true, "city": true,
+}
+
+// Banner is a profile banner: exactly one of Builtin or Doc is set.
+type Banner struct {
+	Builtin *string         `json:"builtin,omitempty"`
+	Doc     json.RawMessage `json:"doc,omitempty"`
+}
+
 // Profile is everything a profile card needs from this package, in one request.
 type Profile struct {
 	Showcase []Art         `json:"showcase"`
 	Buddies  []PlacedBuddy `json:"buddies"`
+	// Banner is nil when the user keeps the plain color banner.
+	Banner *Banner `json:"banner"`
 }
 
 type CreateRequest struct {

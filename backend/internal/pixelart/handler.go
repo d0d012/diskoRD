@@ -77,6 +77,24 @@ func (h *Handler) SetBuddies(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": "ok"})
 }
 
+func (h *Handler) SetBanner(c *fiber.Ctx) error {
+	var req Banner
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := h.svc.SetBanner(c.Context(), userID(c), req); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": "ok"})
+}
+
+func (h *Handler) DeleteBanner(c *fiber.Ctx) error {
+	if err := h.svc.DeleteBanner(c.Context(), userID(c)); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": "ok"})
+}
+
 func (h *Handler) Profile(c *fiber.Ctx) error {
 	p, err := h.svc.Profile(c.Context(), c.Params("id"))
 	if err != nil {

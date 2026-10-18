@@ -271,7 +271,47 @@ func (r *Repository) Profile(ctx context.Context, userID string) (*Profile, erro
 	if err := brows.Err(); err != nil {
 		return nil, fmt.Errorf("pixelart.Repository.Profile: buddies rows: %w", err)
 	}
-	return &Profile{Showcase: showcase, Buddies: buddies}, nil
+	banner, err := r.getBanner(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &Profile{Showcase: showcase, Buddies: buddies, Banner: banner}, nil
+}
+
+func (r *Repository) getBanner(ctx context.Context, userID string) (*Banner, error) {
+	var b Banner
+	var doc []byte
+	err := r.db.QueryRow(ctx, `SELECT builtin, doc FROM profile_banners WHERE user_id = $1`, userID).Scan(&b.Builtin, &doc)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("pixelart.Repository.getBanner: %w", err)
+	}
+	if doc != nil {
+		b.Doc = json.RawMessage(doc)
+	}
+	return &b, nil
+}
+
+// SetBanner stores a built-in id or a doc (exactly one) as the user's banner.
+func (r *Repository) SetBanner(ctx context.Context, userID string, builtin *string, doc json.RawMessage) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO profile_banners (user_id, builtin, doc) VALUES ($1, $2, $3)
+		 ON CONFLICT (user_id) DO UPDATE SET builtin = EXCLUDED.builtin, doc = EXCLUDED.doc, updated_at = now()`,
+		userID, builtin, nullableJSON(doc),
+	)
+	if err != nil {
+		return fmt.Errorf("pixelart.Repository.SetBanner: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) DeleteBanner(ctx context.Context, userID string) error {
+	if _, err := r.db.Exec(ctx, `DELETE FROM profile_banners WHERE user_id = $1`, userID); err != nil {
+		return fmt.Errorf("pixelart.Repository.DeleteBanner: %w", err)
+	}
+	return nil
 }
 
 // UserExists distinguishes "no showcase" from "no such user".

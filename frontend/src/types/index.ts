@@ -143,8 +143,16 @@ export interface ProfileBuddy {
   front: boolean;
 }
 
+/** A profile banner: a built-in scene id or the user's own banner-sized drawing. */
+export interface ProfileBannerArt {
+  builtin?: string;
+  doc?: PixelArtDoc;
+}
+
 export interface PixelProfile {
   showcase: PixelArtPiece[];
   buddies: (ProfileBuddy & { doc: PixelArtDoc })[];
+  /** null keeps the plain color banner. */
+  banner: ProfileBannerArt | null;
 }
 

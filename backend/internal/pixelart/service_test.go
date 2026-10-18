@@ -2,6 +2,7 @@ package pixelart
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -55,6 +56,14 @@ func (m *mockRepo) Profile(ctx context.Context, userID string) (*Profile, error)
 	args := m.Called(ctx, userID)
 	p, _ := args.Get(0).(*Profile)
 	return p, args.Error(1)
+}
+
+func (m *mockRepo) SetBanner(ctx context.Context, userID string, builtin *string, doc json.RawMessage) error {
+	return m.Called(ctx, userID, builtin, doc).Error(0)
+}
+
+func (m *mockRepo) DeleteBanner(ctx context.Context, userID string) error {
+	return m.Called(ctx, userID).Error(0)
 }
 
 func (m *mockRepo) UserExists(ctx context.Context, userID string) (bool, error) {
@@ -222,4 +231,36 @@ func TestUpdateAndDeletePublish(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.Delete(ctx, me, artA))
 	assert.Len(t, pub.events, 2)
+}
+
+func TestSetBannerRules(t *testing.T) {
+	ctx := context.Background()
+	banner := func(w, h int) json.RawMessage {
+		return docJSON(t, func(d map[string]any) {
+			d["width"], d["height"] = w, h
+			d["frames"] = []string{base64.StdEncoding.EncodeToString(make([]byte, w*h))}
+		})
+	}
+	bad := map[string]Banner{
+		"neither":         {},
+		"both":            {Builtin: strPtr("meadow"), Doc: banner(100, 32)},
+		"unknown builtin": {Builtin: strPtr("lava")},
+		"square doc":      {Doc: docJSON(t, nil)},
+	}
+	for name, req := range bad {
+		t.Run(name, func(t *testing.T) {
+			svc, repo, _ := newService()
+			assert.Equal(t, fiber.StatusBadRequest, status(svc.SetBanner(ctx, me, req)))
+			repo.AssertNotCalled(t, "SetBanner", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+
+	svc, repo, pub := newService()
+	repo.On("SetBanner", ctx, me, strPtr("night"), json.RawMessage(nil)).Return(nil)
+	repo.On("SetBanner", ctx, me, nilStr, anyDoc).Return(nil)
+	repo.On("DeleteBanner", ctx, me).Return(nil)
+	require.NoError(t, svc.SetBanner(ctx, me, Banner{Builtin: strPtr("night")}))
+	require.NoError(t, svc.SetBanner(ctx, me, Banner{Doc: banner(150, 48)}))
+	require.NoError(t, svc.DeleteBanner(ctx, me))
+	assert.Len(t, pub.events, 3)
 }

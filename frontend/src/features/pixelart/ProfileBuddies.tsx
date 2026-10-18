@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { MAX_BUDDIES, usePixelArtStore } from "../../stores/pixelArtStore";
 import type { ProfileBuddy } from "../../types";
 import { ArtThumb } from "./ArtThumb";
+import { placeBeside } from "./placeBeside";
 import { Icon } from "./Icon";
 import { BUDDY_MAX_HEIGHT as MAX_HEIGHT, BUDDY_MIN_HEIGHT as MIN_HEIGHT, buddyWidth, snapHeight, trimmedImage } from "./decorationImage";
 import type { PixelArtDoc } from "./lib/doc";
@@ -211,15 +212,7 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
 
   // Sit beside the card (left if there's no room on the right).
   useLayoutEffect(() => {
-    const card = cardRef.current?.getBoundingClientRect();
-    const width = toolbarRef.current?.offsetWidth ?? 240;
-    const el = toolbarRef.current;
-    if (!card || !el) return;
-    const right = card.right + 10;
-    const left = right + width > window.innerWidth - 8 ? Math.max(8, card.left - width - 10) : right;
-    // Written straight to the element: a measurement, not render state.
-    el.style.left = `${left}px`;
-    el.style.top = `${Math.max(8, card.top)}px`;
+    placeBeside(toolbarRef.current, cardRef.current);
   }, [cardRef, picking]);
 
   const current = selected !== null ? buddies[selected] : null;
