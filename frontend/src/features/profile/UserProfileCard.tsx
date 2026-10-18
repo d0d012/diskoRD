@@ -12,6 +12,7 @@ import { claimProfileCard } from "../../stores/profileCardStore";
 import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
 import { AvatarLightbox } from "./AvatarLightbox";
+import { ProfileShowcase } from "../pixelart/ProfileShowcase";
 import { resolveMediaUrl } from "../../lib/api";
 import { RolePicker } from "../guild/RolePicker";
 import { UserSettingsModal } from "../settings/UserSettingsModal";
@@ -117,6 +118,8 @@ export function UserProfileCard({
   const [showPicker, setShowPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
+  /** A pixel art viewer or editor opened from the showcase is on top of the card. */
+  const [pixelOverlay, setPixelOverlay] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [localRoleIds, setLocalRoleIds] = useState<string[] | null>(null);
@@ -192,7 +195,7 @@ export function UserProfileCard({
   useEffect(() => {
     if (inline || !onClose) return;
     // Child overlays (role picker, settings, lightbox) manage their own dismissal.
-    const childOpen = () => showPicker || showSettings || showLightbox;
+    const childOpen = () => showPicker || showSettings || showLightbox || pixelOverlay;
     function onDown(e: MouseEvent) {
       const target = e.target as Element;
       if (childOpen()) return;
@@ -214,7 +217,7 @@ export function UserProfileCard({
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [onClose, inline, showPicker, showSettings, showLightbox]);
+  }, [onClose, inline, showPicker, showSettings, showLightbox, pixelOverlay]);
 
   // Only one profile card is open app-wide, however it was opened.
   useEffect(() => {
@@ -343,6 +346,8 @@ export function UserProfileCard({
                 </p>
               </div>
             )}
+
+            <ProfileShowcase userId={userId} isSelf={isSelf} onOverlayChange={setPixelOverlay} />
 
             {(appJoined || guildJoined) && (
               <div>
