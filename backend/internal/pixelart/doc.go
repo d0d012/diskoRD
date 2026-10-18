@@ -22,8 +22,13 @@ const (
 )
 
 var (
-	allowedSizes = map[int]bool{16: true, 32: true, 64: true, 128: true, 256: true}
-	hexColor     = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	// allowedSizes lists every canvas the editor offers: squares plus the two
+	// banner shapes that fill the 300×96 profile banner at ×3 and ×2.
+	allowedSizes = map[[2]int]bool{
+		{16, 16}: true, {32, 32}: true, {64, 64}: true, {128, 128}: true, {256, 256}: true,
+		{100, 32}: true, {150, 48}: true,
+	}
+	hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 )
 
 // Doc is a pixel art document. Pixel value k refers to Palette[k-1]; 0 is transparent.
@@ -54,7 +59,7 @@ func Validate(raw []byte) (json.RawMessage, error) {
 	if doc.V != 1 {
 		return nil, invalid("unsupported version")
 	}
-	if doc.Width != doc.Height || !allowedSizes[doc.Width] {
+	if !allowedSizes[[2]int{doc.Width, doc.Height}] {
 		return nil, invalid("unsupported size")
 	}
 	if len(doc.Palette) < 1 || len(doc.Palette) > MaxColors {

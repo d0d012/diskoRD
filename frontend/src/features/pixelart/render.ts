@@ -3,11 +3,11 @@ import { hexToRgb, type Rgba } from "./lib/importImage";
 
 /** Writes the art at native size into a canvas (callers scale it with CSS). */
 export function drawArt(canvas: HTMLCanvasElement, art: Art) {
-  canvas.width = art.size;
-  canvas.height = art.size;
+  canvas.width = art.width;
+  canvas.height = art.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const image = ctx.createImageData(art.size, art.size);
+  const image = ctx.createImageData(art.width, art.height);
   const colors = art.palette.map(hexToRgb);
   art.pixels.forEach((p, i) => {
     if (p === 0) return;
@@ -17,9 +17,9 @@ export function drawArt(canvas: HTMLCanvasElement, art: Art) {
   ctx.putImageData(image, 0, 0);
 }
 
-/** Scale that brings any canvas size to a 512px export. */
+/** Scale that brings the longest side to about 512px on export. */
 export function shareScale(art: Art): number {
-  return Math.max(1, Math.floor(512 / art.size));
+  return Math.max(1, Math.floor(512 / Math.max(art.width, art.height)));
 }
 
 /** Nearest-neighbour upscaled PNG of the art. */
@@ -27,8 +27,8 @@ export async function artToPng(art: Art, scale: number): Promise<Blob> {
   const source = document.createElement("canvas");
   drawArt(source, art);
   const out = document.createElement("canvas");
-  out.width = art.size * scale;
-  out.height = art.size * scale;
+  out.width = art.width * scale;
+  out.height = art.height * scale;
   const ctx = out.getContext("2d");
   if (!ctx) throw new Error("Canvas is not available.");
   ctx.imageSmoothingEnabled = false;

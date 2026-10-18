@@ -82,7 +82,7 @@ describe("doc", () => {
   it("round-trips losslessly", () => {
     const art = paint(createArt(32), linePoints(0, 0, 31, 31), 5);
     const back = decodeDoc(JSON.parse(JSON.stringify(encodeDoc(art))));
-    expect(back.size).toBe(32);
+    expect([back.width, back.height]).toEqual([32, 32]);
     expect(back.palette).toEqual(art.palette);
     expect(Array.from(back.pixels)).toEqual(Array.from(art.pixels));
   });
@@ -93,7 +93,7 @@ describe("doc", () => {
     ["too many colors", { ...encodeDoc(createArt(16)), palette: Array(65).fill("#000000") }],
     ["bad color", { ...encodeDoc(createArt(16)), palette: ["red"] }],
     ["wrong byte count", { ...encodeDoc(createArt(16)), frames: [btoa("abc")] }],
-    ["index out of range", encodeDoc(paint(createArt(16, ["#000000"]), [[0, 0]], 2))],
+    ["index out of range", encodeDoc(paint(createArt(16, 16, ["#000000"]), [[0, 0]], 2))],
   ])("rejects %s", (_, doc) => {
     expect(() => decodeDoc(doc)).toThrow();
   });
@@ -113,12 +113,12 @@ function image(rows: string[], scale = 1): Rgba {
 
 describe("resample", () => {
   it("is exact for integer-scaled pixel art and keeps transparency", () => {
-    const out = resample(image(["r.", "r."], 2), 2, "cover");
+    const out = resample(image(["r.", "r."], 2), 2, 2, "cover");
     expect(Array.from(out.slice(0, 8))).toEqual([255, 0, 0, 255, 0, 0, 0, 0]);
   });
 
   it("letterboxes non-square images with contain", () => {
-    const out = resample(image(["wwww", "wwww"]), 4, "contain");
+    const out = resample(image(["wwww", "wwww"]), 4, 4, "contain");
     expect(out[3]).toBe(0); // top row is letterbox
     expect(out[(1 * 4) * 4 + 3]).toBe(255); // second row is image
   });
@@ -127,12 +127,12 @@ describe("resample", () => {
     // 3×3 checker scaled to 2×2: smoothing would blend, sharp picks real pixels.
     const src = image(["rbr", "brb", "rbr"]);
     const isBlend = (px: Uint8ClampedArray) => px[0] > 0 && px[2] > 0; // red and blue mixed
-    expect(isBlend(resample(src, 2, "contain", true).slice(0, 4))).toBe(false);
-    expect(isBlend(resample(src, 2, "contain", false).slice(0, 4))).toBe(true);
+    expect(isBlend(resample(src, 2, 2, "contain", true).slice(0, 4))).toBe(false);
+    expect(isBlend(resample(src, 2, 2, "contain", false).slice(0, 4))).toBe(true);
   });
 
   it("copies pixels 1:1 and centers them with actual", () => {
-    const out = resample(image(["rg", "bw"]), 4, "actual");
+    const out = resample(image(["rg", "bw"]), 4, 4, "actual");
     expect(Array.from(out.slice((1 * 4 + 1) * 4, (1 * 4 + 1) * 4 + 4))).toEqual([255, 0, 0, 255]);
     expect(out[3]).toBe(0); // corner stays transparent
   });
@@ -152,7 +152,7 @@ describe("pixel art detection", () => {
 
   it("suggests a 1:1 import on the smallest canvas that fits", () => {
     const s = suggestImport(image(Array(40).fill("rg".repeat(20)), 4)); // 40×40 sprite at ×4
-    expect(s).toMatchObject({ scale: 4, size: 64, fit: "actual", sharp: true });
+    expect(s).toMatchObject({ scale: 4, width: 64, height: 64, fit: "actual", sharp: true });
     expect(s.source.width).toBe(40);
   });
 
@@ -160,7 +160,7 @@ describe("pixel art detection", () => {
     // 300 wide gradient-ish noise: no blocks, too big for 1:1 at 256.
     const data = new Uint8ClampedArray(300 * 300 * 4);
     for (let i = 0; i < data.length; i += 4) data.set([i % 251, (i / 4) % 241, 7, 255], i);
-    expect(suggestImport({ width: 300, height: 300, data })).toMatchObject({ scale: 1, size: 64, fit: "contain", sharp: false });
+    expect(suggestImport({ width: 300, height: 300, data })).toMatchObject({ scale: 1, width: 64, height: 64, fit: "contain", sharp: false });
   });
 });
 
@@ -169,7 +169,7 @@ describe("renderImport", () => {
     const sprite = ["r.gb", "bwwr", ".rg.", "wbbw"];
     const suggestion = suggestImport(image(sprite, 16)); // a 4×4 sprite saved at 64×64
     const { art } = renderImport({ ...suggestion, thumb: null, palette: "new", colors: "all" }, []);
-    expect(art.size).toBe(16);
+    expect([art.width, art.height]).toEqual([16, 16]);
     // Every source pixel lands 1:1 (centered) with its exact color.
     const hex: Record<string, string> = { r: "#ff0000", g: "#00ff00", b: "#0000ff", w: "#ffffff" };
     sprite.forEach((row, y) => [...row].forEach((ch, x) => {
@@ -177,6 +177,33 @@ describe("renderImport", () => {
       if (ch === ".") expect(v).toBe(0);
       else expect(art.palette[v - 1]).toBe(hex[ch]);
     }));
+  });
+});
+
+describe("rectangular canvases", () => {
+  it("creates, fills and resizes banners", () => {
+    const banner = createArt(100, 32);
+    expect(banner.pixels).toHaveLength(3200);
+    const filled = floodFill(banner, 99, 31, 2);
+    expect(filled.pixels.every((p) => p === 2)).toBe(true);
+    const detailed = resize(paint(banner, [[99, 31]], 1), 150, 48);
+    expect([detailed.width, detailed.height]).toEqual([150, 48]);
+    expect(detailed.pixels[47 * 150 + 149]).toBe(1);
+  });
+
+  it("round-trips banner docs and rejects odd shapes", () => {
+    const art = paint(createArt(150, 48), [[149, 0]], 1);
+    const back = decodeDoc(JSON.parse(JSON.stringify(encodeDoc(art))));
+    expect([back.width, back.height]).toEqual([150, 48]);
+    expect(() => decodeDoc({ ...encodeDoc(createArt(100, 32)), width: 100, height: 40 })).toThrow();
+  });
+
+  it("crops a square image to fill a banner", () => {
+    // 4×4: top half red, bottom half blue; a 4×2 cover crop keeps the middle rows.
+    const src = image(["rrrr", "rrrr", "bbbb", "bbbb"]);
+    const out = resample(src, 4, 2, "cover", true);
+    expect(Array.from(out.slice(0, 4))).toEqual([255, 0, 0, 255]);
+    expect(Array.from(out.slice(4 * 4, 4 * 4 + 4))).toEqual([0, 0, 255, 255]);
   });
 });
 
@@ -197,12 +224,12 @@ describe("quantize", () => {
   ]);
 
   it("maps to the nearest palette color", () => {
-    const art = quantizeToPalette(rgba, 2, ["#ff0000", "#0000ff", "#ffffff"]);
+    const art = quantizeToPalette(rgba, 2, 2, ["#ff0000", "#0000ff", "#ffffff"]);
     expect(Array.from(art.pixels)).toEqual([1, 2, 0, 3]);
   });
 
   it("builds a new palette no larger than k", () => {
-    const art = quantizeNewPalette(rgba, 2, 2);
+    const art = quantizeNewPalette(rgba, 2, 2, 2);
     expect(art.palette.length).toBeLessThanOrEqual(2);
     expect(art.pixels[2]).toBe(0);
     expect(art.pixels[0]).not.toBe(0);
@@ -213,12 +240,12 @@ describe("quantize", () => {
     const px: number[] = [];
     for (let i = 0; i < 98; i++) px.push(200 + (i % 50), 0, 0, 255);
     px.push(0, 0, 255, 255, 0, 0, 0, 0);
-    const art = quantizeNewPalette(new Uint8ClampedArray(px), 10, 2);
+    const art = quantizeNewPalette(new Uint8ClampedArray(px), 10, 10, 2);
     expect(art.palette.some((c) => c === "#0000ff")).toBe(true);
   });
 
   it("keeps exact colors when there are few enough", () => {
-    const art = quantizeNewPalette(rgba, 2, 8);
+    const art = quantizeNewPalette(rgba, 2, 2, 8);
     expect([...art.palette].sort()).toEqual(["#0a0af0", "#fa0a0a", "#ffffff"]);
   });
 });

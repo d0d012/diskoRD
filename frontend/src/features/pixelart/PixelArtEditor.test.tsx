@@ -7,7 +7,7 @@ const drawn: Art[] = [];
 vi.mock("./render", () => ({
   drawArt: (_canvas: HTMLCanvasElement, art: Art) => drawn.push(art),
   artToPng: vi.fn(async () => new Blob(["png"], { type: "image/png" })),
-  shareScale: (art: Art) => 512 / art.size,
+  shareScale: (art: Art) => 512 / art.width,
   loadImageRgba: vi.fn(),
   downloadBlob: vi.fn(),
 }));
@@ -22,7 +22,7 @@ function pointer(type: "pointerDown" | "pointerMove" | "pointerUp", cellX: numbe
 }
 
 const lastArt = () => drawn[drawn.length - 1];
-const at = (x: number, y: number) => lastArt().pixels[y * lastArt().size + x];
+const at = (x: number, y: number) => lastArt().pixels[y * lastArt().width + x];
 
 describe("PixelArtEditor", () => {
   beforeEach(() => {
@@ -97,7 +97,7 @@ describe("PixelArtEditor", () => {
     pointer("pointerUp", 2, 2);
 
     fireEvent.click(screen.getByRole("button", { name: "Stick in chat" }));
-    expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ size: 32 }));
+    expect(onPlace).toHaveBeenCalledWith(expect.objectContaining({ width: 32, height: 32 }));
     expect(screen.getByRole("button", { name: "Send as message" })).toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe("PixelArtEditor", () => {
   it("offers every canvas size up to 256", () => {
     render(<PixelArtEditor onSend={vi.fn()} onClose={vi.fn()} />);
     const options = Array.from(screen.getByRole("combobox").querySelectorAll("option")).map((o) => o.value);
-    expect(options).toEqual(["16", "32", "64", "128", "256"]);
+    expect(options).toEqual(["16x16", "32x32", "64x64", "128x128", "256x256", "100x32", "150x48"]);
   });
 
   it("clears the canvas with an undo toast", () => {

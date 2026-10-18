@@ -20,37 +20,39 @@ const ALPHA_CUTOFF = 128;
 const KMEANS_SAMPLE = 16384;
 
 /**
- * Resamples the source into a size×size RGBA buffer.
+ * Resamples the source into a width×height RGBA buffer.
  * sharp: take the pixel at the center of each area (keeps pixel art crisp, exact colors).
  * smooth: average each area (better for photos and gradients).
  */
-export function resample(src: Rgba, size: number, fit: Fit, sharp = false): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(size * size * 4);
+export function resample(src: Rgba, width: number, height: number, fit: Fit, sharp = false): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(width * height * 4);
 
   if (fit === "actual") {
-    const ox = Math.floor((size - src.width) / 2);
-    const oy = Math.floor((size - src.height) / 2);
+    const ox = Math.floor((width - src.width) / 2);
+    const oy = Math.floor((height - src.height) / 2);
     for (let y = 0; y < src.height; y++) {
       const ty = y + oy;
-      if (ty < 0 || ty >= size) continue;
+      if (ty < 0 || ty >= height) continue;
       for (let x = 0; x < src.width; x++) {
         const tx = x + ox;
-        if (tx < 0 || tx >= size) continue;
+        if (tx < 0 || tx >= width) continue;
         const i = (y * src.width + x) * 4;
-        out.set(src.data.subarray(i, i + 4), (ty * size + tx) * 4);
+        out.set(src.data.subarray(i, i + 4), (ty * width + tx) * 4);
       }
     }
     return out;
   }
 
-  const side = fit === "cover" ? Math.min(src.width, src.height) : Math.max(src.width, src.height);
-  const originX = (src.width - side) / 2;
-  const originY = (src.height - side) / 2;
-  const step = side / size;
+  // Source pixels per canvas pixel, the same on both axes so shapes don't stretch.
+  const step = fit === "cover"
+    ? Math.min(src.width / width, src.height / height)
+    : Math.max(src.width / width, src.height / height);
+  const originX = (src.width - width * step) / 2;
+  const originY = (src.height - height * step) / 2;
 
-  for (let ty = 0; ty < size; ty++) {
-    for (let tx = 0; tx < size; tx++) {
-      const o = (ty * size + tx) * 4;
+  for (let ty = 0; ty < height; ty++) {
+    for (let tx = 0; tx < width; tx++) {
+      const o = (ty * width + tx) * 4;
       if (sharp) {
         const sx = Math.floor(originX + (tx + 0.5) * step);
         const sy = Math.floor(originY + (ty + 0.5) * step);
@@ -145,7 +147,8 @@ export interface ImportSuggestion {
   source: Rgba;
   /** Block size found in the original (1 = none). */
   scale: number;
-  size: number;
+  width: number;
+  height: number;
   fit: Fit;
   sharp: boolean;
 }
@@ -161,9 +164,9 @@ export function suggestImport(src: Rgba): ImportSuggestion {
   const longest = Math.max(source.width, source.height);
   const fitting = SIZES.find((s) => s >= longest);
   if (fitting !== undefined && (scale > 1 || longest <= 128)) {
-    return { source, scale, size: fitting, fit: "actual", sharp: true };
+    return { source, scale, width: fitting, height: fitting, fit: "actual", sharp: true };
   }
-  return { source, scale, size: 64, fit: "contain", sharp: false };
+  return { source, scale, width: 64, height: 64, fit: "contain", sharp: false };
 }
 
 export function hexToRgb(hex: string): [number, number, number] {
@@ -192,14 +195,14 @@ function nearest(colors: readonly (readonly number[])[], r: number, g: number, b
 }
 
 /** Maps every opaque pixel to the nearest palette color. */
-export function quantizeToPalette(rgba: Uint8ClampedArray, size: number, palette: string[]): Art {
+export function quantizeToPalette(rgba: Uint8ClampedArray, width: number, height: number, palette: string[]): Art {
   const colors = palette.map(hexToRgb);
-  const pixels = new Uint8Array(size * size);
+  const pixels = new Uint8Array(width * height);
   for (let i = 0; i < pixels.length; i++) {
     const o = i * 4;
     pixels[i] = rgba[o + 3] < ALPHA_CUTOFF ? TRANSPARENT : nearest(colors, rgba[o], rgba[o + 1], rgba[o + 2]) + 1;
   }
-  return { size, palette: [...palette], pixels };
+  return { width, height, palette: [...palette], pixels };
 }
 
 /**
@@ -208,21 +211,21 @@ export function quantizeToPalette(rgba: Uint8ClampedArray, size: number, palette
  * seeded with the most common color plus repeatedly the color farthest from the
  * seeds so far, which keeps small but distinct details (eyes, outlines) alive.
  */
-export function quantizeNewPalette(rgba: Uint8ClampedArray, size: number, k: number, iterations = 8): Art {
+export function quantizeNewPalette(rgba: Uint8ClampedArray, width: number, height: number, k: number, iterations = 8): Art {
   const counts = new Map<number, number>();
   for (let o = 0; o < rgba.length; o += 4) {
     if (rgba[o + 3] < ALPHA_CUTOFF) continue;
     const key = (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  if (counts.size === 0) return quantizeToPalette(rgba, size, ["#000000"]);
+  if (counts.size === 0) return quantizeToPalette(rgba, width, height, ["#000000"]);
 
   const k2 = Math.min(k, MAX_COLORS);
   const byFrequency = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   const rgb = (key: number) => [(key >> 16) & 255, (key >> 8) & 255, key & 255];
 
   if (counts.size <= k2) {
-    return quantizeToPalette(rgba, size, byFrequency.map(([key]) => rgbToHex(...(rgb(key) as [number, number, number]))));
+    return quantizeToPalette(rgba, width, height, byFrequency.map(([key]) => rgbToHex(...(rgb(key) as [number, number, number]))));
   }
 
   // Weighted sample of distinct colors keeps iterations cheap on 256×256 photos.
@@ -253,7 +256,7 @@ export function quantizeNewPalette(rgba: Uint8ClampedArray, size: number, k: num
     }
   }
   const palette = [...new Set(centers.map((c) => rgbToHex(c[0], c[1], c[2])))];
-  return quantizeToPalette(rgba, size, palette);
+  return quantizeToPalette(rgba, width, height, palette);
 }
 
 /** Options of an image import in progress. */
@@ -264,7 +267,8 @@ export interface ImportState {
   scale: number;
   /** Data URL of the source for the side-by-side comparison, when a canvas is available. */
   thumb: string | null;
-  size: number;
+  width: number;
+  height: number;
   fit: Fit;
   sharp: boolean;
   palette: "new" | "keep";
@@ -274,10 +278,10 @@ export interface ImportState {
 
 /** Renders the import preview for the current options. */
 export function renderImport(state: ImportState, myPalette: string[]): { art: Art; sourceColors: number } {
-  const rgba = resample(state.source, state.size, state.fit, state.sharp);
+  const rgba = resample(state.source, state.width, state.height, state.fit, state.sharp);
   const sourceColors = countColors(rgba);
   const art = state.palette === "keep"
-    ? quantizeToPalette(rgba, state.size, myPalette)
-    : quantizeNewPalette(rgba, state.size, state.colors === "all" ? MAX_COLORS : state.colors);
+    ? quantizeToPalette(rgba, state.width, state.height, myPalette)
+    : quantizeNewPalette(rgba, state.width, state.height, state.colors === "all" ? MAX_COLORS : state.colors);
   return { art, sourceColors };
 }

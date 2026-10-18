@@ -1,4 +1,4 @@
-import { MAX_COLORS, SIZES, type Art } from "./art";
+import { MAX_COLORS, findPreset, type Art } from "./art";
 
 /** Portable file format (`.pixel.json`), also what the gallery will store server side. */
 export interface PixelArtDoc {
@@ -27,15 +27,15 @@ function fromBase64(text: string): Uint8Array {
 }
 
 export function encodeDoc(art: Art): PixelArtDoc {
-  return { v: 1, width: art.size, height: art.size, palette: [...art.palette], frames: [toBase64(art.pixels)] };
+  return { v: 1, width: art.width, height: art.height, palette: [...art.palette], frames: [toBase64(art.pixels)] };
 }
 
 /** Parses and validates a doc; throws an Error with a user-facing message. */
 export function decodeDoc(input: unknown): Art {
   const doc = input as Partial<PixelArtDoc> | null;
   if (!doc || doc.v !== 1) throw new Error("Not a diskoRD pixel art file.");
-  const size = doc.width;
-  if (size !== doc.height || !SIZES.includes(size as (typeof SIZES)[number])) {
+  const { width, height } = doc;
+  if (typeof width !== "number" || typeof height !== "number" || !findPreset(width, height)) {
     throw new Error("Unsupported canvas size.");
   }
   const palette = doc.palette;
@@ -51,8 +51,8 @@ export function decodeDoc(input: unknown): Art {
   } catch {
     throw new Error("Corrupt pixel data.");
   }
-  if (pixels.length !== size! * size! || pixels.some((p) => p > palette.length)) {
+  if (pixels.length !== width * height || pixels.some((p) => p > palette.length)) {
     throw new Error("Corrupt pixel data.");
   }
-  return { size: size!, palette: palette.map((c) => c.toLowerCase()), pixels };
+  return { width, height, palette: palette.map((c) => c.toLowerCase()), pixels };
 }

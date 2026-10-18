@@ -82,3 +82,18 @@ func TestValidateAcceptsLargestCanvas(t *testing.T) {
 	}))
 	assert.NoError(t, err)
 }
+
+func TestValidateAcceptsBanners(t *testing.T) {
+	for _, size := range [][2]int{{100, 32}, {150, 48}} {
+		_, err := Validate(docJSON(t, func(d map[string]any) {
+			d["width"], d["height"] = size[0], size[1]
+			d["frames"] = []string{base64.StdEncoding.EncodeToString(make([]byte, size[0]*size[1]))}
+		}))
+		assert.NoError(t, err, "%dx%d", size[0], size[1])
+	}
+	_, err := Validate(docJSON(t, func(d map[string]any) {
+		d["width"], d["height"] = 100, 40
+		d["frames"] = []string{base64.StdEncoding.EncodeToString(make([]byte, 4000))}
+	}))
+	assert.Error(t, err)
+}

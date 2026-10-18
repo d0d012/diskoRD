@@ -55,10 +55,10 @@ export function trimmedImage(doc: PixelArtDoc): TrimmedImage | null {
   let result: TrimmedImage | null = null;
   try {
     const art = decodeDoc(doc);
-    let minX = art.size, minY = art.size, maxX = -1, maxY = -1;
-    for (let y = 0; y < art.size; y++) {
-      for (let x = 0; x < art.size; x++) {
-        if (!art.pixels[y * art.size + x]) continue;
+    let minX = art.width, minY = art.height, maxX = -1, maxY = -1;
+    for (let y = 0; y < art.height; y++) {
+      for (let x = 0; x < art.width; x++) {
+        if (!art.pixels[y * art.width + x]) continue;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;

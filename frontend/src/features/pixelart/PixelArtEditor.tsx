@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  MAX_BRUSH, MAX_COLORS, SIZES, TRANSPARENT, createArt, floodFill, isEmpty, linePoints, mirrorPoints, paint,
+  CANVAS_PRESETS, MAX_BRUSH, MAX_COLORS, TRANSPARENT, findPreset, presetKey, createArt, floodFill, isEmpty, linePoints, mirrorPoints, paint,
   pixelPerfect, rectPoints, resize, stampPoints, type Art, type Point,
 } from "./lib/art";
 import { decodeDoc, encodeDoc } from "./lib/doc";
@@ -146,12 +146,15 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     [deferredImport, art.palette],
   );
   const shown = imported?.art ?? art;
-  const size = shown.size;
+  const cols = shown.width;
+  const rows = shown.height;
 
-  const baseCell = view / size;
+  // Fit the longest side into the square view.
+  const baseCell = view / Math.max(cols, rows);
   const maxZoom = Math.max(1, MAX_CELL_PX / baseCell);
   const cell = baseCell * Math.min(zoom, maxZoom);
-  const contentPx = Math.round(size * cell);
+  const contentW = Math.round(cols * cell);
+  const contentH = Math.round(rows * cell);
 
   useEffect(() => {
     if (canvasRef.current) drawArt(canvasRef.current, shown);
@@ -252,8 +255,8 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
   function cellAt(e: React.PointerEvent): Point {
     const rect = e.currentTarget.getBoundingClientRect();
     return [
-      clamp(Math.floor(((e.clientX - rect.left) / rect.width) * size), 0, size - 1),
-      clamp(Math.floor(((e.clientY - rect.top) / rect.height) * size), 0, size - 1),
+      clamp(Math.floor(((e.clientX - rect.left) / rect.width) * cols), 0, cols - 1),
+      clamp(Math.floor(((e.clientY - rect.top) / rect.height) * rows), 0, rows - 1),
     ];
   }
 
@@ -267,7 +270,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     else if (stroke.value === TRANSPARENT || brush > 1) points = stroke.points;
     else points = pixelPerfect(stroke.points);
     points = stampPoints(points, brush);
-    return paint(stroke.before, mirror ? mirrorPoints(points, art.size) : points, stroke.value);
+    return paint(stroke.before, mirror ? mirrorPoints(points, art.width) : points, stroke.value);
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -283,7 +286,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     if (importing || (e.button !== 0 && e.button !== 2)) return;
     const [x, y] = cellAt(e);
     if (tool === "picker") {
-      const value = art.pixels[y * art.size + x];
+      const value = art.pixels[y * art.width + x];
       if (value !== TRANSPARENT) { setColor(value); setTool("pencil"); }
       return;
     }
@@ -291,7 +294,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
     const value = e.button === 2 || tool === "eraser" ? TRANSPARENT : color;
     if (tool === "fill") {
       const filled = floodFill(art, x, y, value);
-      commit(mirror ? floodFill(filled, art.size - 1 - x, y, value) : filled);
+      commit(mirror ? floodFill(filled, art.width - 1 - x, y, value) : filled);
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -423,7 +426,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
   function clearCanvas() {
     if (isEmpty(art)) return;
     setClearedFrom(art);
-    commit(createArt(art.size, art.palette));
+    commit(createArt(art.width, art.height, art.palette));
   }
 
   function undoClear() {
@@ -450,7 +453,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
 
   async function exportPng(scale: number) {
     try {
-      downloadBlob(await artToPng(art, scale), `pixel-art-${art.size * scale}.png`);
+      downloadBlob(await artToPng(art, scale), `pixel-art-${art.width * scale}x${art.height * scale}.png`);
     } catch {
       showError("Export failed.");
     }
@@ -548,15 +551,19 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: "var(--color-dc-bg-modifier-selected)" }}>
           <h3 className="text-[15px] font-semibold mr-1" style={{ color: "var(--color-dc-header-primary)" }}>Pixel art</h3>
           <select
-            value={art.size}
-            onChange={(e) => { commit(resize(art, Number(e.target.value))); setZoom(1); }}
+            value={presetKey(art)}
+            onChange={(e) => {
+              const [w, h] = e.target.value.split("x").map(Number);
+              commit(resize(art, w, h));
+              setZoom(1);
+            }}
             disabled={!!importing}
             aria-label="Canvas size"
             title="Canvas size"
             className="rounded-md px-2 py-1 text-xs cursor-pointer disabled:opacity-50"
             style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}
           >
-            {SIZES.map((s) => <option key={s} value={s}>{s} × {s}</option>)}
+            {CANVAS_PRESETS.map((p) => <option key={presetKey(p)} value={presetKey(p)}>{p.label}</option>)}
           </select>
           <span className="w-px h-5 mx-1.5" style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }} />
           <IconButton icon="undo" label="Undo" shortcut="Ctrl+Z" onClick={undo} disabled={!past.length} />
@@ -596,8 +603,8 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
                 ref={contentRef}
                 className="relative touch-none select-none flex-shrink-0 m-auto"
                 style={{
-                  width: contentPx,
-                  height: contentPx,
+                  width: contentW,
+                  height: contentH,
                   cursor: panning ? "grab" : importing ? "default" : "crosshair",
                   background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 16px 16px",
                 }}
@@ -647,7 +654,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
               {notice ? (
                 <span className="flex-shrink-0 font-medium" role="status" style={{ color: "var(--color-dc-green, #23a55a)" }}>✓ {notice}</span>
               ) : (
-                <span className="flex-shrink-0">{hover ? `${hover[0]}, ${hover[1]}` : `${size} × ${size}`}</span>
+                <span className="flex-shrink-0">{hover ? `${hover[0]}, ${hover[1]}` : `${cols} × ${rows}`}</span>
               )}
               <span className="ml-auto truncate" title="Right-click erases · Space + drag pans · [ ] brush size">
                 Right-click erases · Space + drag pans · [ ] brush size
@@ -748,7 +755,7 @@ export function PixelArtEditor({ onSend, onPlace, initial, onClose }: Props) {
                         >
                           {([
                             ["PNG, original size", () => exportPng(1)],
-                            [`PNG, ${art.size * shareScale(art)}px`, () => exportPng(shareScale(art))],
+                            [`PNG, ${art.width * shareScale(art)} × ${art.height * shareScale(art)}`, () => exportPng(shareScale(art))],
                             ["Editable .pixel.json", exportDoc],
                           ] as const).map(([label, run]) => (
                             <button
@@ -963,14 +970,17 @@ function ImportOptions({ state, sourceColors, resultColors, onChange, onApply, o
   const muted = { color: "var(--color-dc-text-muted)" };
   const buttonStyle = { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" };
   const { source } = state;
-  const fitsOneToOne = Math.max(source.width, source.height) <= state.size;
+  const fitsOneToOne = source.width <= state.width && source.height <= state.height;
   const exact = state.palette === "new" && state.colors === "all" && sourceColors !== null && sourceColors <= MAX_COLORS
     && (state.fit === "actual" || state.sharp);
 
-  function setSize(size: number) {
-    const fits = Math.max(source.width, source.height) <= size;
+  function setCanvas(width: number, height: number) {
+    const fits = source.width <= width && source.height <= height;
     // 1:1 only works when the image fits; otherwise fall back to scaling.
-    onChange({ ...state, size, fit: state.fit === "actual" && !fits ? "contain" : state.fit });
+    // Banners usually want the image to fill them.
+    const banner = !!findPreset(width, height)?.banner;
+    const fit = state.fit === "actual" && !fits ? (banner ? "cover" : "contain") : state.fit;
+    onChange({ ...state, width, height, fit });
   }
 
   function chip(active: boolean) {
@@ -999,8 +1009,14 @@ function ImportOptions({ state, sourceColors, resultColors, onChange, onApply, o
 
       <label className="flex items-center justify-between gap-2">
         <span className="text-xs" style={muted}>Canvas</span>
-        <select value={state.size} onChange={(e) => setSize(Number(e.target.value))} className="rounded px-2 py-1 text-sm" style={buttonStyle} aria-label="Canvas size">
-          {SIZES.map((s) => <option key={s} value={s}>{s}×{s}</option>)}
+        <select
+          value={presetKey(state)}
+          onChange={(e) => { const [w, h] = e.target.value.split("x").map(Number); setCanvas(w, h); }}
+          className="rounded px-2 py-1 text-sm max-w-36"
+          style={buttonStyle}
+          aria-label="Canvas size"
+        >
+          {CANVAS_PRESETS.map((p) => <option key={presetKey(p)} value={presetKey(p)}>{p.label}</option>)}
         </select>
       </label>
 

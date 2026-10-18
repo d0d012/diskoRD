@@ -4,12 +4,37 @@
  * undo history can keep them by reference.
  */
 export interface Art {
-  size: number;
+  width: number;
+  height: number;
   palette: string[];
   pixels: Uint8Array;
 }
 
+/** Square canvas sides. */
 export const SIZES = [16, 32, 64, 128, 256] as const;
+
+/** Canvas shapes the editor offers and the server accepts. */
+export interface CanvasPreset {
+  width: number;
+  height: number;
+  label: string;
+  /** Banners fill the 300×96 profile banner at an exact zoom. */
+  banner?: { zoom: number };
+}
+
+export const CANVAS_PRESETS: CanvasPreset[] = [
+  ...SIZES.map((s) => ({ width: s, height: s, label: `${s} × ${s}` })),
+  { width: 100, height: 32, label: "Banner · 100 × 32", banner: { zoom: 3 } },
+  { width: 150, height: 48, label: "Banner, detailed · 150 × 48", banner: { zoom: 2 } },
+];
+
+export function findPreset(width: number, height: number): CanvasPreset | undefined {
+  return CANVAS_PRESETS.find((p) => p.width === width && p.height === height);
+}
+
+export function presetKey(p: { width: number; height: number }): string {
+  return `${p.width}x${p.height}`;
+}
 /** Pixels are stored as bytes, so up to 255 would fit; 64 keeps the palette UI usable. */
 export const MAX_COLORS = 64;
 export const MAX_BRUSH = 4;
@@ -25,8 +50,8 @@ export const DEFAULT_PALETTE = [
 
 export type Point = readonly [number, number];
 
-export function createArt(size = 32, palette = DEFAULT_PALETTE): Art {
-  return { size, palette: [...palette], pixels: new Uint8Array(size * size) };
+export function createArt(width = 32, height = width, palette = DEFAULT_PALETTE): Art {
+  return { width, height, palette: [...palette], pixels: new Uint8Array(width * height) };
 }
 
 export function isEmpty(art: Art): boolean {
@@ -37,7 +62,7 @@ export function isEmpty(art: Art): boolean {
 export function paint(art: Art, points: readonly Point[], value: number): Art {
   const pixels = art.pixels.slice();
   for (const [x, y] of points) {
-    if (x >= 0 && y >= 0 && x < art.size && y < art.size) pixels[y * art.size + x] = value;
+    if (x >= 0 && y >= 0 && x < art.width && y < art.height) pixels[y * art.width + x] = value;
   }
   return { ...art, pixels };
 }
@@ -109,41 +134,41 @@ export function stampPoints(points: readonly Point[], brush: number): Point[] {
 }
 
 /** Adds the horizontal mirror of each point. */
-export function mirrorPoints(points: readonly Point[], size: number): Point[] {
-  return [...points, ...points.map(([x, y]) => [size - 1 - x, y] as const)];
+export function mirrorPoints(points: readonly Point[], width: number): Point[] {
+  return [...points, ...points.map(([x, y]) => [width - 1 - x, y] as const)];
 }
 
 /** 4-way flood fill of the region containing (x, y). */
 export function floodFill(art: Art, x: number, y: number, value: number): Art {
-  const { size } = art;
-  if (x < 0 || y < 0 || x >= size || y >= size) return art;
-  const target = art.pixels[y * size + x];
+  const { width, height } = art;
+  if (x < 0 || y < 0 || x >= width || y >= height) return art;
+  const target = art.pixels[y * width + x];
   if (target === value) return art;
   const pixels = art.pixels.slice();
-  const stack = [y * size + x];
+  const stack = [y * width + x];
   while (stack.length) {
     const i = stack.pop()!;
     if (pixels[i] !== target) continue;
     pixels[i] = value;
-    const px = i % size;
+    const px = i % width;
     if (px > 0) stack.push(i - 1);
-    if (px < size - 1) stack.push(i + 1);
-    if (i >= size) stack.push(i - size);
-    if (i < size * (size - 1)) stack.push(i + size);
+    if (px < width - 1) stack.push(i + 1);
+    if (i >= width) stack.push(i - width);
+    if (i < width * (height - 1)) stack.push(i + width);
   }
   return { ...art, pixels };
 }
 
 /** Nearest-neighbour resample to a new canvas size. */
-export function resize(art: Art, size: number): Art {
-  if (size === art.size) return art;
-  const pixels = new Uint8Array(size * size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const sx = Math.floor((x * art.size) / size);
-      const sy = Math.floor((y * art.size) / size);
-      pixels[y * size + x] = art.pixels[sy * art.size + sx];
+export function resize(art: Art, width: number, height = width): Art {
+  if (width === art.width && height === art.height) return art;
+  const pixels = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const sx = Math.floor((x * art.width) / width);
+      const sy = Math.floor((y * art.height) / height);
+      pixels[y * width + x] = art.pixels[sy * art.width + sx];
     }
   }
-  return { ...art, size, pixels };
+  return { ...art, width, height, pixels };
 }
