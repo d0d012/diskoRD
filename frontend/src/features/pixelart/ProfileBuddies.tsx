@@ -192,7 +192,6 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [pos, setPos] = useState<{ left: number; top: number }>({ left: -9999, top: 0 });
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -214,10 +213,13 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
   useLayoutEffect(() => {
     const card = cardRef.current?.getBoundingClientRect();
     const width = toolbarRef.current?.offsetWidth ?? 240;
-    if (!card) return;
+    const el = toolbarRef.current;
+    if (!card || !el) return;
     const right = card.right + 10;
     const left = right + width > window.innerWidth - 8 ? Math.max(8, card.left - width - 10) : right;
-    setPos({ left, top: Math.max(8, card.top) });
+    // Written straight to the element: a measurement, not render state.
+    el.style.left = `${left}px`;
+    el.style.top = `${Math.max(8, card.top)}px`;
   }, [cardRef, picking]);
 
   const current = selected !== null ? buddies[selected] : null;
@@ -243,7 +245,7 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
       role="dialog"
       aria-label="Arrange buddies"
       className="fixed z-[10001] w-60 rounded-xl p-3 shadow-2xl flex flex-col gap-3 text-sm"
-      style={{ left: pos.left, top: pos.top, backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)", border: "1px solid rgba(255,255,255,0.06)" }}
+      style={{ left: -9999, top: 0, backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)", border: "1px solid rgba(255,255,255,0.06)" }}
     >
       <div>
         <div className="flex items-baseline justify-between">
