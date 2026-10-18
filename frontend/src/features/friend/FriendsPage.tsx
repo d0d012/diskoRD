@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
+import { Icon } from "../pixelart/Icon";
 import { useFriendStore } from "../../stores/friendStore";
 import { PresenceDot } from "../../components/ui/PresenceDot";
 import { Avatar } from "../../components/ui/Avatar";
@@ -229,6 +231,17 @@ function FriendsList() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
             </svg>
+          </button>
+          <button
+            onClick={() => useShowcaseOverlayStore.getState().open(f.id)}
+            className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-interactive-normal)" }}
+            title="View Showcase"
+            aria-label={`View ${f.username}'s showcase`}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
+          >
+            <Icon name="showcase" size={16} />
           </button>
           <button
             onClick={() => removeFriend(friendshipId)}

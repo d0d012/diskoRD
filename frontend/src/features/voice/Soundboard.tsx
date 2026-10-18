@@ -6,6 +6,9 @@ import { useSoundboardStore, type GuildSound } from "../../stores/soundboardStor
 import { useGuildStore } from "../../stores/guildStore";
 import { AddSound } from "./AddSound";
 
+/** Must match soundboard.MaxGuildSounds on the server. */
+const MAX_GUILD_SOUNDS = 64;
+
 interface SoundboardProps { compact?: boolean }
 export function Soundboard({ compact = false }: SoundboardProps) {
   const [open, setOpen] = useState(false);
@@ -120,8 +123,8 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
         {guildId && <section aria-label="Server sounds">
           <div className="flex items-center justify-between py-2 gap-2">
             <h3 className="text-[10px] font-bold uppercase tracking-wider truncate opacity-70">{guildName} · {sounds.length}/48</h3>
-            <button onClick={() => { setAdding(!adding); setRemoving(null); }} disabled={sounds.length >= 48}
-              className="text-xs shrink-0 hover:underline disabled:opacity-40" title={sounds.length >= 48 ? "Remove a sound to make room" : "All members can add sounds"}>+ Add sound</button>
+            <button onClick={() => { setAdding(!adding); setRemoving(null); }} disabled={sounds.length >= MAX_GUILD_SOUNDS}
+              className="text-xs shrink-0 hover:underline disabled:opacity-40" title={sounds.length >= MAX_GUILD_SOUNDS ? "Remove a sound to make room" : "All members can add sounds"}>+ Add sound</button>
           </div>
           <div className="grid grid-cols-3 gap-1.5">{custom.map(tile)}</div>
           {!sounds.length && !loading && !catalogError && <p className="text-xs opacity-60 py-2">Your server's inside jokes go here. Add the first sound!</p>}

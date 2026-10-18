@@ -89,12 +89,12 @@ it("shows decode errors and leaves upload disabled", async () => {
 });
 
 it("keeps the selection on upload failure so members can retry", async () => {
-  vi.mocked(api.post).mockRejectedValue({ response: { data: { error: "this server has reached its 48-sound limit" } } });
+  vi.mocked(api.post).mockRejectedValue({ response: { data: { error: "this server has reached its 64-sound limit" } } });
   render(<AddSound guildId="guild" onDone={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Audio file"), { target: { files: [file] } });
   await waitFor(() => expect(screen.getByRole("button", { name: "Add sound" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Add sound" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("48-sound limit");
+  expect(await screen.findByRole("alert")).toHaveTextContent("64-sound limit");
   expect(screen.getByRole("button", { name: "Add sound" })).toBeEnabled();
   expect(screen.getByRole("slider", { name: "Clip end" })).toHaveAttribute("aria-valuenow", "15");
 });

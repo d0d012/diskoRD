@@ -65,7 +65,7 @@ func (r *Repository) Create(ctx context.Context, guildID, userID string, req Cre
 		return nil, fmt.Errorf("soundboard.Repository.Create: count: %w", err)
 	}
 	if count >= MaxGuildSounds {
-		return nil, fiber.NewError(409, "this server has reached its 48-sound limit")
+		return nil, fiber.NewError(409, fmt.Sprintf("this server has reached its %d-sound limit", MaxGuildSounds))
 	}
 	s, err := scanSound(tx.QueryRow(ctx, `INSERT INTO guild_sounds (guild_id, creator_id, name, audio) VALUES ($1,$2,$3,$4) RETURNING `+columns, guildID, userID, req.Name, req.Audio))
 	if err != nil {

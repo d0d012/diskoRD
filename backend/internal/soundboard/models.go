@@ -3,7 +3,7 @@ package soundboard
 import "time"
 
 const MaxAudioBytes = 720044 // 15 seconds, mono PCM16 at 24 kHz, plus WAV header
-const MaxGuildSounds = 48
+const MaxGuildSounds = 64
 
 type Sound struct {
 	ID        string    `json:"id"`

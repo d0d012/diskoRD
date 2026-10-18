@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
+import { Icon } from "../pixelart/Icon";
 import { useFriendStore } from "../../stores/friendStore";
 import { useCallStore } from "../../stores/callStore";
 import { useLiveUser } from "../../hooks/useLiveUser";
@@ -78,6 +80,16 @@ export function DMConversation() {
         </button>
 
         <div className="flex-1" />
+
+        <button
+          onClick={() => useShowcaseOverlayStore.getState().open(dm.recipient.id)}
+          title={`View ${username}'s showcase`}
+          aria-label={`View ${username}'s showcase`}
+          className="p-1.5 rounded-md transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+          style={{ color: "var(--color-dc-interactive-normal)" }}
+        >
+          <Icon name="showcase" size={20} />
+        </button>
 
         {callHere ? (
           <button

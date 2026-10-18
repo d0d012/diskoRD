@@ -45,7 +45,7 @@ export function ProfileShowcase({ userId, isSelf, onOverlayChange }: Props) {
   }
 
   const pieces = profile?.showcase ?? [];
-  if (!profile || (pieces.length === 0 && !isSelf)) return null;
+  if (!profile) return null;
 
   const visible = expanded || pieces.length <= ROW ? pieces : pieces.slice(0, ROW - 1);
   const hidden = pieces.length - visible.length;
@@ -58,19 +58,21 @@ export function ProfileShowcase({ userId, isSelf, onOverlayChange }: Props) {
           {expanded && (
             <button onClick={() => setExpanded(false)} className="text-[11px] hover:underline" style={{ color: "var(--color-dc-text-muted)" }}>Show less</button>
           )}
-          {pieces.length > 0 && (
+          {(pieces.length > 0 || !isSelf) && (
             <button
               onClick={() => useShowcaseOverlayStore.getState().open(userId)}
               className="text-[11px] font-semibold hover:underline"
               style={{ color: "var(--color-dc-text-link, #00a8fc)" }}
             >
-              View all →
+              {pieces.length > 0 ? "View all →" : "Open →"}
             </button>
           )}
         </div>
       </div>
 
-      {pieces.length === 0 ? (
+      {pieces.length === 0 && !isSelf ? (
+        <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>Nothing on display yet.</p>
+      ) : pieces.length === 0 ? (
         <button
           onClick={() => setOverlay({ kind: "editor", piece: null, remix: false })}
           className="w-full h-12 rounded-md flex items-center justify-center gap-1.5 text-xs hover:bg-[var(--color-dc-bg-modifier-hover)]"

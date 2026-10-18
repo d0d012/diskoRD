@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { api } from "../../lib/api";
 import { usePixelArtStore } from "../../stores/pixelArtStore";
 import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
@@ -68,11 +68,12 @@ describe("ProfileShowcase", () => {
     expect(screen.getAllByRole("button", { name: /^View Piece/ })).toHaveLength(4);
   });
 
-  it("renders nothing for someone else's empty showcase, an add tile for your own", async () => {
+  it("still links someone else's empty showcase, and offers an add tile on your own", async () => {
     serve([]);
-    const { container, unmount } = render(<ProfileShowcase userId="friend" isSelf={false} />);
-    await waitFor(() => expect(mocked.get).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    const { unmount } = render(<ProfileShowcase userId="friend" isSelf={false} />);
+    expect(await screen.findByText("Nothing on display yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open →" }));
+    expect(useShowcaseOverlayStore.getState().userId).toBe("friend");
     unmount();
 
     render(<ProfileShowcase userId="me" isSelf />);

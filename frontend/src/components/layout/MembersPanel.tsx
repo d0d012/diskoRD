@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
+import { Icon } from "../../features/pixelart/Icon";
 import { api } from "../../lib/api";
 import { useGuildStore } from "../../stores/guildStore";
 import { usePresenceStore } from "../../stores/presenceStore";
@@ -79,6 +81,16 @@ function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildI
             {topRole && <RoleBadge role={topRole} />}
           </div>
         </div>
+
+        <button
+          onClick={(e) => { e.stopPropagation(); useShowcaseOverlayStore.getState().open(member.id); }}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 hover:bg-[var(--color-dc-bg-floating)]"
+          style={{ color: "var(--color-dc-interactive-normal)" }}
+          title="View Showcase"
+          aria-label={`View ${live.displayName ?? live.username}'s showcase`}
+        >
+          <Icon name="showcase" size={14} />
+        </button>
 
         {/* + button — only for others, visible on hover */}
         {canManageRoles && currentUser?.id !== member.id && (
