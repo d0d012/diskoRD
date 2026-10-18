@@ -13,6 +13,7 @@ import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
 import { AvatarLightbox } from "./AvatarLightbox";
 import { ProfileShowcase } from "../pixelart/ProfileShowcase";
+import { ProfileBuddies } from "../pixelart/ProfileBuddies";
 import { resolveMediaUrl } from "../../lib/api";
 import { RolePicker } from "../guild/RolePicker";
 import { UserSettingsModal } from "../settings/UserSettingsModal";
@@ -120,6 +121,8 @@ export function UserProfileCard({
   const [showLightbox, setShowLightbox] = useState(false);
   /** A pixel art viewer or editor opened from the showcase is on top of the card. */
   const [pixelOverlay, setPixelOverlay] = useState(false);
+  /** Arranging buddies on the own card. */
+  const [arranging, setArranging] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [localRoleIds, setLocalRoleIds] = useState<string[] | null>(null);
@@ -195,7 +198,7 @@ export function UserProfileCard({
   useEffect(() => {
     if (inline || !onClose) return;
     // Child overlays (role picker, settings, lightbox) manage their own dismissal.
-    const childOpen = () => showPicker || showSettings || showLightbox || pixelOverlay;
+    const childOpen = () => showPicker || showSettings || showLightbox || pixelOverlay || arranging;
     function onDown(e: MouseEvent) {
       const target = e.target as Element;
       if (childOpen()) return;
@@ -217,7 +220,7 @@ export function UserProfileCard({
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [onClose, inline, showPicker, showSettings, showLightbox, pixelOverlay]);
+  }, [onClose, inline, showPicker, showSettings, showLightbox, pixelOverlay, arranging]);
 
   // Only one profile card is open app-wide, however it was opened.
   useEffect(() => {
@@ -283,13 +286,28 @@ export function UserProfileCard({
           boxShadow: inline ? "none" : "0 8px 32px rgba(0,0,0,0.55)",
           border: "1px solid rgba(255,255,255,0.06)",
           overflow: "hidden",
+          // One stacking context: banner < buddies behind < card content < buddies in front.
+          position: inline ? "relative" : undefined,
+          isolation: "isolate",
         }}
       >
         {/* Banner */}
         <div style={{ height: 96, width: "100%", backgroundColor: view.bannerColor ?? avatarColor(username) }} />
 
+        <ProfileBuddies userId={userId} isSelf={isSelf} editing={arranging} onEditingChange={setArranging} cardRef={cardRef} />
+        {isSelf && !inline && !arranging && (
+          <button
+            onClick={() => setArranging(true)}
+            className="absolute top-2 right-2 flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-medium hover:brightness-125"
+            style={{ zIndex: 5, backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
+            title="Place pixel art characters on your card"
+          >
+            ✦ Buddies
+          </button>
+        )}
+
         {/* Avatar + header */}
-        <div className="px-3">
+        <div className="px-3" style={{ position: "relative", zIndex: 2 }}>
           <div style={{ marginTop: -40 }} className="flex items-end gap-3">
             <div style={{ padding: 6, borderRadius: "50%", backgroundColor: "var(--color-dc-bg-floating)" }}>
               {view.avatarUrl && !inline ? (

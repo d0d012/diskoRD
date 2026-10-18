@@ -95,3 +95,22 @@ export function fitScale(width: number, height: number, boxWidth: number, boxHei
   return scale >= 1 ? Math.floor(scale) : scale;
 }
 
+export const BUDDY_MIN_HEIGHT = 16;
+export const BUDDY_MAX_HEIGHT = 128;
+/** Snap to whole-number zooms of the art when within this many px. */
+const SNAP_PX = 4;
+
+/** Width for a buddy shown at `height`, keeping the trimmed art's aspect ratio. */
+export function buddyWidth(doc: PixelArtDoc, height: number): number {
+  const img = trimmedImage(doc);
+  return img ? Math.round((img.width / img.height) * height) : height;
+}
+
+/** Snaps to the nearest whole-number zoom of the art's height when close, so pixels stay crisp. */
+export function snapHeight(doc: PixelArtDoc, height: number): number {
+  const img = trimmedImage(doc);
+  if (!img) return height;
+  const zoom = Math.max(1, Math.round(height / img.height));
+  const snapped = zoom * img.height;
+  return Math.abs(snapped - height) <= SNAP_PX && snapped >= BUDDY_MIN_HEIGHT && snapped <= BUDDY_MAX_HEIGHT ? snapped : height;
+}
