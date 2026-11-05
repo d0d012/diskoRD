@@ -31,9 +31,11 @@ type MessageResponse struct {
 	Content     string        `json:"content"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	EditedAt    *time.Time    `json:"editedAt,omitempty"`
-	Mentions    []string      `json:"mentions,omitempty"`
+	Mentions    []string      `json:"mentions"`
 	Attachments []string      `json:"attachments,omitempty"` // public URLs
 	Reactions   []ReactionRef `json:"reactions,omitempty"`
+	// MentionUsernames are validated in channel scope, not arbitrary @text.
+	MentionUsernames []string `json:"mentionUsernames"`
 	// Decorations are pixel art pieces pinned behind the message.
 	Decorations []decoration.Decoration `json:"decorations,omitempty"`
 }

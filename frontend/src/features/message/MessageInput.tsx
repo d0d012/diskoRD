@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useId, useEffect, useMemo } from "react";
+import { useMentionCandidates } from "./useMentionCandidates";
 import { useMessageStore } from "../../stores/messageStore";
 import { PixelArtEditor } from "../pixelart/PixelArtEditor";
 import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
@@ -16,6 +17,12 @@ interface Props {
   placeholder?: string;
 }
 
+// Case-insensitive match that works for both Turkish and English input:
+// "ALI" finds "alice" and "IŞIK" finds "ışık", so ı and i compare equal.
+function foldForSearch(value: string): string {
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i");
+}
+
 export function MessageInput({ channelId, guildId, channelName, onTyping, placeholder }: Props) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
@@ -26,6 +33,61 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionListId = useId();
+  const [mention, setMention] = useState<{ channelId: string; start: number; end: number; query: string } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [dismissedMention, setDismissedMention] = useState("");
+  const mentionKey = `${channelId}:${content}:${mention?.start}:${mention?.end}:${mention?.query}`;
+  const mentionActive = mention?.channelId === channelId && dismissedMention !== mentionKey;
+  const candidates = useMentionCandidates(guildId, channelId, mentionActive);
+  const matches = useMemo(() => {
+    const query = foldForSearch(mention?.query ?? "");
+    return candidates.map((user) => {
+      const username = foldForSearch(user.username);
+      const displayName = foldForSearch(user.displayName ?? "");
+      const rank = !query || username.startsWith(query) || displayName.startsWith(query) ? 0
+        : username.includes(query) || displayName.includes(query) ? 1 : 2;
+      return { user, rank };
+    }).filter(({ rank }) => rank < 2)
+      .sort((a, b) => a.rank - b.rank || a.user.username.localeCompare(b.user.username))
+      .slice(0, 10).map(({ user }) => user);
+  }, [candidates, mention?.query]);
+  const popupOpen = mentionActive && matches.length > 0;
+  const selectedIndex = Math.min(mentionIndex, Math.max(0, matches.length - 1));
+
+  useEffect(() => {
+    if (popupOpen) document.getElementById(`${mentionListId}-${selectedIndex}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [popupOpen, mentionListId, selectedIndex]);
+
+  function updateMention(input: HTMLTextAreaElement) {
+    const caret = input.selectionStart;
+    const match = input.value.slice(0, caret).match(/(?:^|\s)@([\p{L}\p{N}_]*)$/u);
+    if (!match || input.selectionStart !== input.selectionEnd) {
+      setMention(null);
+      return;
+    }
+    const query = match[1];
+    setMention({
+      channelId,
+      start: caret - query.length - 1,
+      end: caret + (input.value.slice(caret).match(/^[\p{L}\p{N}_]*/u)?.[0].length ?? 0),
+      query,
+    });
+    setMentionIndex(0);
+  }
+
+  function selectMention(username: string) {
+    if (!mention) return;
+    const insertion = `@${username} `;
+    const next = content.slice(0, mention.start) + insertion + content.slice(mention.end).replace(/^ /, "");
+    const caret = mention.start + insertion.length;
+    setContent(next);
+    setMention(null);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(caret, caret);
+    });
+  }
 
   const typing = (typingUsers[channelId] ?? []).filter(
     (u) => Date.now() - u.at < 5000
@@ -44,6 +106,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     if (!trimmed || sending) return;
     setSending(true);
     setContent("");
+    setMention(null);
     try {
       await sendMessage(channelId, trimmed);
     } catch {
@@ -98,6 +161,25 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.nativeEvent.isComposing) return;
+    if (mentionActive && e.key === "Escape") {
+      e.preventDefault();
+      setDismissedMention(mentionKey);
+      setMention(null);
+      return;
+    }
+    if (popupOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((selectedIndex + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length);
+        return;
+      }
+      if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+        e.preventDefault();
+        selectMention(matches[selectedIndex].username);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -106,6 +188,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setContent(e.target.value);
+    updateMention(e.target);
     if (e.target.value) handleTyping();
   }
 
@@ -120,9 +203,40 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   return (
     <div className="px-4 pb-6 flex-shrink-0">
       <div
-        className="flex items-end gap-2 px-4 py-2.5 rounded-lg"
+        className="relative flex items-end gap-2 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}
       >
+        {popupOpen && (
+          <div
+            id={mentionListId}
+            role="listbox"
+            aria-label="Mention members"
+            className="absolute bottom-full left-0 right-0 mb-2 p-2 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20"
+            style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
+          >
+            {matches.map((user, index) => (
+              <button
+                key={user.id}
+                id={`${mentionListId}-${index}`}
+                type="button"
+                role="option"
+                aria-selected={index === selectedIndex}
+                tabIndex={-1}
+                className="block w-full rounded px-3 py-2 text-left text-sm"
+                style={{
+                  color: "var(--color-dc-text-normal)",
+                  backgroundColor: index === selectedIndex ? "var(--color-dc-bg-modifier-selected)" : "transparent",
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setMentionIndex(index)}
+                onClick={() => selectMention(user.username)}
+              >
+                <span className="font-semibold">{user.displayName || user.username}</span>
+                <span className="ml-2" style={{ color: "var(--color-dc-text-muted)" }}>@{user.username}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -173,7 +287,14 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           }}
           placeholder={placeholder ?? `Message #${channelName}`}
           value={content}
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-controls={popupOpen ? mentionListId : undefined}
+          aria-expanded={popupOpen}
+          aria-activedescendant={popupOpen ? `${mentionListId}-${selectedIndex}` : undefined}
           onChange={handleChange}
+          onSelect={(e) => updateMention(e.currentTarget)}
+          onBlur={() => setMention(null)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
         />

@@ -190,7 +190,7 @@ export function MessageItem({ message, isGrouped }: Props) {
             </p>
           </div>
         ) : (
-            <MessageContent content={message.content} attachments={message.attachments} />
+            <MessageContent content={message.content} attachments={message.attachments} mentionUsernames={message.mentionUsernames} />
           )}
 
           {/* Reactions — only rendered when present, so hover never changes layout */}

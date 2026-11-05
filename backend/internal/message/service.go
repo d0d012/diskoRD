@@ -9,7 +9,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/decoration"
-	"github.com/d0d012/diskord/internal/guild"
 )
 
 var mentionRe = regexp.MustCompile(`@(\w+)`)
@@ -27,9 +26,27 @@ func parseMentionUsernames(content string) []string {
 	return usernames
 }
 
+// MessageRepository is the service's persistence boundary.
+type MessageRepository interface {
+	GetChannelContext(context.Context, string) (*ChannelContext, error)
+	Create(context.Context, string, string, string) (*MessageResponse, error)
+	List(context.Context, string, *string, int) ([]MessageResponse, error)
+	Update(context.Context, string, string) (*MessageResponse, error)
+	SoftDelete(context.Context, string) error
+	SetAttachments(context.Context, string, []string) error
+	GetAuthorChannelAndGuild(context.Context, string) (string, string, string, error)
+	GetReactionsForMessages(context.Context, []string, string) (map[string][]ReactionRef, error)
+	GetUserIDsByUsernames(context.Context, string, []string) (map[string]string, error)
+}
+
+type GuildMembership interface {
+	IsMember(context.Context, string, string) (bool, error)
+	GetMemberRole(context.Context, string, string) (string, error)
+}
+
 type Service struct {
-	repo      *Repository
-	guildRepo *guild.Repository
+	repo      MessageRepository
+	guildRepo GuildMembership
 	pub       EventPublisher // nil until 3.4 wires the gateway
 	decos     DecorationLister
 }
@@ -43,7 +60,7 @@ func (s *Service) SetDecorations(l DecorationLister) {
 	s.decos = l
 }
 
-func NewService(repo *Repository, guildRepo *guild.Repository) *Service {
+func NewService(repo MessageRepository, guildRepo GuildMembership) *Service {
 	return &Service{repo: repo, guildRepo: guildRepo}
 }
 
@@ -131,16 +148,40 @@ func (s *Service) PublishWithAttachment(ctx context.Context, msg *MessageRespons
 }
 
 func (s *Service) resolveMentions(ctx context.Context, msg *MessageResponse) {
-	usernames := parseMentionUsernames(msg.Content)
+	msgs := []MessageResponse{*msg}
+	s.resolveMessageMentions(ctx, msg.ChannelID, msgs)
+	*msg = msgs[0]
+}
+
+func (s *Service) resolveMessageMentions(ctx context.Context, channelID string, msgs []MessageResponse) {
+	seen := make(map[string]bool)
+	var usernames []string
+	for i := range msgs {
+		// Empty arrays explicitly clear old highlights on MESSAGE_UPDATE.
+		msgs[i].Mentions = []string{}
+		msgs[i].MentionUsernames = []string{}
+		for _, username := range parseMentionUsernames(msgs[i].Content) {
+			if !seen[username] {
+				seen[username] = true
+				usernames = append(usernames, username)
+			}
+		}
+	}
 	if len(usernames) == 0 {
 		return
 	}
-	idMap, err := s.repo.GetUserIDsByUsernames(ctx, usernames)
+	idMap, err := s.repo.GetUserIDsByUsernames(ctx, channelID, usernames)
 	if err != nil {
-		return
+		log.Warn().Err(err).Str("channelId", channelID).Msg("message.Service: resolve mentions")
+		return // Fail closed: unresolved text must not highlight or notify.
 	}
-	for _, id := range idMap {
-		msg.Mentions = append(msg.Mentions, id)
+	for i := range msgs {
+		for _, username := range parseMentionUsernames(msgs[i].Content) {
+			if id, ok := idMap[username]; ok {
+				msgs[i].Mentions = append(msgs[i].Mentions, id)
+				msgs[i].MentionUsernames = append(msgs[i].MentionUsernames, username)
+			}
+		}
 	}
 }
 
@@ -173,6 +214,8 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 	if hasMore {
 		msgs = msgs[:limit]
 	}
+
+	s.resolveMessageMentions(ctx, channelID, msgs)
 
 	// Enrich with guildID for guild channels; reverse so oldest is first
 	if !cc.IsDM {
@@ -229,6 +272,7 @@ func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMe
 		return nil, err
 	}
 	msg.GuildID = guildID
+	s.resolveMentions(ctx, msg)
 	if reactions, err := s.repo.GetReactionsForMessages(ctx, []string{msg.ID}, userID); err == nil {
 		msg.Reactions = reactions[msg.ID]
 	}

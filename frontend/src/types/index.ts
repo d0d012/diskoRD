@@ -65,6 +65,8 @@ export interface Message {
   deletedAt?: string;
   reactions?: { emoji: string; count: number; selfReacted: boolean }[];
   mentions?: string[];
+  /** Server-validated usernames in this channel's guild/DM scope. */
+  mentionUsernames?: string[];
   attachments?: string[]; // public image URLs
   decorations?: Decoration[];
 }
