@@ -1,5 +1,5 @@
 import "@fontsource/silkscreen/400.css";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuthStore } from "../../../stores/authStore";
 import { usePixelArtStore } from "../../../stores/pixelArtStore";
@@ -20,6 +20,14 @@ const HERO_BOX = 72;
 const CASE_BOX = 44;
 const FLOOR = 10;
 const WAINSCOT = 24;
+
+export function reorderPiece<T>(items: T[], from: number, to: number): T[] {
+  if (from < 0 || from >= items.length || to < 0 || to >= items.length || from === to) return items;
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
 
 /** Room zoom: every room pixel is S CSS pixels, so the whole room stays crisp. */
 function roomScale(): number {
@@ -77,16 +85,16 @@ function Plaque({ S, piece, wide }: { S: number; piece: PixelArtPiece; wide?: bo
 }
 
 /** One piece on display: spotlight, glass case with reflections, marble pedestal with a plaque. */
-function Vitrine({ piece, S, box, hero, arranging, dragging, onOpen, onDragStart, onDrop }: {
+function Vitrine({ piece, index, S, box, hero, arranging, dragging, onOpen, onPointerDown }: {
   piece: PixelArtPiece;
+  index: number;
   S: number;
   box: number;
   hero?: boolean;
   arranging: boolean;
   dragging: boolean;
   onOpen: () => void;
-  onDragStart: () => void;
-  onDrop: () => void;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const url = useMemo(() => docImageUrl(piece.doc), [piece.doc]);
   const inner = box * S;
@@ -103,11 +111,9 @@ function Vitrine({ piece, S, box, hero, arranging, dragging, onOpen, onDragStart
   return (
     <div
       className="museum-case relative flex flex-col items-center flex-shrink-0"
-      draggable={arranging}
-      onDragStart={(e) => { if (e.dataTransfer) e.dataTransfer.effectAllowed = "move"; onDragStart(); }}
-      onDragOver={(e) => { if (arranging) e.preventDefault(); }}
-      onDrop={(e) => { e.preventDefault(); onDrop(); }}
-      style={{ width: pedestalW * S, opacity: dragging ? 0.4 : 1, cursor: arranging ? "grab" : "pointer" }}
+      data-index={index}
+      onPointerDown={onPointerDown}
+      style={{ width: pedestalW * S, opacity: dragging ? 0.4 : 1, cursor: arranging ? "grab" : "pointer", touchAction: arranging ? "none" : undefined }}
     >
       <div aria-hidden="true" style={{ width: 12 * S, height: 5 * S, ...pixelated(lampTile(), 12, 5, S) }} />
       <div
@@ -219,7 +225,17 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [order, setOrder] = useState<PixelArtPiece[] | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const dragFromRef = useRef<number | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  const museumRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
+
+  const finishDrag = useCallback(() => {
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = null;
+    dragFromRef.current = null;
+    setDragFrom(null);
+  }, []);
 
   useEffect(() => {
     loadProfile(userId).catch(() => setError("Couldn't load this showcase."));
@@ -237,30 +253,64 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       e.stopPropagation();
-      if (order) setOrder(null);
-      else onClose();
+      if (order) {
+        finishDrag();
+        setOrder(null);
+      } else onClose();
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [overlayOpen, order, onClose]);
+  }, [overlayOpen, order, onClose, finishDrag]);
 
   const pieces = order ?? profile?.showcase ?? [];
   const arranging = order !== null;
+  // Also end any gesture started while a save was pending, or on unmount.
+  useEffect(() => {
+    if (arranging) return finishDrag;
+  }, [arranging, finishDrag]);
+
   const [hero, ...rest] = pieces;
   const banner = profile ? bannerArt(profile.banner) : null;
   const bannerUrl = useMemo(() => (banner ? docImageUrl(banner) : null), [banner]);
   const bannerZoom = banner ? Math.max(1, Math.floor((150 * S) / banner.width)) : 1;
 
-  function move(to: number) {
-    if (dragFrom === null || dragFrom === to || !order) return;
-    const next = [...order];
-    const [item] = next.splice(dragFrom, 1);
-    next.splice(to, 0, item);
-    setOrder(next);
-    setDragFrom(null);
+  function startDrag(index: number, e: React.PointerEvent<HTMLDivElement>) {
+    if (!arranging || e.button !== 0 || !e.isPrimary || dragFromRef.current !== null) return;
+    e.preventDefault();
+    const pointerId = e.pointerId;
+    dragFromRef.current = index;
+    setDragFrom(index);
+
+    // Slot 0 has a different parent, so reordering can unmount the pressed case.
+    // Keep the gesture on window rather than capturing it on that case.
+    function onMove(event: PointerEvent) {
+      if (event.pointerId !== pointerId) return;
+      const from = dragFromRef.current;
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-index]");
+      if (from === null || !target || !museumRef.current?.contains(target)) return;
+      const to = Number(target.getAttribute("data-index"));
+      if (!Number.isInteger(to) || to < 0 || to >= pieces.length || from === to) return;
+      dragFromRef.current = to;
+      setDragFrom(to);
+      setOrder((current) => current ? reorderPiece(current, from, to) : current);
+    }
+    function onEnd(event: PointerEvent) {
+      if (event.pointerId === pointerId) finishDrag();
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    window.addEventListener("blur", finishDrag);
+    dragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      window.removeEventListener("blur", finishDrag);
+    };
   }
 
   async function saveOrder() {
+    finishDrag();
     if (!order) return;
     setError("");
     try {
@@ -277,20 +327,21 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
       <Vitrine
         key={piece.id}
         piece={piece}
+        index={index}
         S={S}
         box={isHero ? HERO_BOX : CASE_BOX}
         hero={isHero}
         arranging={arranging}
         dragging={dragFrom === index}
         onOpen={() => setViewer(index)}
-        onDragStart={() => setDragFrom(index)}
-        onDrop={() => move(index)}
+        onPointerDown={(e) => startDrag(index, e)}
       />
     );
   }
 
   return createPortal(
     <div
+      ref={museumRef}
       role="dialog"
       aria-modal="true"
       aria-label={isSelf ? "Your showcase" : `${name}'s showcase`}
@@ -307,7 +358,7 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
           {isSelf && !arranging && pieces.length > 1 && <BrassButton S={S} onClick={() => setOrder([...(profile?.showcase ?? [])])}>Arrange</BrassButton>}
           {isSelf && arranging && (
             <>
-              <BrassButton S={S} onClick={() => setOrder(null)}>Cancel</BrassButton>
+              <BrassButton S={S} onClick={() => { finishDrag(); setOrder(null); }}>Cancel</BrassButton>
               <BrassButton S={S} active onClick={() => void saveOrder()}>Save order</BrassButton>
             </>
           )}
