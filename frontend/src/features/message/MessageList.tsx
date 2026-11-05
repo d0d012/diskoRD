@@ -14,10 +14,13 @@ interface Props {
   intro?: ReactNode;
 }
 
+/** Consecutive messages from the same author group into one block within this window. */
+export const MESSAGE_GROUP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
 function isSameAuthorAndClose(a: Message, b: Message): boolean {
   if (a.author?.id !== b.author?.id) return false;
   const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  return diff < 7 * 60 * 1000; // 7 minutes
+  return diff < MESSAGE_GROUP_WINDOW_MS;
 }
 
 /** Distance from the bottom (px) after which the jump-to-latest button shows. */
@@ -166,7 +169,7 @@ export function MessageList({ channelId, channelName, intro }: Props) {
         <div className="pb-4" style={{ isolation: "isolate" }}>
           {msgs.map((msg, i) => {
             const prev = i > 0 ? msgs[i - 1] : null;
-            const grouped = prev != null && isSameAuthorAndClose(prev, msg);
+            const grouped = !msg.replyTo && !msg.referencedMessage && prev != null && isSameAuthorAndClose(prev, msg);
             return <MessageItem key={msg.id} message={msg} isGrouped={grouped} />;
           })}
         </div>

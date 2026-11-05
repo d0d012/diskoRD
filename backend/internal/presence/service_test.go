@@ -59,7 +59,8 @@ func TestTouchRecreatesExpiredKey(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, svc.Set(ctx, "u1", "idle"))
-	mr.Del("presence:u1") // simulate the key expiring while the socket stays open
+	mr.FastForward(ttl) // simulate sleep lasting beyond the presence TTL
+	assert.False(t, mr.Exists("presence:u1"), "the key must expire while the connection is suspended")
 
 	recreated, err := svc.Touch(ctx, "u1", "idle")
 	require.NoError(t, err)

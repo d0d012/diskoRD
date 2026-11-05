@@ -102,6 +102,16 @@ npm run dev
 
 Or put the two variables in `frontend/.env.development.local` (gitignored, dev only) and run `npm run dev`.
 
+Optional GIF picker: set `VITE_KLIPY_API_KEY` in your frontend build environment
+(or your local, gitignored frontend environment file). This is a public client app key,
+not a backend secret; do not commit real keys. Without it, the GIF button is disabled
+with “GIFs not configured”. Rebuild the frontend after changing build-time variables.
+KLIPY requests and media loads go directly from the browser/Tauri webview to KLIPY;
+no server proxy or media cache is used. Favorite slugs/dimensions are stored in your
+account (apply migration `000027` manually before using favorites). Media URLs do
+not reliably expose slugs, so chat GIFs open in the lightbox but omit a favorite star;
+save GIFs from the picker instead.
+
 Open http://localhost:5173.
 
 ## Useful commands

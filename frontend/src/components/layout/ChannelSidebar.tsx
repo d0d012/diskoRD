@@ -16,6 +16,7 @@ import { VoiceStatusBar } from "../../features/voice/VoiceStatusBar";
 import { VolumeMenu } from "../../features/voice/VolumeMenu";
 import type { Channel, PreferredStatus } from "../../types";
 import { micConstraints } from "../../lib/mediaDevices";
+import { normalizeChannelName } from "../../lib/channelName";
 import { UserSettingsModal } from "../../features/settings/UserSettingsModal";
 
 // ── Inline-editable channel item ────────────────────────────────────────────
@@ -47,14 +48,16 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
   }, [editing]);
 
   const commitRename = async () => {
-    const trimmed = draft.trim();
-    if (!trimmed || trimmed === channel.name) {
+    // Normalize like the create modal so Turkish letters survive and no other
+    // characters get stripped (backend stores the name verbatim).
+    const next = normalizeChannelName(draft);
+    if (!next || next === channel.name) {
       setDraft(channel.name);
       setEditing(false);
       return;
     }
     try {
-      await renameChannel(channel.id, guildId, trimmed);
+      await renameChannel(channel.id, guildId, next);
     } catch {
       setDraft(channel.name);
     }
@@ -263,9 +266,9 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
   }, [editing]);
 
   const commitRename = async () => {
-    const trimmed = draft.trim();
-    if (!trimmed || trimmed === channel.name) { setDraft(channel.name); setEditing(false); return; }
-    try { await renameChannel(channel.id, guildId, trimmed); } catch { setDraft(channel.name); }
+    const next = normalizeChannelName(draft);
+    if (!next || next === channel.name) { setDraft(channel.name); setEditing(false); return; }
+    try { await renameChannel(channel.id, guildId, next); } catch { setDraft(channel.name); }
     setEditing(false);
   };
 

@@ -54,17 +54,30 @@ export interface Channel {
   createdAt: string;
 }
 
+export interface ReferencedMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  avatarUrl?: string;
+  content: string;
+  deleted: boolean;
+}
+
 export interface Message {
   id: string;
   channelId: string;
   guildId?: string;
   author: User;
   content: string;
+  replyTo?: string;
+  referencedMessage?: ReferencedMessage;
   createdAt: string;
   editedAt?: string;
   deletedAt?: string;
   reactions?: { emoji: string; count: number; selfReacted: boolean }[];
   mentions?: string[];
+  /** Server-validated usernames in this channel's guild/DM scope. */
+  mentionUsernames?: string[];
   attachments?: string[]; // public image URLs
   decorations?: Decoration[];
 }

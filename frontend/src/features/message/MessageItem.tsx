@@ -31,7 +31,7 @@ function formatDate(iso: string) {
 }
 
 export function MessageItem({ message, isGrouped }: Props) {
-  const { editMessage, toggleReaction } = useMessageStore();
+  const { editMessage, toggleReaction, startReply } = useMessageStore();
   // Decorating: pick or draw art in the editor, then drop it anywhere in the chat.
   const [decorating, setDecorating] = useState(false);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
@@ -78,6 +78,19 @@ export function MessageItem({ message, isGrouped }: Props) {
     }
   }
 
+  function jumpToReply() {
+    const id = message.referencedMessage?.id;
+    if (!id) return;
+    const original = Array.from(document.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find((el) => el.dataset.messageId === id);
+    if (!original) return;
+    original.scrollIntoView({ behavior: "smooth", block: "center" });
+    original.classList.remove("reply-highlight");
+    void original.offsetWidth; // restart the animation on repeated clicks
+    original.classList.add("reply-highlight");
+    window.setTimeout(() => original.classList.remove("reply-highlight"), 1800);
+  }
+
   function handleEditSubmit() {
     if (editContent.trim() && editContent !== message.content) {
       editMessage(message.id, message.channelId, editContent.trim());
@@ -100,10 +113,10 @@ export function MessageItem({ message, isGrouped }: Props) {
     <div
       ref={rowRef}
       tabIndex={-1}
-      className="group flex gap-4 px-4 py-0.5 rounded transition-colors relative outline-none"
+      className="group flex flex-wrap gap-x-4 px-4 py-0.5 rounded transition-colors relative outline-none"
       data-message-id={message.id}
       style={{
-        paddingTop: isGrouped ? "1px" : "16px",
+        paddingTop: isGrouped ? "2px" : "16px",
         backgroundColor: hovered || menuOpen ? "var(--color-dc-bg-modifier-hover)" : "transparent",
       }}
       onMouseEnter={() => setHovered(true)}
@@ -112,9 +125,43 @@ export function MessageItem({ message, isGrouped }: Props) {
       onKeyDown={handleRowKeyDown}
     >
       <MessageDecorations decorations={message.decorations} />
+      <button
+        type="button"
+        title="Reply"
+        aria-label="Reply"
+        onClick={() => startReply(message)}
+        className="absolute right-4 -top-3 hidden group-hover:block focus:block rounded px-2 py-1 text-xs shadow"
+        style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
+      >Reply</button>
 
-      {/* Avatar or spacer */}
-      <div className="w-10 flex-shrink-0">
+      {message.referencedMessage && (
+        <div className="relative w-full pl-14 mb-1">
+          <span aria-hidden="true" className="reply-spine absolute select-none pointer-events-none" />
+          <button type="button" onClick={jumpToReply} className="reply-preview flex max-w-full items-center gap-1.5 text-xs leading-4 text-left">
+            {message.referencedMessage.deleted ? (
+              <span className="italic truncate">Original message was deleted</span>
+            ) : (
+              <>
+                <span className="select-none" aria-hidden="true">
+                  <Avatar name={message.referencedMessage.authorName} src={message.referencedMessage.avatarUrl} size={16} />
+                </span>
+                <span className="font-semibold text-dc-text-normal shrink-0 max-w-40 truncate">{message.referencedMessage.authorName}</span>{" "}
+                {!message.referencedMessage.content && (
+                  <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8" cy="8" r="1" />
+                    <path d="m3 17 6-6 4 4 3-3 5 5" />
+                  </svg>
+                )}
+                <span className="truncate">{message.referencedMessage.content || "Click to see attachment"}</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Out-of-flow timestamp cannot wrap or change a grouped row's height. */}
+      <div className="relative w-10 flex-shrink-0 select-none" style={{ WebkitUserSelect: "none" }}>
         {!isGrouped ? (
           <button
             onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
@@ -125,8 +172,9 @@ export function MessageItem({ message, isGrouped }: Props) {
           </button>
         ) : (
           <span
-            className="invisible group-hover:visible text-xs leading-none pt-1 text-right w-full block"
-            style={{ color: "var(--color-dc-text-muted)" }}
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 invisible group-hover:visible select-none whitespace-nowrap text-[10px] leading-5 text-right"
+            style={{ color: "var(--color-dc-text-muted)", WebkitUserSelect: "none" }}
           >
             {formatTime(message.createdAt)}
           </span>
@@ -190,7 +238,7 @@ export function MessageItem({ message, isGrouped }: Props) {
             </p>
           </div>
         ) : (
-            <MessageContent content={message.content} attachments={message.attachments} />
+            <MessageContent content={message.content} attachments={message.attachments} mentionUsernames={message.mentionUsernames} />
           )}
 
           {/* Reactions — only rendered when present, so hover never changes layout */}

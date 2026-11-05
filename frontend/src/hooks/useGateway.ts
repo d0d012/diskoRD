@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { emitDMMessage } from "../lib/dmMessageEvent";
 import { useAuthStore } from "../stores/authStore";
 import { refreshSession } from "../lib/api";
 import { useMessageStore } from "../stores/messageStore";
@@ -14,6 +15,7 @@ import { useUserStore } from "../stores/userStore";
 import { useToastStore } from "../features/notification/NotificationToast";
 import { playSound } from "../lib/sounds";
 import { storage } from "../lib/storage";
+import { createGatewayLiveness, createOnlineHandler, reconnectOnSleepDrift } from "../lib/gatewayLiveness";
 import type { Decoration, Message, PreferredStatus, PresenceStatus, PublicUser, User } from "../types";
 
 const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ??
@@ -63,17 +65,29 @@ export function useGateway() {
 
     let destroyed = false;
     let backoffMs = 1000;
+    let pendingReplace: WebSocket | null = null;
+    let lastTimerTick = Date.now();
+    const liveness = createGatewayLiveness(() => reconnectNow(false, true));
 
-    function connect() {
+    function connect(replaceExisting = false) {
       if (destroyed) return;
+      if (!replaceExisting && gatewaySocket &&
+        (gatewaySocket.readyState === WebSocket.OPEN || gatewaySocket.readyState === WebSocket.CONNECTING)) return;
+      // Keep the original socket across failed replacement attempts.
+      const previousSocket = pendingReplace ?? gatewaySocket;
       const token = useAuthStore.getState().accessToken;
       if (!token) return;
+      if (replaceExisting) pendingReplace = previousSocket;
 
       const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       gatewaySocket = ws;
 
       ws.onopen = () => {
+        if (previousSocket && previousSocket !== ws && previousSocket.readyState !== WebSocket.CLOSED) {
+          previousSocket.close();
+        }
+        pendingReplace = null;
         // Connection established — HELLO event will set heartbeat interval.
         // Seed the picker from the session until READY.me arrives.
         backoffMs = 1000;
@@ -81,6 +95,8 @@ export function useGateway() {
       };
 
       ws.onmessage = (evt) => {
+        if (destroyed || gatewaySocket !== ws) return;
+        liveness.receivedMessage();
         let event: GatewayEvent;
         try {
           event = JSON.parse(evt.data as string);
@@ -120,7 +136,11 @@ export function useGateway() {
               }
             }
 
+            const alreadyReceived = useMessageStore.getState().messages[msg.channelId]?.some((m) => m.id === msg.id);
             addMessage(msg, currentActive, currentUser?.id);
+            if (!msg.guildId && msg.author?.id !== currentUser?.id && !alreadyReceived) {
+              emitDMMessage(msg);
+            }
 
             // ── Notification logic ─────────────────────────────────────────
             // Never notify for own messages or messages in the active channel
@@ -419,8 +439,8 @@ export function useGateway() {
       };
 
       ws.onclose = (evt) => {
-        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         if (destroyed || gatewaySocket !== ws) return;
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         const delay = backoffMs;
         backoffMs = Math.min(backoffMs * 2, 30000);
         const reconnect = () => {
@@ -441,45 +461,50 @@ export function useGateway() {
 
     connect();
 
-    // Timers are throttled/frozen while backgrounded or asleep; reconnect the
-    // moment the user comes back instead of waiting out the backoff.
-    function reconnectNow() {
+    // Probe an apparently-open socket on resume; only replace it if the server
+    // doesn't answer (or send any other message) within the deadline.
+    function reconnectNow(force = false, replaceOpen = false) {
       if (destroyed) return;
       const ws = gatewaySocket;
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-      if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      backoffMs = 1000;
-      connect();
-    }
-    // A background tab can miss several interval beats; an immediate one keeps
-    // presence fresh the moment the user returns.
-    function sendHeartbeatNow() {
-      const ws = gatewaySocket;
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ op: "HEARTBEAT", s: seqRef.current }));
+      if (ws?.readyState === WebSocket.CONNECTING) return;
+      if (ws?.readyState === WebSocket.OPEN && !replaceOpen) {
+        if (force) liveness.probe(() => ws.send(JSON.stringify({ op: "HEARTBEAT", s: seqRef.current })));
+        return;
       }
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      // A suspended desktop may retain an OPEN socket whose TCP connection has
+      // died. Replace it on resume rather than trusting a heartbeat send that
+      // can succeed locally while never reaching the server.
+      backoffMs = 1000;
+      connect(!!ws && ws.readyState === WebSocket.OPEN);
     }
     function onVisible() {
-      if (document.visibilityState !== "visible") return;
-      reconnectNow();
-      sendHeartbeatNow();
+      if (document.visibilityState === "visible") reconnectNow(true);
     }
     function onFocus() {
-      reconnectNow();
-      sendHeartbeatNow();
+      reconnectNow(true);
     }
+    const driftInterval = setInterval(() => {
+      const now = Date.now();
+      reconnectOnSleepDrift(lastTimerTick, now, 10_000, () => reconnectNow(true));
+      lastTimerTick = now;
+    }, 10_000);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
-    window.addEventListener("online", reconnectNow);
+    const onOnline = createOnlineHandler(reconnectNow);
+    window.addEventListener("online", onOnline);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
-      window.removeEventListener("online", reconnectNow);
+      window.removeEventListener("online", onOnline);
+      clearInterval(driftInterval);
+      liveness.dispose();
       destroyed = true;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       gatewaySocket?.close();
+      if (pendingReplace && pendingReplace.readyState !== WebSocket.CLOSED) pendingReplace.close();
       gatewaySocket = null;
     };
   }, [isAuthed]);

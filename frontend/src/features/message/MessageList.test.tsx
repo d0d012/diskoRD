@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MessageList } from "./MessageList";
+import { MessageList, MESSAGE_GROUP_WINDOW_MS } from "./MessageList";
 import { useMessageStore } from "../../stores/messageStore";
 import { useAuthStore } from "../../stores/authStore";
 import type { Message, User } from "../../types";
@@ -31,8 +31,8 @@ function makeMessages(count: number, authorId = "other"): Message[] {
     guildId: "g1",
     author: author(authorId),
     content: `message ${i}`,
-    // Far apart so messages don't group.
-    createdAt: new Date(Date.UTC(2026, 0, 1, 0, i * 10)).toISOString(),
+    // 11 minutes apart so messages never group.
+    createdAt: new Date(Date.UTC(2026, 0, 1, 0, i * 11)).toISOString(),
   }));
 }
 
@@ -52,6 +52,22 @@ function scrollTo(scrollTop: number) {
 }
 
 const jumpButton = () => screen.queryByRole("button", { name: "Jump to latest message" });
+
+/** Grouped rows hide the avatar; MessageItem labels it "View <user>'s profile". */
+const profileButtons = () => screen.queryAllByRole("button", { name: "View other's profile" });
+
+function pair(minutesApart: number): Message[] {
+  const base = Date.UTC(2026, 0, 1, 12, 0);
+  return [
+    { ...makeMessages(1)[0], id: "p0", content: "first", createdAt: new Date(base).toISOString() },
+    {
+      ...makeMessages(1)[0],
+      id: "p1",
+      content: "second",
+      createdAt: new Date(base + minutesApart * 60_000).toISOString(),
+    },
+  ];
+}
 
 describe("MessageList jump to latest", () => {
   beforeEach(() => {
@@ -135,5 +151,100 @@ describe("MessageList jump to latest", () => {
 
     fireEvent.load(decoration);
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageList message grouping", () => {
+  beforeEach(() => {
+    useAuthStore.setState({ user: author("me") });
+    useMessageStore.setState({ fetchMessages: vi.fn().mockResolvedValue(undefined), messages: {}, hasMore: {} });
+  });
+
+  it("groups same-author messages inside the 10 minute window", () => {
+    expect(MESSAGE_GROUP_WINDOW_MS).toBe(10 * 60 * 1000);
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages(pair(9));
+    // One avatar/header for the group, not one per message.
+    expect(profileButtons()).toHaveLength(1);
+    expect(screen.getByText("second")).toBeInTheDocument();
+  });
+
+  it.each([false, true])("starts a reply's own group but groups the following message (deleted=%s)", (deleted) => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const [first, reply] = pair(1);
+    reply.replyTo = first.id;
+    reply.referencedMessage = { id: first.id, authorId: "other", authorName: "Parent author", content: "parent text", deleted };
+    setMessages([first, reply, { ...reply, id: "following", content: "following", replyTo: undefined, referencedMessage: undefined }]);
+    expect(profileButtons()).toHaveLength(2);
+    expect(screen.getByText("following").closest("[data-message-id]")).toHaveStyle({ paddingTop: "2px" });
+    expect(screen.getByText("second").closest("[data-message-id]")).toHaveStyle({ paddingTop: "16px" });
+  });
+
+  it("renders a reply avatar and jumps to the original from the preview", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const [first, reply] = pair(1);
+    reply.referencedMessage = { id: first.id, authorId: "other", authorName: "Parent author", avatarUrl: "/parent.png", content: "parent text", deleted: false };
+    setMessages([first, reply]);
+    const preview = screen.getByRole("button", { name: "Parent author parent text" });
+    expect(preview.querySelector("img")).toHaveAttribute("src", "/parent.png");
+    scrollIntoView.mockClear();
+    fireEvent.click(preview);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    expect(screen.getByText("first").closest("[data-message-id]")).toHaveClass("reply-highlight");
+  });
+
+  it("shows attachment and deleted-parent reply fallbacks", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const [first, reply] = pair(1);
+    reply.referencedMessage = { id: first.id, authorId: "other", authorName: "Parent author", content: "", deleted: false };
+    setMessages([first, reply]);
+    const preview = screen.getByRole("button", { name: "Parent author Click to see attachment" });
+    expect(preview.querySelector("svg")).toBeInTheDocument();
+    expect(preview.querySelector(".select-none")).toHaveAttribute("aria-hidden", "true");
+    setMessages([first, { ...reply, referencedMessage: { ...reply.referencedMessage, deleted: true } }]);
+    expect(screen.getByRole("button", { name: "Original message was deleted" }).firstChild).toHaveClass("italic");
+    expect(screen.queryByText("Parent author")).not.toBeInTheDocument();
+  });
+
+  it("keeps grouped gutters non-selectable and timestamps out of layout", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const [first, second] = pair(1);
+    setMessages([first, second, { ...second, id: "third", content: "third", attachments: [], reactions: [] }]);
+    for (const text of ["second", "third"]) {
+      const row = screen.getByText(text).closest("[data-message-id]")!;
+      expect(row).toHaveStyle({ paddingTop: "2px" });
+      const timestamp = row.querySelector("span.invisible")!;
+      expect(timestamp).toHaveClass("absolute", "select-none", "whitespace-nowrap");
+      expect(timestamp).toHaveAttribute("aria-hidden", "true");
+      expect(timestamp.parentElement).toHaveClass("select-none");
+      expect(screen.getByText(text)).toHaveClass("m-0", "leading-5");
+    }
+  });
+
+  it("starts a new group at exactly 10 minutes and beyond", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages(pair(10));
+    expect(profileButtons()).toHaveLength(2);
+  });
+
+  it("still grouped at the old 7 minute threshold", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages(pair(8));
+    expect(profileButtons()).toHaveLength(1);
+  });
+
+  it("never groups different authors", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const base = Date.UTC(2026, 0, 1, 12, 0);
+    const a = { ...makeMessages(1)[0], id: "d0", content: "first", createdAt: new Date(base).toISOString() };
+    const b = {
+      ...makeMessages(1)[0],
+      id: "d1",
+      author: author("someone-else"),
+      content: "second",
+      createdAt: new Date(base + 60_000).toISOString(),
+    };
+    setMessages([a, b]);
+    expect(screen.queryAllByRole("button", { name: /^View .* profile$/ })).toHaveLength(2);
   });
 });

@@ -20,6 +20,7 @@ import (
 	"github.com/d0d012/diskord/internal/decoration"
 	"github.com/d0d012/diskord/internal/friend"
 	"github.com/d0d012/diskord/internal/gateway"
+	"github.com/d0d012/diskord/internal/giffavorite"
 	"github.com/d0d012/diskord/internal/guild"
 	"github.com/d0d012/diskord/internal/invite"
 	"github.com/d0d012/diskord/internal/linkpreview"
@@ -183,6 +184,8 @@ func main() {
 	decoration.RegisterRoutes(app, decoration.NewHandler(decorationService), authMw,
 		middleware.RateLimit(rdb, middleware.RateLimitConfig{Max: 10, Window: time.Minute}))
 	msgService.SetDecorations(decorationRepo)
+
+	giffavorite.RegisterRoutes(app, giffavorite.NewHandler(giffavorite.NewService(giffavorite.NewRepository(pool))), authMw)
 
 	pixelArtService := pixelart.NewService(pixelart.NewRepository(pool))
 	pixelArtService.SetPublisher(hub)
