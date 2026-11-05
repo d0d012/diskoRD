@@ -31,7 +31,7 @@ function formatDate(iso: string) {
 }
 
 export function MessageItem({ message, isGrouped }: Props) {
-  const { editMessage, toggleReaction } = useMessageStore();
+  const { editMessage, toggleReaction, startReply } = useMessageStore();
   // Decorating: pick or draw art in the editor, then drop it anywhere in the chat.
   const [decorating, setDecorating] = useState(false);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
@@ -78,6 +78,19 @@ export function MessageItem({ message, isGrouped }: Props) {
     }
   }
 
+  function jumpToReply() {
+    const id = message.referencedMessage?.id;
+    if (!id) return;
+    const original = Array.from(document.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find((el) => el.dataset.messageId === id);
+    if (!original) return;
+    original.scrollIntoView({ behavior: "smooth", block: "center" });
+    original.classList.remove("reply-highlight");
+    void original.offsetWidth; // restart the animation on repeated clicks
+    original.classList.add("reply-highlight");
+    window.setTimeout(() => original.classList.remove("reply-highlight"), 1800);
+  }
+
   function handleEditSubmit() {
     if (editContent.trim() && editContent !== message.content) {
       editMessage(message.id, message.channelId, editContent.trim());
@@ -112,6 +125,14 @@ export function MessageItem({ message, isGrouped }: Props) {
       onKeyDown={handleRowKeyDown}
     >
       <MessageDecorations decorations={message.decorations} />
+      <button
+        type="button"
+        title="Reply"
+        aria-label="Reply"
+        onClick={() => startReply(message)}
+        className="absolute right-4 -top-3 hidden group-hover:block focus:block rounded px-2 py-1 text-xs shadow"
+        style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
+      >Reply</button>
 
       {/* Avatar or spacer */}
       <div className="w-10 flex-shrink-0">
@@ -135,6 +156,12 @@ export function MessageItem({ message, isGrouped }: Props) {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
+        {message.referencedMessage && (
+          <button type="button" onClick={jumpToReply} className="flex max-w-full items-center gap-1 text-xs text-left hover:underline mb-1" style={{ color: "var(--color-dc-text-muted)" }}>
+            <span className="font-semibold truncate">{message.referencedMessage.deleted ? "Deleted message" : message.referencedMessage.authorName}</span>
+            {!message.referencedMessage.deleted && <span className="truncate">{message.referencedMessage.content || "Attachment"}</span>}
+          </button>
+        )}
         {!isGrouped && (
           <div className="flex items-baseline gap-2 mb-0.5">
             <span

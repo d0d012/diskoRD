@@ -25,8 +25,8 @@ func (m *mockMessageRepo) GetUserIDsByUsernames(ctx context.Context, channelID s
 	a := m.Called(ctx, channelID, names)
 	return a.Get(0).(map[string]string), a.Error(1)
 }
-func (m *mockMessageRepo) Create(ctx context.Context, channelID, authorID, content string) (*MessageResponse, error) {
-	a := m.Called(ctx, channelID, authorID, content)
+func (m *mockMessageRepo) Create(ctx context.Context, channelID, authorID, content string, replyTo *string) (*MessageResponse, error) {
+	a := m.Called(ctx, channelID, authorID, content, replyTo)
 	return a.Get(0).(*MessageResponse), a.Error(1)
 }
 func (m *mockMessageRepo) List(ctx context.Context, channelID string, before *string, limit int) ([]MessageResponse, error) {
@@ -40,6 +40,10 @@ func (m *mockMessageRepo) GetAuthorChannelAndGuild(ctx context.Context, id strin
 func (m *mockMessageRepo) Update(ctx context.Context, id, content string) (*MessageResponse, error) {
 	a := m.Called(ctx, id, content)
 	return a.Get(0).(*MessageResponse), a.Error(1)
+}
+func (m *mockMessageRepo) GetReferences(ctx context.Context, ids []string) (map[string]*ReferencedMessage, error) {
+	a := m.Called(ctx, ids)
+	return a.Get(0).(map[string]*ReferencedMessage), a.Error(1)
 }
 func (m *mockMessageRepo) GetReactionsForMessages(ctx context.Context, ids []string, viewer string) (map[string][]ReactionRef, error) {
 	a := m.Called(ctx, ids, viewer)
@@ -89,7 +93,7 @@ func TestSendResolvesMentionsInChannelScope(t *testing.T) {
 			if !tc.cc.IsDM {
 				members.On("IsMember", mock.Anything, "guild", "sender").Return(true, nil).Once()
 			}
-			repo.On("Create", mock.Anything, tc.channel, "sender", content).Return(&MessageResponse{ID: "msg", ChannelID: tc.channel, Content: content}, nil).Once()
+			repo.On("Create", mock.Anything, tc.channel, "sender", content, (*string)(nil)).Return(&MessageResponse{ID: "msg", ChannelID: tc.channel, Content: content}, nil).Once()
 			// The persistence boundary must receive the channel, not a global lookup.
 			repo.On("GetUserIDsByUsernames", mock.Anything, tc.channel, []string{"alice", "outsider"}).Return(map[string]string{"alice": "alice-id"}, nil).Once()
 
@@ -137,6 +141,7 @@ func TestListBatchesScopedMentionsForHistory(t *testing.T) {
 		{ID: "older", ChannelID: "dm", Content: "@alice"},
 	}, nil)
 	repo.On("GetUserIDsByUsernames", mock.Anything, "dm", []string{"outsider", "alice"}).Return(map[string]string{"alice": "alice-id"}, nil).Once()
+	repo.On("GetReferences", mock.Anything, []string(nil)).Return(map[string]*ReferencedMessage{}, nil).Once()
 	repo.On("GetReactionsForMessages", mock.Anything, []string{"older", "newer"}, "viewer").Return(map[string][]ReactionRef{}, nil)
 	page, err := NewService(repo, nil).List(context.Background(), "viewer", "dm", nil, 50)
 	require.NoError(t, err)
@@ -148,16 +153,19 @@ func TestListBatchesScopedMentionsForHistory(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-func TestEditRecomputesScopedMentions(t *testing.T) {
-	for _, content := range []string{"@alice @outsider", "removed all mentions"} {
+func TestEditRecomputesScopedMentionsAndKeepsReply(t *testing.T) {
+	parentID := "parent"
+	preview := &ReferencedMessage{ID: parentID, AuthorName: "Alice", Content: "original"}
+	for _, content := range []string{"@Alice @outsider", "removed all mentions"} {
 		t.Run(content, func(t *testing.T) {
 			repo := &mockMessageRepo{}
 			repo.On("GetAuthorChannelAndGuild", mock.Anything, "msg").Return("author", "channel", "guild", nil)
 			repo.On("GetChannelContext", mock.Anything, "channel").Return(&ChannelContext{GuildID: "guild"}, nil)
-			repo.On("Update", mock.Anything, "msg", content).Return(&MessageResponse{ID: "msg", ChannelID: "channel", Content: content}, nil)
+			repo.On("Update", mock.Anything, "msg", content).Return(&MessageResponse{ID: "msg", ChannelID: "channel", Content: content, ReplyTo: &parentID}, nil)
+			repo.On("GetReferences", mock.Anything, []string{parentID}).Return(map[string]*ReferencedMessage{parentID: preview}, nil).Once()
 			repo.On("GetReactionsForMessages", mock.Anything, []string{"msg"}, "author").Return(map[string][]ReactionRef{}, nil)
 			if content[0] == '@' {
-				repo.On("GetUserIDsByUsernames", mock.Anything, "channel", []string{"alice", "outsider"}).Return(map[string]string{"alice": "alice-id"}, nil).Once()
+				repo.On("GetUserIDsByUsernames", mock.Anything, "channel", []string{"Alice", "outsider"}).Return(map[string]string{"alice": "alice-id"}, nil).Once()
 			}
 			svc := NewService(repo, nil)
 			pub := &mentionPublisher{}
@@ -166,12 +174,16 @@ func TestEditRecomputesScopedMentions(t *testing.T) {
 			require.NoError(t, err)
 			if content[0] == '@' {
 				assert.Equal(t, []string{"alice-id"}, msg.Mentions)
-				assert.Equal(t, []string{"alice"}, msg.MentionUsernames)
+				assert.Equal(t, []string{"Alice"}, msg.MentionUsernames)
 			} else {
 				assert.Equal(t, []string{}, msg.Mentions)
 				assert.Equal(t, []string{}, msg.MentionUsernames)
 			}
+			assert.Equal(t, &parentID, msg.ReplyTo)
+			assert.Equal(t, preview, msg.ReferencedMessage)
 			require.Len(t, pub.messages, 1)
+			assert.Equal(t, preview, pub.messages[0].ReferencedMessage)
+			assert.Equal(t, msg.Mentions, pub.messages[0].Mentions)
 			repo.AssertExpectations(t)
 		})
 	}

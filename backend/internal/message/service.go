@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
@@ -29,7 +30,9 @@ func parseMentionUsernames(content string) []string {
 // MessageRepository is the service's persistence boundary.
 type MessageRepository interface {
 	GetChannelContext(context.Context, string) (*ChannelContext, error)
-	Create(context.Context, string, string, string) (*MessageResponse, error)
+	GetByID(context.Context, string) (*MessageResponse, error)
+	GetReferences(context.Context, []string) (map[string]*ReferencedMessage, error)
+	Create(context.Context, string, string, string, *string) (*MessageResponse, error)
 	List(context.Context, string, *string, int) ([]MessageResponse, error)
 	Update(context.Context, string, string) (*MessageResponse, error)
 	SoftDelete(context.Context, string) error
@@ -93,10 +96,15 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 		if userID == cc.DMUserB {
 			recipientID = cc.DMUserA
 		}
-		msg, err := s.repo.Create(ctx, channelID, userID, req.Content)
+		ref, err := s.validateReply(ctx, channelID, req.ReplyTo)
 		if err != nil {
-			return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+			return nil, err
 		}
+		msg, err := s.repo.Create(ctx, channelID, userID, req.Content, req.ReplyTo)
+		if err != nil {
+			return nil, sendError(err)
+		}
+		msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 		s.resolveMentions(ctx, msg)
 		if s.pub != nil {
 			s.pub.PublishToDM(userID, recipientID, "MESSAGE_CREATE", msg)
@@ -107,16 +115,50 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 	if err := s.requireMember(ctx, cc.GuildID, userID); err != nil {
 		return nil, err
 	}
-	msg, err := s.repo.Create(ctx, channelID, userID, req.Content)
+	ref, err := s.validateReply(ctx, channelID, req.ReplyTo)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+		return nil, err
 	}
+	msg, err := s.repo.Create(ctx, channelID, userID, req.Content, req.ReplyTo)
+	if err != nil {
+		return nil, sendError(err)
+	}
+	msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 	msg.GuildID = cc.GuildID
 	s.resolveMentions(ctx, msg)
 	if s.pub != nil {
 		s.pub.PublishToGuild(cc.GuildID, "MESSAGE_CREATE", msg)
 	}
 	return msg, nil
+}
+
+func sendError(err error) error {
+	if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusBadRequest {
+		return fe
+	}
+	log.Error().Err(err).Msg("message.Service.Send: create")
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+}
+
+func (s *Service) validateReply(ctx context.Context, channelID string, replyTo *string) (*ReferencedMessage, error) {
+	if replyTo == nil {
+		return nil, nil
+	}
+	parent, err := s.repo.GetByID(ctx, *replyTo)
+	if err != nil {
+		if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusNotFound {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "reply must reference an existing message in this channel")
+		}
+		return nil, fmt.Errorf("message.Service.validateReply: %w", err)
+	}
+	if parent.ChannelID != channelID {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "reply must reference a message in this channel")
+	}
+	refs, err := s.repo.GetReferences(ctx, []string{*replyTo})
+	if err != nil {
+		return nil, fmt.Errorf("message.Service.validateReply: %w", err)
+	}
+	return refs[*replyTo], nil
 }
 
 // SetAttachments persists the public URLs of files uploaded for a message, so
@@ -177,7 +219,7 @@ func (s *Service) resolveMessageMentions(ctx context.Context, channelID string, 
 	}
 	for i := range msgs {
 		for _, username := range parseMentionUsernames(msgs[i].Content) {
-			if id, ok := idMap[username]; ok {
+			if id, ok := idMap[strings.ToLower(username)]; ok {
 				msgs[i].Mentions = append(msgs[i].Mentions, id)
 				msgs[i].MentionUsernames = append(msgs[i].MentionUsernames, username)
 			}
@@ -227,6 +269,25 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 
+	// Attach compact parent previews in one batch, including parents outside this page.
+	if len(msgs) > 0 {
+		var replyIDs []string
+		for i := range msgs {
+			if msgs[i].ReplyTo != nil {
+				replyIDs = append(replyIDs, *msgs[i].ReplyTo)
+			}
+		}
+		refs, err := s.repo.GetReferences(ctx, replyIDs)
+		if err != nil {
+			return nil, fmt.Errorf("message.Service.List: references: %w", err)
+		}
+		for i := range msgs {
+			if msgs[i].ReplyTo != nil {
+				msgs[i].ReferencedMessage = refs[*msgs[i].ReplyTo]
+			}
+		}
+	}
+
 	// Attach reaction summaries for the viewer.
 	if len(msgs) > 0 {
 		ids := make([]string, len(msgs))
@@ -273,6 +334,13 @@ func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMe
 	}
 	msg.GuildID = guildID
 	s.resolveMentions(ctx, msg)
+	if msg.ReplyTo != nil {
+		refs, err := s.repo.GetReferences(ctx, []string{*msg.ReplyTo})
+		if err != nil {
+			return nil, fmt.Errorf("message.Service.Edit: references: %w", err)
+		}
+		msg.ReferencedMessage = refs[*msg.ReplyTo]
+	}
 	if reactions, err := s.repo.GetReactionsForMessages(ctx, []string{msg.ID}, userID); err == nil {
 		msg.Reactions = reactions[msg.ID]
 	}

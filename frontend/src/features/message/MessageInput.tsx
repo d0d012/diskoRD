@@ -29,7 +29,18 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const [uploadError, setUploadError] = useState("");
   const [pixelArtOpen, setPixelArtOpen] = useState(false);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
-  const { sendMessage, uploadImage, typingUsers } = useMessageStore();
+  const { sendMessage, uploadImage, typingUsers, replyingTo, cancelReply } = useMessageStore();
+  const reply = replyingTo?.channelId === channelId ? replyingTo.message : null;
+  useEffect(() => { if (reply) textareaRef.current?.focus(); }, [reply]);
+  // A reply belongs to the channel it was started in, so switching channels
+  // drops it (Discord-like) instead of letting it reappear on return.
+  const prevChannelId = useRef(channelId);
+  useEffect(() => {
+    if (prevChannelId.current !== channelId) {
+      prevChannelId.current = channelId;
+      cancelReply();
+    }
+  }, [channelId, cancelReply]);
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -107,8 +118,11 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     setSending(true);
     setContent("");
     setMention(null);
+    const replyId = reply?.id;
     try {
-      await sendMessage(channelId, trimmed);
+      if (replyId) await sendMessage(channelId, trimmed, replyId);
+      else await sendMessage(channelId, trimmed);
+      if (replyId && useMessageStore.getState().replyingTo?.message.id === replyId) cancelReply();
     } catch {
       // Don't clobber anything typed while the send was in flight.
       setContent((current) => current || trimmed);
@@ -136,7 +150,10 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     setSending(true);
     setUploadError("");
     try {
-      await uploadImage(channelId, file);
+      const replyId = reply?.id;
+      if (replyId) await uploadImage(channelId, file, "", replyId);
+      else await uploadImage(channelId, file);
+      if (replyId && useMessageStore.getState().replyingTo?.message.id === replyId) cancelReply();
     } catch {
       showUploadError("Upload failed.");
     } finally {
@@ -180,6 +197,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         return;
       }
     }
+    if (e.key === "Escape" && reply) { e.preventDefault(); cancelReply(); return; }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -202,6 +220,12 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
 
   return (
     <div className="px-4 pb-6 flex-shrink-0">
+      {reply && (
+        <div className="flex items-center justify-between rounded-t-lg px-4 py-2 text-sm" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+          <span>Replying to <strong>{reply.author?.displayName ?? reply.author?.username ?? "Deleted User"}</strong></span>
+          <button type="button" aria-label="Cancel reply" onClick={cancelReply}>✕</button>
+        </div>
+      )}
       <div
         className="relative flex items-end gap-2 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}

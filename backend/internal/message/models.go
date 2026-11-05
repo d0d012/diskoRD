@@ -11,6 +11,7 @@ type Message struct {
 	ChannelID string     `db:"channel_id"`
 	AuthorID  *string    `db:"author_id"`
 	Content   string     `db:"content"`
+	ReplyTo   *string    `db:"reply_to"`
 	CreatedAt time.Time  `db:"created_at"`
 	EditedAt  *time.Time `db:"edited_at"`
 	DeletedAt *time.Time `db:"deleted_at"`
@@ -23,17 +24,29 @@ type AuthorInfo struct {
 	AvatarURL   *string `json:"avatarUrl"`
 }
 
+// ReferencedMessage is a compact snapshot of the current parent state.
+type ReferencedMessage struct {
+	ID         string  `json:"id"`
+	AuthorID   string  `json:"authorId"`
+	AuthorName string  `json:"authorName"`
+	AvatarURL  *string `json:"avatarUrl,omitempty"`
+	Content    string  `json:"content"`
+	Deleted    bool    `json:"deleted"`
+}
+
 type MessageResponse struct {
-	ID          string        `json:"id"`
-	ChannelID   string        `json:"channelId"`
-	GuildID     string        `json:"guildId"`
-	Author      AuthorInfo    `json:"author"`
-	Content     string        `json:"content"`
-	CreatedAt   time.Time     `json:"createdAt"`
-	EditedAt    *time.Time    `json:"editedAt,omitempty"`
-	Mentions    []string      `json:"mentions"`
-	Attachments []string      `json:"attachments,omitempty"` // public URLs
-	Reactions   []ReactionRef `json:"reactions,omitempty"`
+	ID                string             `json:"id"`
+	ChannelID         string             `json:"channelId"`
+	GuildID           string             `json:"guildId"`
+	Author            AuthorInfo         `json:"author"`
+	Content           string             `json:"content"`
+	ReplyTo           *string            `json:"replyTo,omitempty"`
+	ReferencedMessage *ReferencedMessage `json:"referencedMessage,omitempty"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	EditedAt          *time.Time         `json:"editedAt,omitempty"`
+	Mentions          []string           `json:"mentions"`
+	Attachments       []string           `json:"attachments,omitempty"` // public URLs
+	Reactions         []ReactionRef      `json:"reactions,omitempty"`
 	// MentionUsernames are validated in channel scope, not arbitrary @text.
 	MentionUsernames []string `json:"mentionUsernames"`
 	// Decorations are pixel art pieces pinned behind the message.
@@ -49,7 +62,8 @@ type ReactionRef struct {
 }
 
 type CreateMessageRequest struct {
-	Content string `json:"content" validate:"required,min=1,max=2000"`
+	Content string  `json:"content" validate:"required,min=1,max=2000"`
+	ReplyTo *string `json:"replyTo" validate:"omitempty,uuid"`
 }
 
 type EditMessageRequest struct {

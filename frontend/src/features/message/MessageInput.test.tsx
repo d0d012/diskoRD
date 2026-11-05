@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MessageInput } from "./MessageInput";
 import { useMessageStore } from "../../stores/messageStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -7,6 +7,7 @@ import { useFriendStore } from "../../stores/friendStore";
 import { useUserStore } from "../../stores/userStore";
 import { api } from "../../lib/api";
 import { clearMentionRosterCache } from "./useMentionCandidates";
+import type { Message } from "../../types";
 
 vi.mock("../../lib/api", () => ({
   api: { post: vi.fn(), get: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -33,7 +34,7 @@ describe("MessageInput", () => {
     clearMentionRosterCache();
     sendMessage.mockReset().mockResolvedValue(undefined);
     uploadImage.mockReset().mockResolvedValue(undefined);
-    useMessageStore.setState({ sendMessage, uploadImage, typingUsers: {} });
+    useMessageStore.setState({ sendMessage, uploadImage, typingUsers: {}, replyingTo: null });
     useAuthStore.setState({ user: null });
     useFriendStore.setState({ dms: [] });
     useUserStore.setState({ users: {} });
@@ -147,6 +148,98 @@ describe("MessageInput", () => {
     expect(screen.queryByRole("option", { name: /alice/ })).not.toBeInTheDocument();
   });
 
+  const parent = { id: "parent", channelId: "c1", author: { id: "u1", username: "alice" }, content: "hello", createdAt: "2025-01-01" } as Message;
+
+  it("shows reply target, cancels with Escape, and sends with the parent id", async () => {
+    const textarea = renderInput();
+    act(() => useMessageStore.getState().startReply(parent));
+    expect(screen.getByText(/Replying to/)).toHaveTextContent("Replying to alice");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
+    act(() => useMessageStore.getState().startReply(parent));
+    fireEvent.change(textarea, { target: { value: "my reply" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith("c1", "my reply", "parent"));
+    await waitFor(() => expect(useMessageStore.getState().replyingTo).toBeNull());
+  });
+
+  it("selects a mention without sending, then sends both the mention and reply", async () => {
+    const textarea = renderInput();
+    act(() => useMessageStore.getState().startReply(parent));
+    fireEvent.change(textarea, { target: { value: "hi @ALI" } });
+    await screen.findByRole("option", { name: /alice/ });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(textarea).toHaveValue("hi @alice ");
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(useMessageStore.getState().replyingTo?.message.id).toBe("parent");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith("c1", "hi @alice", "parent"));
+    await waitFor(() => expect(useMessageStore.getState().replyingTo).toBeNull());
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("dismisses mention suggestions before cancelling the reply on Escape", async () => {
+    const textarea = renderInput();
+    act(() => useMessageStore.getState().startReply(parent));
+    fireEvent.change(textarea, { target: { value: "@" } });
+    await screen.findByRole("listbox");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(useMessageStore.getState().replyingTo?.message.id).toBe("parent");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(useMessageStore.getState().replyingTo).toBeNull();
+  });
+
+  it("ranks prefix matches first, caps suggestions, and reuses the roster cache", async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: { data: [
+      { id: "substring", username: "aaa_alice" },
+      ...Array.from({ length: 12 }, (_, i) => ({ id: `u${i}`, username: `alice${i}` })),
+    ] } });
+    const first = render(<MessageInput channelId="c1" guildId="g1" channelName="general" onTyping={vi.fn()} />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "@ali" } });
+    await screen.findByRole("listbox");
+    expect(screen.getAllByRole("option")).toHaveLength(10);
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("@alice0");
+    expect(screen.queryByRole("option", { name: /aaa_alice/ })).not.toBeInTheDocument();
+    first.unmount();
+    const textarea = renderInput();
+    fireEvent.change(textarea, { target: { value: "@ali" } });
+    expect(screen.getAllByRole("option")).toHaveLength(10);
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the reply target after a failed send and cancels via button", async () => {
+    sendMessage.mockRejectedValueOnce(new Error("offline"));
+    const textarea = renderInput();
+    act(() => useMessageStore.getState().startReply(parent));
+    fireEvent.change(textarea, { target: { value: "retry" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await waitFor(() => expect(textarea).toHaveValue("retry"));
+    expect(useMessageStore.getState().replyingTo?.message.id).toBe("parent");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel reply" }));
+    expect(useMessageStore.getState().replyingTo).toBeNull();
+  });
+
+  it("does not show another channel's reply in this composer", () => {
+    renderInput();
+    act(() => useMessageStore.getState().startReply({ ...parent, channelId: "other" }));
+    expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
+  });
+
+  it("clears the reply when the channel changes", () => {
+    const { rerender } = render(
+      <MessageInput channelId="c1" guildId="g1" channelName="general" onTyping={vi.fn()} />
+    );
+    act(() => useMessageStore.getState().startReply(parent));
+    expect(useMessageStore.getState().replyingTo).not.toBeNull();
+
+    rerender(
+      <MessageInput channelId="c2" guildId="g1" channelName="general2" onTyping={vi.fn()} />
+    );
+
+    expect(useMessageStore.getState().replyingTo).toBeNull();
+  });
+
   it("uploads an image pasted from the clipboard", async () => {
     const textarea = renderInput();
     const image = new File(["png"], "image.png", { type: "image/png" });
@@ -154,6 +247,15 @@ describe("MessageInput", () => {
     fireEvent.paste(textarea, { clipboardData: { files: [image] } });
 
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith("c1", image));
+  });
+
+  it("includes the reply id on image uploads", async () => {
+    const textarea = renderInput();
+    act(() => useMessageStore.getState().startReply(parent));
+    const image = new File(["png"], "image.png", { type: "image/png" });
+    fireEvent.paste(textarea, { clipboardData: { files: [image] } });
+    await waitFor(() => expect(uploadImage).toHaveBeenCalledWith("c1", image, "", "parent"));
+    await waitFor(() => expect(useMessageStore.getState().replyingTo).toBeNull());
   });
 
   it("leaves plain text pastes alone", () => {

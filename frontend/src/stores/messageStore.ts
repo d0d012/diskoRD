@@ -4,6 +4,10 @@ import { useAuthStore } from "./authStore";
 import { useUserStore } from "./userStore";
 import type { Decoration, Message } from "../types";
 
+// Reply previews mirror the backend's LEFT(content, 120) truncation in
+// Repository.GetReferences, so edited parents stay consistent with the server.
+const REPLY_PREVIEW_LENGTH = 120;
+
 // Per message+emoji generation counter. Every change (optimistic or a gateway
 // event) bumps it, so a failed request only rolls back if nothing newer landed.
 const reactionGenerations = new Map<string, number>();
@@ -31,6 +35,9 @@ interface TypingUser {
 
 interface MessageStore {
   messages: Record<string, Message[]>;
+  replyingTo: { channelId: string; message: Message } | null;
+  startReply: (message: Message) => void;
+  cancelReply: () => void;
   hasMore: Record<string, boolean>;
   typingUsers: Record<string, TypingUser[]>;
   unreadChannels: Record<string, boolean>; // channelId → has unread
@@ -43,8 +50,8 @@ interface MessageStore {
   addMessage: (msg: Message, activeChannelId: string | null, currentUserId?: string) => void;
   updateMessage: (msg: Message) => void;
   removeMessage: (messageId: string, channelId: string) => void;
-  sendMessage: (channelId: string, content: string) => Promise<void>;
-  uploadImage: (channelId: string, file: File, caption?: string) => Promise<void>;
+  sendMessage: (channelId: string, content: string, replyTo?: string) => Promise<void>;
+  uploadImage: (channelId: string, file: File, caption?: string, replyTo?: string) => Promise<void>;
   editMessage: (messageId: string, channelId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string, channelId: string) => Promise<void>;
   setReactionCount: (messageId: string, channelId: string, emoji: string, count: number, selfReacted: boolean) => void;
@@ -73,6 +80,9 @@ function withMessage(
 
 export const useMessageStore = create<MessageStore>((set, get) => ({
   messages: {},
+  replyingTo: null,
+  startReply: (message) => set({ replyingTo: { channelId: message.channelId, message } }),
+  cancelReply: () => set({ replyingTo: null }),
   hasMore: {},
   typingUsers: {},
   unreadChannels: {},
@@ -173,11 +183,20 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     set((s) => {
       const msgs = s.messages[msg.channelId];
       if (!msgs) return s;
+      const preview = Array.from(msg.content).slice(0, REPLY_PREVIEW_LENGTH).join("");
       return {
         messages: {
           ...s.messages,
-          // Edits don't carry decorations; keep the ones already loaded.
-          [msg.channelId]: msgs.map((m) => (m.id === msg.id ? { ...msg, decorations: msg.decorations ?? m.decorations } : m)),
+          [msg.channelId]: msgs.map((m) => {
+            if (m.id === msg.id) {
+              // Edits don't carry decorations; keep the ones already loaded.
+              return { ...msg, decorations: msg.decorations ?? m.decorations };
+            }
+            if (m.referencedMessage?.id === msg.id) {
+              return { ...m, referencedMessage: { ...m.referencedMessage, content: preview } };
+            }
+            return m;
+          }),
         },
       };
     });
@@ -185,25 +204,32 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
   removeMessage: (messageId, channelId) => {
     set((s) => {
+      const clearReply = s.replyingTo?.message.id === messageId;
       const msgs = s.messages[channelId];
-      if (!msgs) return s;
+      if (!msgs) return clearReply ? { replyingTo: null } : s;
       return {
         messages: {
           ...s.messages,
-          [channelId]: msgs.filter((m) => m.id !== messageId),
+          [channelId]: msgs.filter((m) => m.id !== messageId).map((m) =>
+            m.referencedMessage?.id === messageId
+              ? { ...m, referencedMessage: { ...m.referencedMessage, deleted: true, content: "" } }
+              : m
+          ),
         },
+        ...(clearReply ? { replyingTo: null } : {}),
       };
     });
   },
 
-  sendMessage: async (channelId, content) => {
-    await api.post(`/channels/${channelId}/messages`, { content });
+  sendMessage: async (channelId, content, replyTo) => {
+    await api.post(`/channels/${channelId}/messages`, { content, ...(replyTo ? { replyTo } : {}) });
   },
 
-  uploadImage: async (channelId, file, caption = "") => {
+  uploadImage: async (channelId, file, caption = "", replyTo) => {
     const form = new FormData();
     form.append("file", file);
     form.append("caption", caption);
+    if (replyTo) form.append("replyTo", replyTo);
     await api.post(`/channels/${channelId}/upload`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -375,7 +401,10 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     set((s) => {
       const msgs = { ...s.messages };
       delete msgs[channelId];
-      return { messages: msgs };
+      return {
+        messages: msgs,
+        ...(s.replyingTo?.channelId === channelId ? { replyingTo: null } : {}),
+      };
     });
   },
 }));
