@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { emitDMMessage } from "../lib/dmMessageEvent";
 import { useAuthStore } from "../stores/authStore";
 import { refreshSession } from "../lib/api";
 import { useMessageStore } from "../stores/messageStore";
@@ -135,7 +136,11 @@ export function useGateway() {
               }
             }
 
+            const alreadyReceived = useMessageStore.getState().messages[msg.channelId]?.some((m) => m.id === msg.id);
             addMessage(msg, currentActive, currentUser?.id);
+            if (!msg.guildId && msg.author?.id !== currentUser?.id && !alreadyReceived) {
+              emitDMMessage(msg);
+            }
 
             // ── Notification logic ─────────────────────────────────────────
             // Never notify for own messages or messages in the active channel

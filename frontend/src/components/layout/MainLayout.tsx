@@ -4,12 +4,16 @@ import { ChannelSidebar } from "./ChannelSidebar";
 import { MembersPanel } from "./MembersPanel";
 import { FriendsSidebar } from "../../features/friend/FriendsSidebar";
 import { useGuildStore } from "../../stores/guildStore";
+import { useUnreadTitle } from "../../hooks/useUnreadTitle";
+import { useOSBadge } from "../../hooks/useOSBadge";
 
 interface MainLayoutProps {
   children: ReactNode;
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
+  useUnreadTitle();
+  useOSBadge();
   const activeGuildId = useGuildStore((s) => s.activeGuildId);
   const isHome = activeGuildId === null;
 
