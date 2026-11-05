@@ -91,6 +91,10 @@ body,
   background-color: rgba(0, 0, 0, 0.5);
 }
 
+.reply-highlight { animation: reply-highlight 1.8s ease-out; }
+@keyframes reply-highlight { from { background-color: rgba(88,101,242,.45); } to { background-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .reply-highlight { outline: 2px solid var(--color-dc-brand); animation: none; } }
+
 .lightbox-in { animation: lightbox-in 140ms ease-out; }
 @keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .lightbox-in { animation: none; } }

@@ -9,7 +9,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/d0d012/diskord/internal/decoration"
-	"github.com/d0d012/diskord/internal/guild"
 )
 
 var mentionRe = regexp.MustCompile(`@(\w+)`)
@@ -28,8 +27,8 @@ func parseMentionUsernames(content string) []string {
 }
 
 type Service struct {
-	repo      *Repository
-	guildRepo *guild.Repository
+	repo      messageRepository
+	guildRepo membershipRepository
 	pub       EventPublisher // nil until 3.4 wires the gateway
 	decos     DecorationLister
 }
@@ -43,7 +42,26 @@ func (s *Service) SetDecorations(l DecorationLister) {
 	s.decos = l
 }
 
-func NewService(repo *Repository, guildRepo *guild.Repository) *Service {
+// Interfaces keep authorization and reply validation testable at the repository boundary.
+type messageRepository interface {
+	GetChannelContext(context.Context, string) (*ChannelContext, error)
+	GetByID(context.Context, string) (*MessageResponse, error)
+	GetReferences(context.Context, []string) (map[string]*ReferencedMessage, error)
+	Create(context.Context, string, string, string, *string) (*MessageResponse, error)
+	List(context.Context, string, *string, int) ([]MessageResponse, error)
+	GetReactionsForMessages(context.Context, []string, string) (map[string][]ReactionRef, error)
+	GetUserIDsByUsernames(context.Context, []string) (map[string]string, error)
+	SetAttachments(context.Context, string, []string) error
+	GetAuthorChannelAndGuild(context.Context, string) (string, string, string, error)
+	Update(context.Context, string, string) (*MessageResponse, error)
+	SoftDelete(context.Context, string) error
+}
+type membershipRepository interface {
+	IsMember(context.Context, string, string) (bool, error)
+	GetMemberRole(context.Context, string, string) (string, error)
+}
+
+func NewService(repo messageRepository, guildRepo membershipRepository) *Service {
 	return &Service{repo: repo, guildRepo: guildRepo}
 }
 
@@ -76,10 +94,15 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 		if userID == cc.DMUserB {
 			recipientID = cc.DMUserA
 		}
-		msg, err := s.repo.Create(ctx, channelID, userID, req.Content)
+		ref, err := s.validateReply(ctx, channelID, req.ReplyTo)
 		if err != nil {
-			return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+			return nil, err
 		}
+		msg, err := s.repo.Create(ctx, channelID, userID, req.Content, req.ReplyTo)
+		if err != nil {
+			return nil, sendError(err)
+		}
+		msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 		s.resolveMentions(ctx, msg)
 		if s.pub != nil {
 			s.pub.PublishToDM(userID, recipientID, "MESSAGE_CREATE", msg)
@@ -90,16 +113,50 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 	if err := s.requireMember(ctx, cc.GuildID, userID); err != nil {
 		return nil, err
 	}
-	msg, err := s.repo.Create(ctx, channelID, userID, req.Content)
+	ref, err := s.validateReply(ctx, channelID, req.ReplyTo)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+		return nil, err
 	}
+	msg, err := s.repo.Create(ctx, channelID, userID, req.Content, req.ReplyTo)
+	if err != nil {
+		return nil, sendError(err)
+	}
+	msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 	msg.GuildID = cc.GuildID
 	s.resolveMentions(ctx, msg)
 	if s.pub != nil {
 		s.pub.PublishToGuild(cc.GuildID, "MESSAGE_CREATE", msg)
 	}
 	return msg, nil
+}
+
+func sendError(err error) error {
+	if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusBadRequest {
+		return fe
+	}
+	log.Error().Err(err).Msg("message.Service.Send: create")
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to send message")
+}
+
+func (s *Service) validateReply(ctx context.Context, channelID string, replyTo *string) (*ReferencedMessage, error) {
+	if replyTo == nil {
+		return nil, nil
+	}
+	parent, err := s.repo.GetByID(ctx, *replyTo)
+	if err != nil {
+		if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusNotFound {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "reply must reference an existing message in this channel")
+		}
+		return nil, fmt.Errorf("message.Service.validateReply: %w", err)
+	}
+	if parent.ChannelID != channelID {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "reply must reference a message in this channel")
+	}
+	refs, err := s.repo.GetReferences(ctx, []string{*replyTo})
+	if err != nil {
+		return nil, fmt.Errorf("message.Service.validateReply: %w", err)
+	}
+	return refs[*replyTo], nil
 }
 
 // SetAttachments persists the public URLs of files uploaded for a message, so
@@ -184,6 +241,25 @@ func (s *Service) List(ctx context.Context, userID, channelID string, beforeID *
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 
+	// Attach compact parent previews in one batch, including parents outside this page.
+	if len(msgs) > 0 {
+		var replyIDs []string
+		for i := range msgs {
+			if msgs[i].ReplyTo != nil {
+				replyIDs = append(replyIDs, *msgs[i].ReplyTo)
+			}
+		}
+		refs, err := s.repo.GetReferences(ctx, replyIDs)
+		if err != nil {
+			return nil, fmt.Errorf("message.Service.List: references: %w", err)
+		}
+		for i := range msgs {
+			if msgs[i].ReplyTo != nil {
+				msgs[i].ReferencedMessage = refs[*msgs[i].ReplyTo]
+			}
+		}
+	}
+
 	// Attach reaction summaries for the viewer.
 	if len(msgs) > 0 {
 		ids := make([]string, len(msgs))
@@ -229,6 +305,13 @@ func (s *Service) Edit(ctx context.Context, userID, messageID string, req EditMe
 		return nil, err
 	}
 	msg.GuildID = guildID
+	if msg.ReplyTo != nil {
+		refs, err := s.repo.GetReferences(ctx, []string{*msg.ReplyTo})
+		if err != nil {
+			return nil, fmt.Errorf("message.Service.Edit: references: %w", err)
+		}
+		msg.ReferencedMessage = refs[*msg.ReplyTo]
+	}
 	if reactions, err := s.repo.GetReactionsForMessages(ctx, []string{msg.ID}, userID); err == nil {
 		msg.Reactions = reactions[msg.ID]
 	}

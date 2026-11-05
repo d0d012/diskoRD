@@ -65,25 +65,31 @@ func (r *Repository) GetChannelContext(ctx context.Context, channelID string) (*
 	return nil, fmt.Errorf("message.Repository.GetChannelContext: %w", err)
 }
 
-func (r *Repository) Create(ctx context.Context, channelID, authorID, content string) (*MessageResponse, error) {
+func (r *Repository) Create(ctx context.Context, channelID, authorID, content string, replyTo *string) (*MessageResponse, error) {
 	var msg MessageResponse
 	var author AuthorInfo
 
 	err := r.db.QueryRow(ctx, `
 		WITH inserted AS (
-			INSERT INTO messages (channel_id, author_id, content)
-			VALUES ($1, $2, $3)
+			INSERT INTO messages (channel_id, author_id, content, reply_to)
+			SELECT $1, $2, $3, $4::uuid
+			WHERE $4::uuid IS NULL OR EXISTS (
+			  SELECT 1 FROM messages WHERE id = $4::uuid AND channel_id = $1 AND deleted_at IS NULL
+			)
 			RETURNING id, channel_id, content, created_at, attachments
 		)
 		SELECT i.id, i.channel_id, i.content, i.created_at, i.attachments,
 		       u.id, u.username, u.display_name, u.avatar_url
 		FROM inserted i
 		JOIN users u ON u.id = $2`,
-		channelID, authorID, content,
+		channelID, authorID, content, replyTo,
 	).Scan(
 		&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.Attachments,
 		&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "reply must reference a message in this channel")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("message.Repository.Create: %w", err)
 	}
@@ -94,36 +100,16 @@ func (r *Repository) Create(ctx context.Context, channelID, authorID, content st
 func (r *Repository) List(ctx context.Context, channelID string, beforeID *string, limit int) ([]MessageResponse, error) {
 	fetch := limit + 1
 
-	var rows pgx.Rows
-	var err error
-
-	if beforeID == nil {
-		rows, err = r.db.Query(ctx, `
-			SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.attachments,
-			       COALESCE(u.id::text, ''), COALESCE(u.username, 'Deleted User'),
-			       u.display_name, u.avatar_url
-			FROM messages m
-			LEFT JOIN users u ON u.id = m.author_id
-			WHERE m.channel_id = $1 AND m.deleted_at IS NULL
-			ORDER BY m.created_at DESC
-			LIMIT $2`,
-			channelID, fetch,
-		)
-	} else {
-		rows, err = r.db.Query(ctx, `
-			SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.attachments,
-			       COALESCE(u.id::text, ''), COALESCE(u.username, 'Deleted User'),
-			       u.display_name, u.avatar_url
-			FROM messages m
-			LEFT JOIN users u ON u.id = m.author_id
-			WHERE m.channel_id = $1
-			  AND m.deleted_at IS NULL
-			  AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
-			ORDER BY m.created_at DESC
-			LIMIT $3`,
-			channelID, *beforeID, fetch,
-		)
-	}
+	rows, err := r.db.Query(ctx, `
+		SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.attachments, m.reply_to,
+		       COALESCE(u.id::text, ''), COALESCE(u.username, 'Deleted User'),
+		       u.display_name, u.avatar_url
+		FROM messages m
+		LEFT JOIN users u ON u.id = m.author_id
+		WHERE m.channel_id = $1 AND m.deleted_at IS NULL
+		  AND ($2::uuid IS NULL OR m.created_at < (SELECT created_at FROM messages WHERE id = $2))
+		ORDER BY m.created_at DESC
+		LIMIT $3`, channelID, beforeID, fetch)
 	if err != nil {
 		return nil, fmt.Errorf("message.Repository.List: %w", err)
 	}
@@ -134,7 +120,7 @@ func (r *Repository) List(ctx context.Context, channelID string, beforeID *strin
 		var msg MessageResponse
 		var author AuthorInfo
 		if err := rows.Scan(
-			&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments,
+			&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments, &msg.ReplyTo,
 			&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL,
 		); err != nil {
 			return nil, fmt.Errorf("message.Repository.List: scan: %w", err)
@@ -145,11 +131,43 @@ func (r *Repository) List(ctx context.Context, channelID string, beforeID *strin
 	return msgs, nil
 }
 
+// GetReferences loads previews for a page in one query, including soft-deleted parents.
+func (r *Repository) GetReferences(ctx context.Context, ids []string) (map[string]*ReferencedMessage, error) {
+	result := make(map[string]*ReferencedMessage)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT m.id, COALESCE(u.id::text, ''),
+		       COALESCE(u.display_name, u.username, 'Deleted User'), u.avatar_url,
+		       LEFT(m.content, 120), m.deleted_at IS NOT NULL
+		FROM messages m LEFT JOIN users u ON u.id = m.author_id
+		WHERE m.id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("message.Repository.GetReferences: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ref ReferencedMessage
+		if err := rows.Scan(&ref.ID, &ref.AuthorID, &ref.AuthorName, &ref.AvatarURL, &ref.Content, &ref.Deleted); err != nil {
+			return nil, fmt.Errorf("message.Repository.GetReferences: scan: %w", err)
+		}
+		if ref.Deleted {
+			ref.Content = ""
+		}
+		result[ref.ID] = &ref
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("message.Repository.GetReferences: rows: %w", err)
+	}
+	return result, nil
+}
+
 func (r *Repository) GetByID(ctx context.Context, messageID string) (*MessageResponse, error) {
 	var msg MessageResponse
 	var author AuthorInfo
 	err := r.db.QueryRow(ctx, `
-		SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.attachments,
+		SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at, m.attachments, m.reply_to,
 		       COALESCE(u.id::text, ''), COALESCE(u.username, 'Deleted User'),
 		       u.display_name, u.avatar_url,
 		       COALESCE((SELECT guild_id::text FROM channels WHERE id = m.channel_id), '')
@@ -158,7 +176,7 @@ func (r *Repository) GetByID(ctx context.Context, messageID string) (*MessageRes
 		WHERE m.id = $1 AND m.deleted_at IS NULL`,
 		messageID,
 	).Scan(
-		&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments,
+		&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments, &msg.ReplyTo,
 		&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL,
 		&msg.GuildID,
 	)
@@ -179,9 +197,9 @@ func (r *Repository) Update(ctx context.Context, messageID, content string) (*Me
 		WITH updated AS (
 			UPDATE messages SET content = $2, edited_at = now()
 			WHERE id = $1 AND deleted_at IS NULL
-			RETURNING id, channel_id, content, created_at, edited_at, attachments
+			RETURNING id, channel_id, content, created_at, edited_at, attachments, reply_to
 		)
-		SELECT u2.id, u2.channel_id, u2.content, u2.created_at, u2.edited_at, u2.attachments,
+		SELECT u2.id, u2.channel_id, u2.content, u2.created_at, u2.edited_at, u2.attachments, u2.reply_to,
 		       COALESCE(u.id::text, ''), COALESCE(u.username, 'Deleted User'),
 		       u.display_name, u.avatar_url,
 		       COALESCE((SELECT guild_id::text FROM channels WHERE id = u2.channel_id), '')
@@ -190,7 +208,7 @@ func (r *Repository) Update(ctx context.Context, messageID, content string) (*Me
 		LEFT JOIN users u ON u.id = m.author_id`,
 		messageID, content,
 	).Scan(
-		&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments,
+		&msg.ID, &msg.ChannelID, &msg.Content, &msg.CreatedAt, &msg.EditedAt, &msg.Attachments, &msg.ReplyTo,
 		&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL,
 		&msg.GuildID,
 	)

@@ -49,6 +49,7 @@ const mockMsg: Message = {
 beforeEach(() => {
   useMessageStore.setState({
     messages: {},
+    replyingTo: null,
     unreadChannels: {},
     hasMore: {},
     typingUsers: {},
@@ -72,6 +73,59 @@ describe("messageStore fetchMessages", () => {
     await expect(useMessageStore.getState().fetchMessages("c1")).resolves.toBeUndefined();
 
     expect(useMessageStore.getState().messages.c1).toEqual([]);
+  });
+});
+
+describe("messageStore replies", () => {
+  const parent = { ...mockMsg, id: "parent" };
+
+  function replyMessage(): Message {
+    return {
+      ...mockMsg,
+      id: "reply1",
+      referencedMessage: {
+        id: "parent",
+        authorId: "u1",
+        authorName: "author",
+        content: "hello",
+        deleted: false,
+      },
+    };
+  }
+
+  it("removeMessage clears replyingTo when the reply target is removed", () => {
+    useMessageStore.getState().startReply(parent);
+    useMessageStore.getState().addMessage(replyMessage(), "c1");
+
+    useMessageStore.getState().removeMessage("parent", "c1");
+
+    expect(useMessageStore.getState().replyingTo).toBeNull();
+  });
+
+  it("updateMessage rewrites referencedMessage previews with 120-char truncation", () => {
+    useMessageStore.getState().addMessage(parent, "c1");
+    useMessageStore.getState().addMessage(replyMessage(), "c1");
+
+    useMessageStore.getState().updateMessage({ ...parent, content: "b".repeat(200) });
+
+    const reply = useMessageStore.getState().messages.c1.find((m) => m.id === "reply1");
+    expect(reply?.referencedMessage?.content).toBe("b".repeat(120));
+  });
+
+  it("clearChannel clears replyingTo for that channel", () => {
+    useMessageStore.getState().startReply(parent);
+
+    useMessageStore.getState().clearChannel("c1");
+
+    expect(useMessageStore.getState().replyingTo).toBeNull();
+  });
+
+  it("clearChannel keeps replyingTo for another channel", () => {
+    useMessageStore.getState().startReply({ ...parent, channelId: "c2" });
+
+    useMessageStore.getState().clearChannel("c1");
+
+    expect(useMessageStore.getState().replyingTo?.channelId).toBe("c2");
   });
 });
 

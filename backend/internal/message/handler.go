@@ -121,7 +121,14 @@ func (h *Handler) Upload(c *fiber.Ctx) error {
 
 	// Create the message first to get an ID, then save file under that ID
 	caption := c.FormValue("caption", "")
-	msg, err := h.svc.Send(c.Context(), userID, channelID, CreateMessageRequest{Content: caption})
+	var replyTo *string
+	if id := c.FormValue("replyTo"); id != "" {
+		if err := validate.Var(id, "uuid"); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid reply id")
+		}
+		replyTo = &id
+	}
+	msg, err := h.svc.Send(c.Context(), userID, channelID, CreateMessageRequest{Content: caption, ReplyTo: replyTo})
 	if err != nil {
 		return err
 	}
