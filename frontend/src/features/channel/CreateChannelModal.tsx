@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useGuildStore } from "../../stores/guildStore";
+import { normalizeChannelName, normalizeChannelNameInput } from "../../lib/channelName";
 
 interface CreateChannelModalProps {
   guildId: string;
@@ -19,17 +20,18 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
     inputRef.current?.focus();
   }, []);
 
-  // Auto-format name: lowercase, spaces → hyphens
+  // Auto-format name: lowercase, spaces → hyphens, keep Unicode letters (ç ğ ı İ ö ş ü)
   const handleNameChange = (val: string) => {
-    setName(val.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
+    setName(normalizeChannelNameInput(val));
   };
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    const finalName = normalizeChannelName(name);
+    if (!finalName) return;
     setLoading(true);
     setError("");
     try {
-      await createChannel(guildId, name.trim(), type);
+      await createChannel(guildId, finalName, type);
       onClose();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -176,7 +178,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
           </button>
           <button
             onClick={handleCreate}
-            disabled={loading || !name.trim()}
+            disabled={loading || !normalizeChannelName(name)}
             className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: "var(--color-dc-brand)" }}
             onMouseEnter={(e) => !loading && (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)")}
