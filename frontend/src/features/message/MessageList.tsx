@@ -14,10 +14,13 @@ interface Props {
   intro?: ReactNode;
 }
 
+/** Consecutive messages from the same author group into one block within this window. */
+export const MESSAGE_GROUP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
 function isSameAuthorAndClose(a: Message, b: Message): boolean {
   if (a.author?.id !== b.author?.id) return false;
   const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  return diff < 7 * 60 * 1000; // 7 minutes
+  return diff < MESSAGE_GROUP_WINDOW_MS;
 }
 
 /** Distance from the bottom (px) after which the jump-to-latest button shows. */
