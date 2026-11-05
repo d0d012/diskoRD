@@ -179,7 +179,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.nativeEvent.isComposing) return;
-    if (mentionActive && e.key === "Escape") {
+    if (popupOpen && e.key === "Escape") {
       e.preventDefault();
       setDismissedMention(mentionKey);
       setMention(null);
