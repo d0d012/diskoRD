@@ -154,12 +154,12 @@ function InlineImage({ url }: { url: string }) {
 
 // ── Text with @mention highlight + plain link rendering ─────────────────────
 
-function TextWithMentions({ text }: { text: string }) {
+function TextWithMentions({ text, usernames }: { text: string; usernames: string[] }) {
   const parts = text.split(/(@\w+)/g);
   return (
     <>
       {parts.map((part, i) =>
-        /^@\w+$/.test(part) ? (
+        /^@\w+$/.test(part) && usernames.includes(part.slice(1)) ? (
           <span key={i} style={{ color: "var(--color-dc-brand)", fontWeight: 600 }}>
             {part}
           </span>
@@ -176,9 +176,10 @@ function TextWithMentions({ text }: { text: string }) {
 interface Props {
   content: string;
   attachments?: string[];
+  mentionUsernames?: string[];
 }
 
-export function MessageContent({ content, attachments }: Props) {
+export function MessageContent({ content, attachments, mentionUsernames = [] }: Props) {
   // Collect all URLs in the text
   const urlMatches = Array.from(new Set(content.match(URL_RE) ?? []));
 
@@ -190,7 +191,7 @@ export function MessageContent({ content, attachments }: Props) {
   // Turn URLs and bare domains (e.g. "youtube.com") in the text into clickable links
   const textParts = linkify(content).map((part, i) =>
     part.type === "text" ? (
-      <TextWithMentions key={i} text={part.text} />
+      <TextWithMentions key={i} text={part.text} usernames={mentionUsernames} />
     ) : (
       <a
         key={i}

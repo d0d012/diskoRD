@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -277,13 +278,24 @@ func (r *Repository) GetReactionsForMessages(ctx context.Context, messageIDs []s
 	return result, nil
 }
 
-// GetUserIDsByUsernames resolves @mention usernames to user IDs.
-func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []string) (map[string]string, error) {
+// GetUserIDsByUsernames resolves only members of this channel's guild or DM.
+func (r *Repository) GetUserIDsByUsernames(ctx context.Context, channelID string, usernames []string) (map[string]string, error) {
 	if len(usernames) == 0 {
 		return nil, nil
 	}
+	normalized := make([]string, len(usernames))
+	for i, username := range usernames {
+		normalized[i] = strings.ToLower(username)
+	}
 	rows, err := r.db.Query(ctx,
-		`SELECT id, username FROM users WHERE username = ANY($1)`, usernames,
+		`SELECT u.id, u.username FROM users u
+		 WHERE lower(u.username) = ANY($2) AND (
+		   EXISTS (SELECT 1 FROM channels c
+		           JOIN guild_members gm ON gm.guild_id = c.guild_id
+		           WHERE c.id = $1 AND gm.user_id = u.id)
+		   OR EXISTS (SELECT 1 FROM dm_channels dm
+		              WHERE dm.id = $1 AND (dm.user_a_id = u.id OR dm.user_b_id = u.id))
+		 )`, channelID, normalized,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("message.Repository.GetUserIDsByUsernames: %w", err)
@@ -296,7 +308,10 @@ func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []stri
 		if err := rows.Scan(&id, &username); err != nil {
 			return nil, fmt.Errorf("message.Repository.GetUserIDsByUsernames: scan: %w", err)
 		}
-		result[username] = id
+		result[strings.ToLower(username)] = id
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("message.Repository.GetUserIDsByUsernames: rows: %w", err)
 	}
 	return result, nil
 }
