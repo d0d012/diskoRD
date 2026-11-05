@@ -97,6 +97,20 @@ describe("UserProfileCard", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("preserves avatar original-link controls and backdrop dismissal", () => {
+    const onClose = vi.fn();
+    useUserStore.setState({ users: { other: { id: "other", username: "bob", avatarUrl: "/uploads/avatar.webp" } } });
+    render(<UserProfileCard userId="other" anchorRect={rect} preferredSide="right" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "View avatar" }));
+    const dialog = screen.getByRole("dialog", { name: "bob's avatar" });
+    expect(screen.getByRole("link", { name: "Open original" })).toHaveAttribute("href", "/uploads/avatar.webp");
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    fireEvent.mouseDown(dialog);
+    expect(screen.queryByRole("dialog", { name: "bob's avatar" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "bob's profile" })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("has no lightbox button without an uploaded avatar", () => {
     useUserStore.setState({ users: { other: { id: "other", username: "bob" } } });
 
