@@ -45,6 +45,25 @@ describe("MessageInput", () => {
     ] } });
   });
 
+  it("centers one line and resizes for multiline content, capped at 144px", () => {
+    const textarea = renderInput();
+    expect(textarea).toHaveStyle({ height: "28px" });
+    expect(textarea).toHaveClass("py-1", "leading-5");
+    expect(textarea.parentElement).toHaveClass("items-end");
+    expect(screen.getByTitle("Upload image")).not.toHaveClass("mb-0.5");
+    expect(screen.getByTitle("Draw pixel art")).not.toHaveClass("mb-0.5");
+    expect(screen.getByTitle("Send message")).not.toHaveClass("mb-0.5");
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 48 });
+    fireEvent.change(textarea, { target: { value: "line one\nline two" } });
+    expect(textarea).toHaveStyle({ height: "48px" });
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 300 });
+    fireEvent.change(textarea, { target: { value: "many lines" } });
+    expect(textarea).toHaveStyle({ height: "144px" });
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 28 });
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(textarea).toHaveStyle({ height: "28px" });
+  });
+
   it("keeps focus after sending so the next message can be typed right away", async () => {
     const textarea = renderInput();
     textarea.focus();

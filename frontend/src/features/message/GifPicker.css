@@ -1,0 +1,33 @@
+.gif-picker {
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40;
+  width: min(420px, calc(100vw - 40px)); height: min(440px, calc(100dvh - 150px));
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border-radius: 12px; background: var(--color-dc-bg-floating); color: var(--color-dc-text-normal);
+  box-shadow: 0 8px 32px #0008; border: 1px solid var(--color-dc-bg-modifier-selected);
+}
+.gif-picker input { flex-shrink: 0; width: 100%; padding: 8px 10px; border-radius: 6px; outline: none; background: var(--color-dc-bg-secondary); }
+.gif-picker input:focus-visible { outline: 2px solid var(--color-dc-brand); }
+.gif-tabs { display: flex; gap: 8px; font-size: 12px; }
+.gif-tabs button { border-radius: 4px; padding: 4px 8px; }
+.gif-tabs [aria-selected="true"] { background: var(--color-dc-bg-modifier-selected); color: var(--color-dc-header-primary); }
+.gif-scroll { overflow-y: auto; min-height: 0; flex: 1; }
+.gif-grid { columns: 2; column-gap: 8px; }
+.gif-masonry { position: relative; width: 100%; }
+.gif-masonry-slot { position: absolute; width: calc((100% - 8px) / 2); }
+.gif-masonry-slot .gif-tile { height: 100%; margin-bottom: 0; }
+.gif-tile { position: relative; break-inside: avoid; margin-bottom: 8px; overflow: hidden; border-radius: 6px; background: var(--color-dc-bg-secondary); }
+.gif-send { display: block; width: 100%; height: 100%; cursor: pointer; }
+.gif-send:disabled { cursor: default; }
+.gif-send img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gif-send span { display: block; padding: 8px; font-size: 12px; }
+.gif-star { position: absolute; right: 0; top: 0; padding: 7px; color: white; opacity: 0; background: radial-gradient(at top right, #000b, transparent); border-radius: 0 0 0 12px; }
+.gif-star.is-favorite { color: #facc15; opacity: 1; }
+.gif-tile:hover .gif-star, .gif-tile:focus-within .gif-star { opacity: 1; }
+.gif-picker button:focus-visible { outline: 2px solid var(--color-dc-brand); outline-offset: -2px; }
+.gif-picker footer { flex-shrink: 0; text-align: right; font-size: 10px; color: var(--color-dc-text-muted); }
+.gif-status { padding: 8px; font-size: 12px; }
+.gif-status button { text-decoration: underline; }
+.gif-skeleton { break-inside: avoid; margin-bottom: 8px; border-radius: 6px; background: linear-gradient(100deg, var(--color-dc-bg-secondary) 20%, var(--color-dc-bg-modifier-selected) 50%, var(--color-dc-bg-secondary) 80%); background-size: 200% 100%; animation: gif-shimmer 1.4s infinite linear; }
+@keyframes gif-shimmer { to { background-position: -200% 0; } }
+@media (hover: none) { .gif-star { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .gif-skeleton { animation: none; } }

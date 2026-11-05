@@ -169,7 +169,7 @@ export function MessageList({ channelId, channelName, intro }: Props) {
         <div className="pb-4" style={{ isolation: "isolate" }}>
           {msgs.map((msg, i) => {
             const prev = i > 0 ? msgs[i - 1] : null;
-            const grouped = prev != null && isSameAuthorAndClose(prev, msg);
+            const grouped = !msg.replyTo && !msg.referencedMessage && prev != null && isSameAuthorAndClose(prev, msg);
             return <MessageItem key={msg.id} message={msg} isGrouped={grouped} />;
           })}
         </div>

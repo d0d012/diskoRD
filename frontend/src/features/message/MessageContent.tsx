@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { ImageLightbox, type LightboxImage } from "../../components/ImageLightbox";
 import { api, resolveMediaUrl } from "../../lib/api";
 import { parseInviteCode, goToInvite } from "../../lib/inviteLinks";
-import { openExternal } from "../../lib/externalLinks";
 import { linkify } from "../../lib/linkify";
+import { isKlipyMediaUrl } from "../../lib/klipy";
 
 /** Invite links open inside the app instead of a browser tab. */
 function openInApp(e: React.MouseEvent, url: string) {
@@ -136,7 +137,7 @@ function YoutubeEmbed({ videoId }: { videoId: string }) {
 
 // ── Inline image ────────────────────────────────────────────────────────────
 
-function InlineImage({ url }: { url: string }) {
+function InlineImage({ url, images, onOpen }: { url: string; images: LightboxImage[]; onOpen: (index: number, target: HTMLElement) => void }) {
   const [broken, setBroken] = useState(false);
   const src = resolveMediaUrl(url);
   if (broken || !src) return null;
@@ -144,10 +145,14 @@ function InlineImage({ url }: { url: string }) {
     <img
       src={src}
       alt="attachment"
+      tabIndex={0}
+      role="button"
+      aria-label="View attachment"
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(images.findIndex(image => image.src === src), e.currentTarget); } }}
       className="mt-2 rounded-lg max-w-sm max-h-80 object-contain block cursor-pointer"
-      style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
+      style={{ backgroundColor: "var(--color-dc-bg-secondary)", ...(isKlipyMediaUrl(url) ? { maxWidth: "min(300px, 100%)", height: "auto" } : {}) }}
       onError={() => setBroken(true)}
-      onClick={() => openExternal(src)}
+      onClick={(e) => onOpen(images.findIndex(image => image.src === src), e.currentTarget)}
     />
   );
 }
@@ -180,6 +185,11 @@ interface Props {
 }
 
 export function MessageContent({ content, attachments, mentionUsernames = [] }: Props) {
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
+  // KLIPY media paths do not document a reversible slug, so chat GIFs intentionally
+  // omit the favorite star rather than saving an incorrect slug.
+  const singleKlipyGif = isKlipyMediaUrl(content.trim());
   // Collect all URLs in the text
   const urlMatches = Array.from(new Set(content.match(URL_RE) ?? []));
 
@@ -207,21 +217,23 @@ export function MessageContent({ content, attachments, mentionUsernames = [] }: 
     )
   );
 
+  const images: LightboxImage[] = [...(attachments ?? []), ...imageUrls].flatMap(url => { const src = resolveMediaUrl(url); return src ? [{ src, alt: "attachment" }] : []; });
   return (
     <div>
+      {viewerIndex !== null && <ImageLightbox images={images} index={viewerIndex} onChange={setViewerIndex} onClose={() => setViewerIndex(null)} returnFocus={returnFocus} />}
       {/* Text */}
-      <p className="text-sm whitespace-pre-wrap break-words" style={{ color: "var(--color-dc-text-normal)" }}>
+      {!singleKlipyGif && <p className="m-0 text-sm leading-5 whitespace-pre-wrap break-words" style={{ color: "var(--color-dc-text-normal)" }}>
         {textParts}
-      </p>
+      </p>}
 
       {/* Uploaded attachments */}
       {(attachments ?? []).map((url) => (
-        <InlineImage key={url} url={url} />
+        <InlineImage key={url} url={url} images={images} onOpen={(index, target) => { setReturnFocus(target); setViewerIndex(index); }} />
       ))}
 
       {/* Pasted image URLs */}
       {imageUrls.map((url) => (
-        <InlineImage key={url} url={url} />
+        <InlineImage key={url} url={url} images={images} onOpen={(index, target) => { setReturnFocus(target); setViewerIndex(index); }} />
       ))}
 
       {/* YouTube embeds */}

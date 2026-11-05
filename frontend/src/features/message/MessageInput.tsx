@@ -1,7 +1,9 @@
-import { useState, useRef, useId, useEffect, useMemo } from "react";
+import { useState, useRef, useId, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { useMentionCandidates } from "./useMentionCandidates";
 import { useMessageStore } from "../../stores/messageStore";
 import { PixelArtEditor } from "../pixelart/PixelArtEditor";
+import { GifPicker } from "./GifPicker";
+import { klipyConfigured } from "../../lib/klipy";
 import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
 
 const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
@@ -28,6 +30,12 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const [sending, setSending] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [pixelArtOpen, setPixelArtOpen] = useState(false);
+  const [gifChannel, setGifChannel] = useState<string | null>(null);
+  const gifTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeGifPicker = useCallback(() => {
+    setGifChannel(null);
+    gifTriggerRef.current?.focus();
+  }, []);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
   const { sendMessage, uploadImage, typingUsers, replyingTo, cancelReply } = useMessageStore();
   const reply = replyingTo?.channelId === channelId ? replyingTo.message : null;
@@ -39,11 +47,20 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     if (prevChannelId.current !== channelId) {
       prevChannelId.current = channelId;
       cancelReply();
+      setGifChannel(null);
     }
   }, [channelId, cancelReply]);
   const typingThrottleRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Equal 28px textarea/button heights center a single line. As text grows,
+  // items-end keeps the controls anchored to the last line.
+  useLayoutEffect(() => {
+    const input = textareaRef.current;
+    if (!input) return;
+    input.style.height = "28px";
+    input.style.height = `${Math.max(28, Math.min(input.scrollHeight, 144))}px`;
+  }, [content]);
   const mentionListId = useId();
   const [mention, setMention] = useState<{ channelId: string; start: number; end: number; query: string } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -230,6 +247,18 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         className="relative flex items-end gap-2 px-4 py-2.5 rounded-lg"
         style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}
       >
+        {gifChannel === channelId && <GifPicker triggerRef={gifTriggerRef} onClose={closeGifPicker} onSend={async (url) => {
+          if (sending) throw new Error("Message send in progress");
+          setSending(true);
+          const replyId = reply?.id;
+          try {
+            if (replyId) await sendMessage(channelId, url, replyId);
+            else await sendMessage(channelId, url);
+            if (replyId && useMessageStore.getState().replyingTo?.message.id === replyId) cancelReply();
+            setGifChannel(null);
+            textareaRef.current?.focus();
+          } finally { setSending(false); }
+        }} />}
         {popupOpen && (
           <div
             id={mentionListId}
@@ -274,7 +303,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
-          className="flex-shrink-0 p-1 rounded transition-colors mb-0.5"
+          className="flex-shrink-0 p-1 rounded transition-colors"
           title="Upload image"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
@@ -288,7 +317,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         <button
           onClick={() => setPixelArtOpen(true)}
           disabled={sending}
-          className="flex-shrink-0 p-1 rounded transition-colors mb-0.5"
+          className="flex-shrink-0 p-1 rounded transition-colors"
           title="Draw pixel art"
           aria-label="Draw pixel art"
           style={{ color: "var(--color-dc-interactive-normal)" }}
@@ -304,10 +333,9 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           ref={textareaRef}
           autoFocus
           rows={1}
-          className="flex-1 bg-transparent text-sm outline-none resize-none max-h-36 overflow-y-auto leading-5"
+          className="flex-1 min-w-0 bg-transparent text-sm outline-none resize-none max-h-36 overflow-y-auto leading-5 py-1"
           style={{
             color: "var(--color-dc-text-normal)",
-            paddingTop: "2px",
           }}
           placeholder={placeholder ?? `Message #${channelName}`}
           value={content}
@@ -323,9 +351,21 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           onPaste={handlePaste}
         />
         <button
+          ref={gifTriggerRef}
+          type="button"
+          aria-label={klipyConfigured() ? "Open GIF picker" : "GIFs not configured"}
+          title={klipyConfigured() ? "GIF" : "GIFs not configured"}
+          aria-haspopup="dialog"
+          aria-expanded={gifChannel === channelId}
+          disabled={sending || !klipyConfigured()}
+          onClick={() => setGifChannel(current => current === channelId ? null : channelId)}
+          className="flex-shrink-0 self-end my-1 px-1 rounded text-[10px] leading-5 font-extrabold disabled:opacity-40"
+          style={{ backgroundColor: "var(--color-dc-interactive-normal)", color: "var(--color-dc-bg-secondary)" }}
+        >GIF</button>
+        <button
           onClick={handleSubmit}
           disabled={!content.trim() || sending}
-          className="flex-shrink-0 p-1 rounded transition-colors mb-0.5"
+          className="flex-shrink-0 p-1 rounded transition-colors"
           style={{
             color: content.trim()
               ? "var(--color-dc-brand)"

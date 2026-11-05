@@ -113,10 +113,10 @@ export function MessageItem({ message, isGrouped }: Props) {
     <div
       ref={rowRef}
       tabIndex={-1}
-      className="group flex gap-4 px-4 py-0.5 rounded transition-colors relative outline-none"
+      className="group flex flex-wrap gap-x-4 px-4 py-0.5 rounded transition-colors relative outline-none"
       data-message-id={message.id}
       style={{
-        paddingTop: isGrouped ? "1px" : "16px",
+        paddingTop: isGrouped ? "2px" : "16px",
         backgroundColor: hovered || menuOpen ? "var(--color-dc-bg-modifier-hover)" : "transparent",
       }}
       onMouseEnter={() => setHovered(true)}
@@ -134,8 +134,34 @@ export function MessageItem({ message, isGrouped }: Props) {
         style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
       >Reply</button>
 
-      {/* Avatar or spacer */}
-      <div className="w-10 flex-shrink-0">
+      {message.referencedMessage && (
+        <div className="relative w-full pl-14 mb-1">
+          <span aria-hidden="true" className="reply-spine absolute select-none pointer-events-none" />
+          <button type="button" onClick={jumpToReply} className="reply-preview flex max-w-full items-center gap-1.5 text-xs leading-4 text-left">
+            {message.referencedMessage.deleted ? (
+              <span className="italic truncate">Original message was deleted</span>
+            ) : (
+              <>
+                <span className="select-none" aria-hidden="true">
+                  <Avatar name={message.referencedMessage.authorName} src={message.referencedMessage.avatarUrl} size={16} />
+                </span>
+                <span className="font-semibold text-dc-text-normal shrink-0 max-w-40 truncate">{message.referencedMessage.authorName}</span>{" "}
+                {!message.referencedMessage.content && (
+                  <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8" cy="8" r="1" />
+                    <path d="m3 17 6-6 4 4 3-3 5 5" />
+                  </svg>
+                )}
+                <span className="truncate">{message.referencedMessage.content || "Click to see attachment"}</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Out-of-flow timestamp cannot wrap or change a grouped row's height. */}
+      <div className="relative w-10 flex-shrink-0 select-none" style={{ WebkitUserSelect: "none" }}>
         {!isGrouped ? (
           <button
             onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
@@ -146,8 +172,9 @@ export function MessageItem({ message, isGrouped }: Props) {
           </button>
         ) : (
           <span
-            className="invisible group-hover:visible text-xs leading-none pt-1 text-right w-full block"
-            style={{ color: "var(--color-dc-text-muted)" }}
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 invisible group-hover:visible select-none whitespace-nowrap text-[10px] leading-5 text-right"
+            style={{ color: "var(--color-dc-text-muted)", WebkitUserSelect: "none" }}
           >
             {formatTime(message.createdAt)}
           </span>
@@ -156,12 +183,6 @@ export function MessageItem({ message, isGrouped }: Props) {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        {message.referencedMessage && (
-          <button type="button" onClick={jumpToReply} className="flex max-w-full items-center gap-1 text-xs text-left hover:underline mb-1" style={{ color: "var(--color-dc-text-muted)" }}>
-            <span className="font-semibold truncate">{message.referencedMessage.deleted ? "Deleted message" : message.referencedMessage.authorName}</span>
-            {!message.referencedMessage.deleted && <span className="truncate">{message.referencedMessage.content || "Attachment"}</span>}
-          </button>
-        )}
         {!isGrouped && (
           <div className="flex items-baseline gap-2 mb-0.5">
             <span
