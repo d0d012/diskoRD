@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { usePixelArtStore } from "../../stores/pixelArtStore";
@@ -61,6 +61,50 @@ describe("snapHeight", () => {
 });
 
 describe("ProfileBuddies", () => {
+  it("sharp-scales 64px art at 100px, keeps integer zooms and downscaling unchanged", () => {
+    const large = encodeDoc(paint(createArt(64), Array.from({ length: 4096 }, (_, i) => [i % 64, Math.floor(i / 64)] as const), 1));
+    vi.mocked(HTMLCanvasElement.prototype.toDataURL).mockImplementation(function (this: HTMLCanvasElement) { return `data:image/png;base64,size-${this.width}`; });
+    usePixelArtStore.setState({ profiles: { me: { showcase: [], banner: null, buddies: [100, 128, 32].map((height) => ({ artId: String(height), doc: large, x: 50, y: 10, height, flip: false, front: false })) } } });
+    render(<Card />);
+    const images = screen.getAllByTestId("profile-buddy").map((el) => el.querySelector("img")!);
+    expect(images[0].getAttribute("src")).toBe("data:image/png;base64,size-128");
+    expect(images[0].style.imageRendering).toBe("auto");
+    expect(images[1].getAttribute("src")).toBe("data:image/png;base64,size-64");
+    expect(images[1].style.imageRendering).toBe("pixelated");
+    expect(images[2].getAttribute("src")).toBe("data:image/png;base64,size-64");
+    expect(images[2].style.imageRendering).toBe("auto");
+  });
+  it("snaps final positions on mount and container resize, with stepped idle motion", () => {
+    const container = document.createElement("div");
+    let width = 301;
+    vi.spyOn(container, "getBoundingClientRect").mockImplementation(() => ({ left: 0.25, top: 0.25, width, height: 100 } as DOMRect));
+    const offsetParent = vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockReturnValue(container);
+    let resize = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { resize = callback; }
+      observe() {}
+      disconnect = disconnect;
+    });
+    vi.stubGlobal("devicePixelRatio", 2);
+    usePixelArtStore.setState({ profiles: { me: { showcase: [], banner: null, buddies: [{ artId: "snap", doc, x: 33, y: 90, height: 48, flip: false, front: false }] } } });
+    const { unmount } = render(<Card />);
+    const sprite = screen.getByTestId("profile-buddy");
+    expect((parseFloat(sprite.style.left) + 0.25) * 2 % 1).toBe(0);
+    expect((parseFloat(sprite.style.top) + 0.25) * 2 % 1).toBe(0);
+    expect(parseFloat(sprite.style.top)).toBeLessThanOrEqual(52.25);
+    expect(sprite.style.animationTimingFunction).toBe("steps(6, end)");
+    const left = sprite.style.left;
+    width = 401;
+    act(() => resize());
+    expect(sprite.style.left).not.toBe(left);
+    expect((parseFloat(sprite.style.left) + 0.25) * 2 % 1).toBe(0);
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+    offsetParent.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it("draws buddies behind or in front, never past the card's bottom", () => {
     usePixelArtStore.setState({
       profiles: { me: { showcase: [], banner: null, buddies: [

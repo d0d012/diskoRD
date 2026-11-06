@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { showcaseOrder, usePixelArtStore } from "../../stores/pixelArtStore";
 import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
@@ -6,7 +6,8 @@ import type { PixelArtPiece } from "../../types";
 import { ArtThumb } from "./ArtThumb";
 import { Icon } from "./Icon";
 import { PixelArtEditor } from "./PixelArtEditor";
-import { docImageUrl, fitScale } from "./decorationImage";
+import { fitScale } from "./decorationImage";
+import { SharpArtImage } from "./SharpArtImage";
 import { decodeDoc } from "./lib/doc";
 import { artToPng, downloadBlob, shareScale } from "./render";
 
@@ -147,7 +148,6 @@ export function ShowcaseViewer({ pieces, index, isSelf, onIndex, onRemix, onClos
   onClose: () => void;
 }) {
   const piece = pieces[index];
-  const url = useMemo(() => (piece ? docImageUrl(piece.doc) : null), [piece]);
   const [box, setBox] = useState(viewerSize);
   const setShowcase = usePixelArtStore((s) => s.setShowcase);
   const gallery = usePixelArtStore((s) => s.gallery);
@@ -215,7 +215,7 @@ export function ShowcaseViewer({ pieces, index, isSelf, onIndex, onRemix, onClos
           <Icon name="chevronLeft" size={28} />
         </button>
         <div className="rounded-lg overflow-hidden shadow-2xl" style={{ width: px, height: px, background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 24px 24px" }}>
-          {url && <img src={url} alt={piece.title || "Pixel art"} draggable={false} style={{ width: px, height: px, imageRendering: scale >= 1 ? "pixelated" : "auto" }} />}
+          <SharpArtImage doc={piece.doc} width={px} height={px} alt={piece.title || "Pixel art"} draggable={false} />
         </div>
         <button onClick={() => onIndex(index + 1)} disabled={index === pieces.length - 1} aria-label="Next" className={navButton} style={{ color: "#fff" }}>
           <Icon name="chevronRight" size={28} />

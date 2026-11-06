@@ -1,18 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePixelArtStore } from "../../stores/pixelArtStore";
 import type { ProfileBannerArt } from "../../types";
 import { Icon } from "./Icon";
 import { PixelArtEditor } from "./PixelArtEditor";
 import { bannerArt } from "./bannerArt";
-import { docImageUrl } from "./decorationImage";
+import { SharpArtImage } from "./SharpArtImage";
 import { createArt, findPreset, type Art } from "./lib/art";
 import { BUILTIN_BANNERS } from "./lib/banners";
 import { decodeDoc, encodeDoc, type PixelArtDoc } from "./lib/doc";
 import { placeBeside } from "./placeBeside";
 
 function BannerThumb({ doc, selected, label, onClick }: { doc: PixelArtDoc | null; selected: boolean; label: string; onClick: () => void }) {
-  const url = useMemo(() => (doc ? docImageUrl(doc) : null), [doc]);
   return (
     <button
       onClick={onClick}
@@ -22,7 +21,7 @@ function BannerThumb({ doc, selected, label, onClick }: { doc: PixelArtDoc | nul
       className="relative rounded-md overflow-hidden transition-transform hover:scale-[1.03]"
       style={{ width: 150, height: 48, outline: selected ? "2px solid var(--color-dc-brand)" : "1px solid rgba(255,255,255,0.08)", outlineOffset: selected ? 2 : 0 }}
     >
-      {url && <img src={url} alt="" draggable={false} style={{ width: 150, height: 48, imageRendering: "pixelated" }} />}
+      {doc && <SharpArtImage doc={doc} width={150} height={48} alt="" draggable={false} />}
     </button>
   );
 }

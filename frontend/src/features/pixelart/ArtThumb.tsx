@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PixelArtDoc } from "./lib/doc";
 import { fitScale, trimmedImage } from "./decorationImage";
+import { useSharpArtUrl } from "./sharpScale";
 
 /**
  * A piece fitted into a size×size box, trimmed to its visible pixels. Enlarges
@@ -8,17 +9,18 @@ import { fitScale, trimmedImage } from "./decorationImage";
  */
 export function ArtThumb({ doc, size, alt = "" }: { doc: PixelArtDoc; size: number; alt?: string }) {
   const image = useMemo(() => trimmedImage(doc), [doc]);
+  const scale = image ? fitScale(image.width, image.height, size, size) : 1;
+  const sharp = useSharpArtUrl(image, (image?.width ?? 0) * scale, (image?.height ?? 0) * scale);
   if (!image) return <span style={{ width: size, height: size }} />;
-  const scale = fitScale(image.width, image.height, size, size);
   return (
     <img
-      src={image.url}
+      src={sharp.url}
       alt={alt}
       draggable={false}
       style={{
         width: image.width * scale,
         height: image.height * scale,
-        imageRendering: scale >= 1 ? "pixelated" : "auto",
+        imageRendering: sharp.imageRendering,
       }}
     />
   );
