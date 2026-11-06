@@ -7,6 +7,7 @@ import { placeBeside } from "./placeBeside";
 import { Icon } from "./Icon";
 import { BUDDY_MAX_HEIGHT as MAX_HEIGHT, BUDDY_MIN_HEIGHT as MIN_HEIGHT, buddyWidth, snapHeight, trimmedImage } from "./decorationImage";
 import type { PixelArtDoc } from "./lib/doc";
+import { snapDevicePixel, useArtContainer, useDevicePixelRatio, useSharpArtUrl } from "./sharpScale";
 
 const MAX_Y = 1000;
 
@@ -24,18 +25,22 @@ function BuddySprite({ buddy, index, selected, editing, onPointerDown }: {
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const img = useMemo(() => trimmedImage(buddy.doc), [buddy.doc]);
-  if (!img) return null;
   const width = buddyWidth(buddy.doc, buddy.height);
-  const crisp = buddy.height % img.height === 0;
+  const sharp = useSharpArtUrl(img, width, buddy.height);
+  const ref = useRef<HTMLDivElement>(null);
+  const box = useArtContainer(ref, true);
+  const dpr = useDevicePixelRatio();
+  if (!img) return null;
   return (
     <div
+      ref={ref}
       data-testid="profile-buddy"
       onPointerDown={onPointerDown}
       className={editing ? "absolute touch-none" : "absolute pointer-events-none buddy-idle"}
       style={{
-        left: `calc(${buddy.x}% - ${(width * buddy.x) / 100}px)`,
+        left: box ? snapDevicePixel(box.left + (box.width - width) * buddy.x / 100, dpr) - box.left : `calc(${buddy.x}% - ${(width * buddy.x) / 100}px)`,
         // Never below the card's bottom edge, however short the card gets.
-        top: `min(${buddy.y}px, calc(100% - ${buddy.height}px))`,
+        top: box ? snapDevicePixel(box.top + Math.min(buddy.y, box.height - buddy.height), dpr) - box.top : `min(${buddy.y}px, calc(100% - ${buddy.height}px))`,
         width,
         height: buddy.height,
         zIndex: buddy.front ? 3 : 1,
@@ -43,16 +48,18 @@ function BuddySprite({ buddy, index, selected, editing, onPointerDown }: {
         outline: selected ? "2px dashed #fff" : editing ? "1px dashed rgba(255,255,255,0.45)" : undefined,
         outlineOffset: 2,
         animationDelay: `${index * -0.37}s`,
-      }}
+        animationTimingFunction: `steps(${Math.max(1, Math.round(3 * dpr))}, end)`,
+        "--buddy-bob": `${snapDevicePixel(-3, dpr)}px`,
+      } as React.CSSProperties}
     >
       <img
-        src={img.url}
+        src={sharp.url}
         alt=""
         draggable={false}
         style={{
           width: "100%",
           height: "100%",
-          imageRendering: crisp ? "pixelated" : "auto",
+          imageRendering: sharp.imageRendering,
           transform: buddy.flip ? "scaleX(-1)" : undefined,
         }}
       />
@@ -170,7 +177,7 @@ export function ProfileBuddies({ userId, editing, onEditingChange, cardRef }: La
       )}
       <style>{`
         .buddy-idle { animation: buddy-bob 1.8s ease-in-out infinite alternate; }
-        @keyframes buddy-bob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+        @keyframes buddy-bob { from { transform: translateY(0); } to { transform: translateY(var(--buddy-bob, -3px)); } }
         @media (prefers-reduced-motion: reduce) { .buddy-idle { animation: none; } }
       `}</style>
     </>

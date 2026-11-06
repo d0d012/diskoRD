@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Art } from "./lib/art";
+import { SharpArtImage } from "./SharpArtImage";
+import { snapDevicePixel, useDevicePixelRatio } from "./sharpScale";
 import { encodeDoc } from "./lib/doc";
-import { DECORATION_MAX_Y, DECORATION_MIN_Y, DECORATION_OPACITIES, DECORATION_SIZES, docImageUrl } from "./decorationImage";
+import { DECORATION_MAX_Y, DECORATION_MIN_Y, DECORATION_OPACITIES, DECORATION_SIZES } from "./decorationImage";
 
 export interface Placement {
   /** The message the piece is anchored to, so it scrolls and paginates with it. */
@@ -75,7 +77,8 @@ function rowAt(list: HTMLElement, clientY: number): HTMLElement | null {
  * message under the pointer, with its offset from that message's top.
  */
 export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
-  const url = useMemo(() => docImageUrl(encodeDoc(art)), [art]);
+  const doc = useMemo(() => encodeDoc(art), [art]);
+  const dpr = useDevicePixelRatio();
   const [sizeIndex, setSizeIndex] = useState(2); // 64px
   const [opacity, setOpacity] = useState(loadOpacity);
   const [ghost, setGhost] = useState<Ghost | null>(null);
@@ -183,13 +186,13 @@ export function PlaceDecoration({ art, list, onPlace, onCancel }: Props) {
     >
       <div className="absolute inset-0 pointer-events-none" style={{ outline: "2px dashed var(--color-dc-brand)", outlineOffset: -2, backgroundColor: "rgba(88,101,242,0.05)" }} />
 
-      {ghost && url && (
-        <img
-          src={url}
+      {ghost && (
+        <SharpArtImage
+          doc={doc} width={size} height={size}
           alt=""
           data-testid="decoration-ghost"
           className="fixed pointer-events-none"
-          style={{ left: ghost.left, top: ghost.top, width: size, height: size, opacity: opacity / 100, imageRendering: "pixelated" }}
+          style={{ left: snapDevicePixel(ghost.left, dpr), top: snapDevicePixel(ghost.top, dpr), opacity: opacity / 100 }}
         />
       )}
 

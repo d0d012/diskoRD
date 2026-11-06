@@ -1,5 +1,5 @@
 import "@fontsource/silkscreen/400.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuthStore } from "../../../stores/authStore";
 import { usePixelArtStore } from "../../../stores/pixelArtStore";
@@ -10,7 +10,8 @@ import { GalleryPicker } from "../GalleryDialogs";
 import { PixelArtEditor } from "../PixelArtEditor";
 import { ShowcaseViewer } from "../ProfileShowcase";
 import { bannerArt } from "../bannerArt";
-import { docImageUrl, fitScale } from "../decorationImage";
+import { fitScale } from "../decorationImage";
+import { SharpArtImage } from "../SharpArtImage";
 import { decodeDoc } from "../lib/doc";
 import { MUSEUM as M, carpetTile, floorTile, glassStreaks, glintBand, lampTile, spotlight, wainscotTile, wallTile } from "./museumArt";
 
@@ -96,7 +97,6 @@ function Vitrine({ piece, index, S, box, hero, arranging, dragging, onOpen, onPo
   onOpen: () => void;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
-  const url = useMemo(() => docImageUrl(piece.doc), [piece.doc]);
   const inner = box * S;
   const artScale = fitScale(piece.doc.width, piece.doc.height, inner - 6 * S, inner - 6 * S);
   const lampGap = hero ? 18 : 12;
@@ -137,14 +137,11 @@ function Vitrine({ piece, index, S, box, hero, arranging, dragging, onOpen, onPo
             backgroundColor: "rgba(191,230,242,0.07)",
           }}
         >
-          {url && (
-            <img
-              src={url}
-              alt=""
-              draggable={false}
-              style={{ width: piece.doc.width * artScale, height: piece.doc.height * artScale, imageRendering: artScale >= 1 ? "pixelated" : "auto" }}
-            />
-          )}
+          <SharpArtImage
+            doc={piece.doc} width={piece.doc.width * artScale} height={piece.doc.height * artScale}
+            alt=""
+            draggable={false}
+          />
           <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={pixelated(glassStreaks(box, box), box, box, S)} />
           <div
             aria-hidden="true"
@@ -271,7 +268,6 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
 
   const [hero, ...rest] = pieces;
   const banner = profile ? bannerArt(profile.banner) : null;
-  const bannerUrl = useMemo(() => (banner ? docImageUrl(banner) : null), [banner]);
   const bannerZoom = banner ? Math.max(1, Math.floor((150 * S) / banner.width)) : 1;
 
   function startDrag(index: number, e: React.PointerEvent<HTMLDivElement>) {
@@ -375,10 +371,10 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
       {error && <p className="text-center" style={{ fontSize: 4 * S, color: "#ff8a8a", padding: `${2 * S}px 0` }}>{error}</p>}
 
       {/* Banner hung as a painting */}
-      {bannerUrl && banner && (
+      {banner && (
         <div className="flex justify-center" style={{ paddingTop: 8 * S }}>
           <div style={{ padding: 3 * S, backgroundColor: M.brass, border: `${S}px solid ${M.brassDark}`, boxShadow: `inset 0 ${S}px 0 ${M.brassLight}, 0 ${2 * S}px 0 rgba(0,0,0,0.35)` }}>
-            <img src={bannerUrl} alt="" draggable={false} style={{ display: "block", width: banner.width * bannerZoom, height: banner.height * bannerZoom, imageRendering: "pixelated", border: `${S}px solid ${M.brassDark}` }} />
+            <SharpArtImage doc={banner} width={banner.width * bannerZoom} height={banner.height * bannerZoom} alt="" draggable={false} style={{ display: "block", border: `${S}px solid ${M.brassDark}` }} />
           </div>
         </div>
       )}

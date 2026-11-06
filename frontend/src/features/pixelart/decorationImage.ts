@@ -11,18 +11,22 @@ export const DECORATION_OPACITIES = [35, 60, 100] as const;
 export const DEFAULT_DECORATION_OPACITY = 35;
 
 // Each distinct piece is rasterized once per session, however many times it appears.
-const urlCache = new Map<string, string | null>();
+const urlCache = new Map<string, TrimmedImage | null>();
 
 /** Data URL of a doc at native size (CSS scales it), or null if it can't be drawn. */
 export function docImageUrl(doc: PixelArtDoc): string | null {
-  const key = `${doc.width}|${doc.palette.join(",")}|${doc.frames[0]}`;
+  return docImage(doc)?.url ?? null;
+}
+
+export function docImage(doc: PixelArtDoc): TrimmedImage | null {
+  const key = `${doc.width}x${doc.height}|${doc.palette.join(",")}|${doc.frames[0]}`;
   const cached = urlCache.get(key);
   if (cached !== undefined) return cached;
-  let url: string | null = null;
+  let url: TrimmedImage | null = null;
   try {
     const canvas = document.createElement("canvas");
     drawArt(canvas, decodeDoc(doc));
-    url = canvas.getContext("2d") ? canvas.toDataURL("image/png") : null;
+    url = canvas.getContext("2d") ? { url: canvas.toDataURL("image/png"), width: doc.width, height: doc.height, canvas } : null;
   } catch {
     url = null; // corrupt doc or no canvas: skip it rather than break the message
   }
@@ -37,6 +41,7 @@ export function decorationLeft(x: number, size: number): string {
 
 export interface TrimmedImage {
   url: string;
+  canvas: HTMLCanvasElement;
   /** Size of the non-transparent area, in art pixels. */
   width: number;
   height: number;
@@ -49,7 +54,7 @@ const trimCache = new Map<string, TrimmedImage | null>();
  * the corner of a big canvas shows at a useful size. Cached per doc.
  */
 export function trimmedImage(doc: PixelArtDoc): TrimmedImage | null {
-  const key = `${doc.width}|${doc.palette.join(",")}|${doc.frames[0]}`;
+  const key = `${doc.width}x${doc.height}|${doc.palette.join(",")}|${doc.frames[0]}`;
   const cached = trimCache.get(key);
   if (cached !== undefined) return cached;
   let result: TrimmedImage | null = null;
@@ -76,7 +81,7 @@ export function trimmedImage(doc: PixelArtDoc): TrimmedImage | null {
       const ctx = crop.getContext("2d");
       if (ctx) {
         ctx.drawImage(full, minX, minY, width, height, 0, 0, width, height);
-        result = { url: crop.toDataURL("image/png"), width, height };
+        result = { url: crop.toDataURL("image/png"), width, height, canvas: crop };
       }
     }
   } catch {
