@@ -1,0 +1,14 @@
+.showcase-museum .museum-btn:hover { filter: brightness(1.1); }
+.showcase-museum .museum-case:hover .museum-light { opacity: 0.45; }
+.showcase-museum .museum-light { transition: opacity 180ms ease-out; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .showcase-museum .museum-glass { transition: transform 180ms var(--ease-out-expo); }
+  .showcase-museum .museum-glass:hover { transform: translateY(calc(-1 * var(--museum-step))); }
+  .showcase-museum .museum-glass:hover .museum-glint { animation: museum-glint 900ms steps(14) 1; }
+  .showcase-museum .museum-btn:active { transform: translateY(calc(var(--museum-step) / 2)); }
+  @keyframes museum-glint {
+    from { background-position-x: var(--museum-glint-from); }
+    to { background-position-x: var(--museum-glint-to); }
+  }
+}

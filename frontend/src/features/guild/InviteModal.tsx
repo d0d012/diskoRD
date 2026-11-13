@@ -38,18 +38,21 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="dc-modal-backdrop-in fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-[460px] rounded-[5px] p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Invite friends to ${guildName}`}
+        className="dc-modal-in relative w-full max-w-[460px] rounded-xl p-6"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 transition-colors"
+          className="dc-press absolute top-3 right-3 w-8 h-8 rounded-md flex items-center justify-center transition-colors hover:bg-dc-bg-modifier-hover"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
@@ -59,7 +62,7 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
           </svg>
         </button>
 
-        <h2 className="text-xl font-bold mb-1" style={{ color: "var(--color-dc-header-primary)" }}>
+        <h2 className="text-xl font-bold mb-1 pr-7 tracking-tight" style={{ color: "var(--color-dc-header-primary)" }}>
           Invite friends to{" "}
           <span style={{ color: "var(--color-dc-header-primary)" }}>{guildName}</span>
         </h2>
@@ -70,7 +73,7 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
         {loading && (
           <div className="flex items-center justify-center h-12">
             <div
-              className="w-5 h-5 border-2 rounded-full animate-spin"
+              className="w-5 h-5 border-2 rounded-full motion-safe:animate-spin"
               style={{
                 borderColor: "var(--color-dc-brand)",
                 borderTopColor: "transparent",
@@ -88,7 +91,7 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
         {!loading && !error && (
           <>
             <div
-              className="flex items-center gap-2 p-2 rounded mb-1"
+              className="flex items-center gap-2 p-2 rounded-md mb-2 focus-within:ring-2 focus-within:ring-dc-brand/25 transition-shadow duration-150 motion-reduce:transition-none"
               style={{
                 backgroundColor: "var(--color-dc-bg-tertiary)",
                 border: "1px solid var(--color-dc-bg-floating)",
@@ -98,25 +101,14 @@ export function InviteModal({ guildId, guildName, onClose }: InviteModalProps) {
                 readOnly
                 value={inviteUrl}
                 onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 bg-transparent text-sm outline-none truncate font-mono"
+                className="dc-no-focus-ring min-w-0 flex-1 bg-transparent text-sm outline-none truncate font-mono"
                 style={{ color: "var(--color-dc-text-normal)" }}
               />
               <button
                 onClick={handleCopy}
-                className="px-3 py-1.5 rounded text-white text-sm font-semibold flex-shrink-0 transition-colors"
+                className={`dc-press px-4 h-9 rounded-md text-white text-sm font-semibold flex-shrink-0 transition-colors ${copied ? "" : "dc-btn-primary"}`}
                 style={{
-                  backgroundColor: copied
-                    ? "var(--color-dc-online)"
-                    : "var(--color-dc-brand)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!copied)
-                    e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = copied
-                    ? "var(--color-dc-online)"
-                    : "var(--color-dc-brand)";
+                  backgroundColor: copied ? "var(--color-dc-online)" : undefined,
                 }}
               >
                 {copied ? "Copied!" : "Copy"}

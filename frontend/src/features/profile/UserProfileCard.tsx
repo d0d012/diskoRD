@@ -279,20 +279,20 @@ export function UserProfileCard({
         ref={cardRef}
         role="dialog"
         aria-label={`${displayName}'s profile`}
-        className={inline ? "profile-card-in" : "fixed z-[9999] overflow-hidden profile-card-in"}
+        className={inline ? "dc-elevated" : `fixed z-[9999] overflow-hidden dc-elevated${pos ? " dc-pop-in" : ""}`}
         style={{
           top: inline ? undefined : pos?.top ?? -9999,
           left: inline ? undefined : pos?.left ?? -9999,
           width: 300,
           borderRadius: 12,
           backgroundColor: "var(--color-dc-bg-floating)",
-          boxShadow: inline ? "none" : "0 8px 32px rgba(0,0,0,0.55)",
           border: "1px solid rgba(255,255,255,0.06)",
+          "--dc-origin": preferredSide === "left" ? "top right" : "top left",
           overflow: "hidden",
           // One stacking context: banner < buddies behind < card content < buddies in front.
           position: inline ? "relative" : undefined,
           isolation: "isolate",
-        }}
+        } as React.CSSProperties}
       >
         {/* Banner */}
         <ProfileBanner userId={userId} color={view.bannerColor ?? avatarColor(username)} />
@@ -302,7 +302,7 @@ export function UserProfileCard({
           <div className="absolute top-2 right-2 flex gap-1" style={{ zIndex: 5 }}>
             <button
               onClick={() => setPickingBanner((p) => !p)}
-              className="flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-medium hover:brightness-125"
+              className="dc-press flex items-center gap-1 px-2 h-6 rounded-md border border-white/10 text-[11px] font-medium hover:brightness-125"
               style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
               title="Pick a pixel art banner"
             >
@@ -310,7 +310,7 @@ export function UserProfileCard({
             </button>
             <button
               onClick={() => { setPickingBanner(false); setArranging(true); }}
-              className="flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-medium hover:brightness-125"
+              className="dc-press flex items-center gap-1 px-2 h-6 rounded-md border border-white/10 text-[11px] font-medium hover:brightness-125"
               style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
               title="Place pixel art characters on your card"
             >
@@ -328,7 +328,7 @@ export function UserProfileCard({
                 <button
                   type="button"
                   onClick={() => setShowLightbox(true)}
-                  className="relative block rounded-full group/avatar"
+                  className="dc-press relative block rounded-full group/avatar"
                   aria-label="View avatar"
                   title="View avatar"
                 >
@@ -369,7 +369,7 @@ export function UserProfileCard({
           </div>
 
           {/* Inner panel */}
-          <div className="mt-3 p-3 rounded-lg flex flex-col gap-3" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+          <div className="mt-3 p-3 rounded-lg border border-white/[0.04] flex flex-col gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]" style={{ backgroundColor: "var(--color-dc-bg-user-panel)" }}>
             {view.bio && (
               <div>
                 <SectionLabel>About me</SectionLabel>
@@ -465,8 +465,7 @@ export function UserProfileCard({
               {isSelf ? (
                 <button
                   onClick={() => setShowSettings(true)}
-                  className="w-full h-9 rounded text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: "var(--color-dc-brand)" }}
+                  className="dc-btn-primary w-full h-9 rounded-md text-sm font-medium text-white"
                 >
                   Edit Profile
                 </button>
@@ -485,12 +484,6 @@ export function UserProfileCard({
             </div>
           )}
         </div>
-
-        <style>{`
-          .profile-card-in { animation: profile-card-in 120ms ease-out; }
-          @keyframes profile-card-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
-          @media (prefers-reduced-motion: reduce) { .profile-card-in { animation: none; } }
-        `}</style>
       </div>
 
       {showPicker && guildId && (

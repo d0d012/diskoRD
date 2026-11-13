@@ -16,15 +16,15 @@ export function CallStatusBar() {
     useFriendStore.getState().setActiveDM(call!.channelId);
   }
 
-  const iconButton = "p-1 rounded transition-colors flex-shrink-0 hover:bg-[var(--color-dc-bg-modifier-hover)]";
+  const iconButton = "dc-press p-1 rounded transition-colors flex-shrink-0 hover:bg-[var(--color-dc-bg-modifier-hover)]";
 
   return (
     <div
-      className="flex-shrink-0 px-2 py-2 border-t"
+      className="flex-shrink-0 px-2 py-2 border-t shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       style={{ borderColor: "var(--color-dc-bg-floating)", backgroundColor: "var(--color-dc-bg-tertiary)" }}
     >
-      <div className="flex items-center gap-2 px-2 py-1 rounded-md" style={{ backgroundColor: "rgba(35,165,90,0.12)" }}>
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--color-dc-online, #23a55a)" }} />
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-dc-online/10" style={{ backgroundColor: "color-mix(in srgb, var(--color-dc-online) 10%, transparent)" }}>
+        <span className="w-2 h-2 rounded-full flex-shrink-0 shadow-[0_0_8px_color-mix(in_srgb,var(--color-dc-online)_25%,transparent)]" style={{ backgroundColor: "var(--color-dc-online, #23a55a)" }} />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold truncate" style={{ color: "var(--color-dc-online, #23a55a)" }}>Call Connected</p>
           <button

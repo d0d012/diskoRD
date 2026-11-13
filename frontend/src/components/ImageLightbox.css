@@ -1,0 +1,32 @@
+.lightbox-image {
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.lightbox-dock {
+  background-color: var(--color-dc-bg-floating);
+  color: var(--color-dc-text-normal);
+}
+
+.lightbox-dock button,
+.lightbox-dock a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.lightbox-dock button:hover,
+.lightbox-dock a:hover { background-color: rgba(255, 255, 255, 0.08); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .lightbox-stage { animation: lightbox-image-in 220ms var(--ease-out-expo) both; }
+  @keyframes lightbox-image-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: none; }
+  }
+}

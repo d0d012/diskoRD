@@ -147,7 +147,7 @@ export function ProfileSettings() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="relative w-20 h-20 rounded-full overflow-hidden group flex-shrink-0"
+                className="dc-press relative w-20 h-20 rounded-full overflow-hidden group flex-shrink-0"
                 disabled={uploading}
                 aria-label="Change avatar"
               >
@@ -172,8 +172,7 @@ export function ProfileSettings() {
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     disabled={uploading}
-                    className="px-4 h-8 rounded text-sm font-medium text-white whitespace-nowrap hover:brightness-110 disabled:opacity-60"
-                    style={{ backgroundColor: "var(--color-dc-brand)" }}
+                    className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white whitespace-nowrap disabled:opacity-60"
                   >
                     Change Avatar
                   </button>
@@ -182,7 +181,7 @@ export function ProfileSettings() {
                       type="button"
                       onClick={handleRemoveAvatar}
                       disabled={uploading}
-                      className="px-3 h-8 rounded text-sm font-medium whitespace-nowrap hover:underline disabled:opacity-60"
+                      className="dc-press px-3 h-9 rounded-md text-sm font-medium whitespace-nowrap hover:bg-dc-bg-modifier-hover transition-colors disabled:opacity-60"
                       style={{ color: "var(--color-dc-text-normal)" }}
                     >
                       Remove
@@ -204,7 +203,7 @@ export function ProfileSettings() {
               maxLength={64}
               placeholder={user.username}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full h-10 px-3 rounded text-sm outline-none focus:ring-2 focus:ring-[var(--color-dc-brand)]"
+              className="w-full h-10 px-3 rounded-md text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
               style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
             />
           </Field>
@@ -218,7 +217,7 @@ export function ProfileSettings() {
                 rows={4}
                 placeholder="Tell people a little about yourself"
                 onChange={(e) => setBio(e.target.value)}
-                className="w-full px-3 pt-2 pb-6 rounded text-sm outline-none resize-none block focus:ring-2 focus:ring-[var(--color-dc-brand)]"
+                className="w-full px-3 pt-2 pb-6 rounded-md text-sm outline-none resize-none block border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
                 style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
               />
               <span
@@ -301,7 +300,7 @@ export function ProfileSettings() {
       {/* Unsaved changes bar */}
       {(dirty || error) && (
         <div
-          className="sticky bottom-0 flex items-center gap-3 px-4 py-2.5 rounded-lg shadow-lg"
+          className="dc-elevated dc-slide-up-in sticky bottom-0 flex items-center gap-3 px-4 py-3 rounded-lg"
           style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
         >
           <p className="flex-1 min-w-0 text-sm truncate" style={{ color: error ? "var(--color-dc-red)" : "var(--color-dc-text-normal)" }}>
@@ -310,14 +309,14 @@ export function ProfileSettings() {
           {dirty && (
             <>
               <button type="button" onClick={handleReset} disabled={saving}
-                className="px-3 h-8 rounded text-sm hover:underline" style={{ color: "var(--color-dc-text-normal)" }}>
+                className="dc-press px-3 h-9 rounded-md text-sm hover:bg-dc-bg-modifier-hover transition-colors" style={{ color: "var(--color-dc-text-normal)" }}>
                 Reset
               </button>
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={saving || bioLength > 190}
-                className="px-4 h-8 rounded text-sm font-medium text-white whitespace-nowrap hover:brightness-110 disabled:opacity-60"
+                className="dc-press px-4 h-9 rounded-md text-sm font-medium text-white whitespace-nowrap hover:brightness-110 disabled:opacity-60 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_1px_2px_rgba(0,0,0,0.3)]"
                 style={{ backgroundColor: "var(--color-dc-online)" }}
               >
                 {saving ? "Saving…" : "Save Changes"}
@@ -337,7 +336,7 @@ const BANNER_PRESETS = ["#5865f2", "#3ba55c", "#faa61a", "#ed4245", "#eb459e", "
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-dc-text-muted)" }}>
+    <h3 className="text-[11px] font-bold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-dc-text-muted)" }}>
       {children}
     </h3>
   );
@@ -372,7 +371,7 @@ function Swatch({ color, selected, label, onClick }: { color: string; selected: 
       title={label}
       aria-label={label}
       aria-pressed={selected}
-      className="w-7 h-7 rounded-full flex-shrink-0 transition-transform hover:scale-110"
+      className="dc-press w-7 h-7 rounded-full flex-shrink-0 motion-safe:hover:scale-110"
       style={{
         backgroundColor: color,
         boxShadow: selected ? "0 0 0 2px var(--color-dc-bg-primary), 0 0 0 4px var(--color-dc-header-primary)" : undefined,

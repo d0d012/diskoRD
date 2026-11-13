@@ -85,16 +85,12 @@ export function RegisterPage() {
         type={type}
         value={value}
         onChange={(e) => { onChange(e.target.value); setErrors((p) => ({ ...p })); }}
-        className="px-2.5 py-2 rounded text-base outline-none focus:ring-2 w-full"
-        style={{
-          backgroundColor: "var(--color-dc-bg-tertiary)",
-          color: "var(--color-dc-text-normal)",
-          border: error ? "1px solid var(--color-dc-red)" : "none",
-          borderRadius: "3px",
-        }}
+        className={`w-full h-10 px-3 rounded-[4px] text-base outline-none bg-dc-bg-tertiary text-dc-text-body border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none ${error ? "border-dc-red focus:border-dc-red focus:shadow-[0_0_0_2px_rgba(237,66,69,0.25)]" : ""}`}
       />
     );
   }
+
+  const dobSelectClassName = `h-10 pl-3 pr-8 rounded-[4px] text-base outline-none cursor-pointer appearance-none bg-dc-bg-tertiary bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23b5bac1%22 stroke-width=%222%22%3E%3Cpath d=%22m6 9 6 6 6-6%22/%3E%3C/svg%3E')] bg-[right_10px_center] bg-no-repeat border transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none ${errors.dob ? "border-dc-red focus:border-dc-red focus:shadow-[0_0_0_2px_rgba(237,66,69,0.25)]" : "border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)]"}`;
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 120 }, (_, i) => currentYear - i);
@@ -105,11 +101,11 @@ export function RegisterPage() {
   return (
     <div
       className="min-h-screen flex items-center justify-center py-8"
-      style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
+      style={{ background: "radial-gradient(circle at 18% 22%, rgba(88,101,242,0.24) 0%, transparent 48%), radial-gradient(circle at 82% 78%, rgba(88,101,242,0.14) 0%, transparent 45%), #111214" }}
     >
       <div
         ref={formRef}
-        className={`w-full max-w-md mx-4 rounded-md shadow-2xl px-8 py-8 ${shaking ? "shake" : ""}`}
+        className={`w-full max-w-md mx-4 rounded-[8px] border border-dc-border-subtle shadow-[0_20px_48px_rgba(0,0,0,0.55)] px-8 py-8 ${shaking ? "motion-safe:animate-[shake_0.4s_ease]" : ""}`}
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         <h1 className="text-center text-2xl font-bold mb-1" style={{ color: "var(--color-dc-header-primary)" }}>
@@ -155,13 +151,9 @@ export function RegisterPage() {
               <select
                 value={month}
                 onChange={(e) => { setMonth(e.target.value); setErrors((p) => ({ ...p, dob: undefined })); }}
-                className="px-2.5 py-2 rounded text-base outline-none cursor-pointer"
+                className={dobSelectClassName}
                 style={{
-                  backgroundColor: "var(--color-dc-bg-tertiary)",
-                  color: month ? "var(--color-dc-text-normal)" : "var(--color-dc-text-muted)",
-                  border: errors.dob ? "1px solid var(--color-dc-red)" : "none",
-                  borderRadius: "3px",
-                  appearance: "none",
+                  color: month ? "var(--color-dc-text-body)" : "var(--color-dc-text-muted)",
                 }}
               >
                 <option value="" disabled>Month</option>
@@ -171,13 +163,9 @@ export function RegisterPage() {
               <select
                 value={day}
                 onChange={(e) => { setDay(e.target.value); setErrors((p) => ({ ...p, dob: undefined })); }}
-                className="px-2.5 py-2 rounded text-base outline-none cursor-pointer"
+                className={dobSelectClassName}
                 style={{
-                  backgroundColor: "var(--color-dc-bg-tertiary)",
-                  color: day ? "var(--color-dc-text-normal)" : "var(--color-dc-text-muted)",
-                  border: errors.dob ? "1px solid var(--color-dc-red)" : "none",
-                  borderRadius: "3px",
-                  appearance: "none",
+                  color: day ? "var(--color-dc-text-body)" : "var(--color-dc-text-muted)",
                 }}
               >
                 <option value="" disabled>Day</option>
@@ -189,13 +177,9 @@ export function RegisterPage() {
               <select
                 value={year}
                 onChange={(e) => { setYear(e.target.value); setErrors((p) => ({ ...p, dob: undefined })); }}
-                className="px-2.5 py-2 rounded text-base outline-none cursor-pointer"
+                className={dobSelectClassName}
                 style={{
-                  backgroundColor: "var(--color-dc-bg-tertiary)",
-                  color: year ? "var(--color-dc-text-normal)" : "var(--color-dc-text-muted)",
-                  border: errors.dob ? "1px solid var(--color-dc-red)" : "none",
-                  borderRadius: "3px",
-                  appearance: "none",
+                  color: year ? "var(--color-dc-text-body)" : "var(--color-dc-text-muted)",
                 }}
               >
                 <option value="" disabled>Year</option>
@@ -206,31 +190,32 @@ export function RegisterPage() {
 
           {/* Marketing emails */}
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={marketingEmails}
-              onChange={(e) => setMarketingEmails(e.target.checked)}
-              className="w-4 h-4 rounded cursor-pointer"
-              style={{ accentColor: "var(--color-dc-brand)" }}
-            />
+            <span className="relative inline-flex shrink-0">
+              <input
+                type="checkbox"
+                checked={marketingEmails}
+                onChange={(e) => setMarketingEmails(e.target.checked)}
+                className="peer appearance-none w-[18px] h-[18px] rounded-[4px] border border-[#80848e] bg-dc-bg-tertiary checked:bg-dc-brand checked:border-dc-brand cursor-pointer transition-colors duration-150 motion-reduce:transition-none forced-colors:appearance-auto"
+              />
+              <svg className="absolute inset-0 hidden peer-checked:block pointer-events-none text-white forced-colors:hidden" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="m4 9 3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
             <span className="text-xs leading-snug" style={{ color: "var(--color-dc-header-secondary)" }}>
-              (Optional) It's okay to send me emails with Discord updates, tips, and special offers. You can opt out at any time.
+              (Optional) It's okay to send me emails with diskoRD updates, tips, and special offers. You can opt out at any time.
             </span>
           </label>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 text-white font-medium text-base mt-1 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer select-none"
-            style={{ backgroundColor: "var(--color-dc-brand)", borderRadius: "3px" }}
-            onMouseEnter={(e) => { if (!isLoading) (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)"); }}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand)")}
+            className="dc-btn-primary dc-press w-full h-11 rounded-[4px] bg-dc-brand enabled:hover:bg-dc-brand-560 text-white font-medium text-base mt-1 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer select-none"
           >
             {isLoading ? "Creating account..." : "Continue"}
           </button>
 
           <p className="text-xs leading-snug" style={{ color: "var(--color-dc-text-muted)" }}>
-            By registering, you agree to Discord's{" "}
+            By registering, you agree to diskoRD's{" "}
             <a href="#" style={{ color: "var(--color-dc-text-link)" }} className="hover:underline">Terms of Service</a>
             {" "}and{" "}
             <a href="#" style={{ color: "var(--color-dc-text-link)" }} className="hover:underline">Privacy Policy</a>.

@@ -5,6 +5,7 @@ import { ScreenShareModal } from "./ScreenShareModal";
 import { Soundboard } from "./Soundboard";
 import { micConstraints } from "../../lib/mediaDevices";
 import { isTauri } from "../../lib/inviteLinks";
+import "./voice.css";
 
 interface ControlBarProps {
   /** When true, renders with semi-transparent dark background for overlay use */
@@ -14,6 +15,7 @@ interface ControlBarProps {
 function ControlBtn({
   active,
   danger,
+  muted,
   onClick,
   title,
   children,
@@ -21,6 +23,7 @@ function ControlBtn({
 }: {
   active?: boolean;
   danger?: boolean;
+  muted?: boolean;
   onClick: () => void;
   title: string;
   children: React.ReactNode;
@@ -28,17 +31,21 @@ function ControlBtn({
 }) {
   const base = floating ? "w-10 h-10" : "w-12 h-12";
   const bg = danger
-    ? "var(--color-dc-red, #ed4245)"
+    ? "var(--color-dc-red)"
+    : muted
+    ? "color-mix(in srgb, var(--color-dc-red) 16%, var(--color-dc-bg-tertiary))"
+    : floating
+    ? active ? "rgba(79,86,96,0.85)" : "rgba(79,86,96,0.75)"
     : active
-    ? floating ? "rgba(79,86,96,0.85)" : "var(--color-dc-bg-modifier-selected)"
-    : floating ? "rgba(79,86,96,0.75)" : "var(--color-dc-bg-tertiary)";
+    ? "var(--color-dc-bg-modifier-selected)"
+    : "var(--color-dc-bg-tertiary)";
 
   return (
     <button
       onClick={onClick}
       title={title}
-      className={`${base} rounded-full flex items-center justify-center transition-all duration-150 flex-shrink-0`}
-      style={{ backgroundColor: bg, color: active ? "var(--color-dc-header-primary)" : "var(--color-dc-interactive-normal)" }}
+      className={`dc-press dc-voice-control ${base} rounded-full flex items-center justify-center flex-shrink-0`}
+      style={{ backgroundColor: bg, color: danger ? "#fff" : muted ? "var(--color-dc-red)" : active ? "var(--color-dc-header-primary)" : "var(--color-dc-interactive-normal)" }}
     >
       {children}
     </button>
@@ -89,7 +96,7 @@ export function ControlBar({ floating = false }: ControlBarProps) {
     <>
       <div className={`flex items-center justify-center gap-3 ${floating ? "py-3" : "px-6 py-4"}`}>
         {/* Mic */}
-        <ControlBtn active={!isMuted} onClick={() => setMuted(!isMuted)} title={isMuted ? "Unmute" : "Mute"} floating={floating}>
+        <ControlBtn active={!isMuted} muted={isMuted} onClick={() => setMuted(!isMuted)} title={isMuted ? "Unmute" : "Mute"} floating={floating}>
           {isMuted ? (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
@@ -102,7 +109,7 @@ export function ControlBar({ floating = false }: ControlBarProps) {
         </ControlBtn>
 
         {/* Deafen */}
-        <ControlBtn active={!isDeafened} onClick={() => setDeafened(!isDeafened)} title={isDeafened ? "Undeafen" : "Deafen"} floating={floating}>
+        <ControlBtn active={!isDeafened} muted={isDeafened} onClick={() => setDeafened(!isDeafened)} title={isDeafened ? "Undeafen" : "Deafen"} floating={floating}>
           {isDeafened ? (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 3a9 9 0 0 0-9 9v4a3 3 0 0 0 3 3h1a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H6.29A7 7 0 0 1 19 12h-1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1a3 3 0 0 0 3-3v-4a9 9 0 0 0-9-9z"/>

@@ -55,15 +55,15 @@ function ChannelView({ channelId }: { channelId: string }) {
     <div className="flex flex-col h-full" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
       {/* Channel header */}
       <div
-        className="h-12 px-4 flex items-center gap-2 flex-shrink-0 border-b shadow-sm"
+        className="relative z-10 h-12 px-4 flex items-center gap-2 flex-shrink-0"
         style={{
-          borderColor: "var(--color-dc-bg-floating)",
           backgroundColor: "var(--color-dc-bg-primary)",
+          boxShadow: "var(--shadow-dc-header)",
         }}
       >
-        <span className="text-xl leading-none font-bold" style={{ color: "var(--color-dc-text-muted)" }}>
-          #
-        </span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="flex-shrink-0 text-[var(--color-dc-channel-default)]">
+          <path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16" />
+        </svg>
         <span className="font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
           {channelName}
         </span>

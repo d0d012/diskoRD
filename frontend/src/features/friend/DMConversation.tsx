@@ -36,12 +36,16 @@ export function DMConversation() {
   const callTitle = callHere ? "Call in progress" : callDisabled ? "You're already in a call" : `Start a voice call with ${username}`;
 
   const intro = (
-    <div className="px-4 pt-14 pb-4">
-      <Avatar name={username} src={live.avatarUrl} size={80} />
-      <h2 className="text-3xl font-bold mt-3" style={{ color: "var(--color-dc-header-primary)" }}>
+    <div className="px-4 pt-14 pb-5">
+      <div className="relative w-20">
+        <div className="dc-history-badge relative rounded-full">
+          <Avatar name={username} src={live.avatarUrl} size={80} />
+        </div>
+      </div>
+      <h2 className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] mt-3" style={{ color: "var(--color-dc-header-primary)" }}>
         {username}
       </h2>
-      <p className="text-sm mt-2" style={{ color: "var(--color-dc-text-muted)" }}>
+      <p className="text-[15px] mt-2" style={{ color: "var(--color-dc-text-muted)" }}>
         This is the beginning of your direct message history with{" "}
         <span className="font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>@{username}</span>.
       </p>
@@ -49,7 +53,7 @@ export function DMConversation() {
         onClick={startCall}
         disabled={callDisabled}
         title={callTitle}
-        className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium text-white transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
+        className="dc-press mt-4 inline-flex h-8 items-center gap-2 px-3 rounded-[6px] border border-dc-border-subtle text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100"
         style={{ backgroundColor: "var(--color-dc-green, #248046)" }}
       >
         <PhoneIcon size={16} />
@@ -62,8 +66,8 @@ export function DMConversation() {
     <div className="flex flex-col h-full" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
       {/* Header */}
       <div
-        className="h-12 px-4 flex items-center gap-3 border-b flex-shrink-0"
-        style={{ borderColor: "var(--color-dc-bg-floating)", boxShadow: "0 1px 0 rgba(0,0,0,0.2)" }}
+        className="relative z-10 h-12 px-4 flex items-center gap-3 flex-shrink-0"
+        style={{ backgroundColor: "var(--color-dc-bg-primary)", boxShadow: "var(--shadow-dc-header)" }}
       >
         <button
           onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
@@ -85,7 +89,7 @@ export function DMConversation() {
           onClick={() => useShowcaseOverlayStore.getState().open(dm.recipient.id)}
           title={`View ${username}'s showcase`}
           aria-label={`View ${username}'s showcase`}
-          className="p-1.5 rounded-md transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+          className="dc-press p-1.5 rounded-md transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
           style={{ color: "var(--color-dc-interactive-normal)" }}
         >
           <Icon name="showcase" size={20} />
@@ -96,7 +100,7 @@ export function DMConversation() {
             onClick={() => setCallPanelHidden(false)}
             disabled={callState !== "in-call"}
             title={callState === "in-call" ? "Show call window" : undefined}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-[filter] enabled:hover:brightness-125 disabled:cursor-default"
+            className="dc-press flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-[filter] enabled:hover:brightness-125 disabled:cursor-default"
             style={{ backgroundColor: "rgba(35,165,90,0.15)", color: "var(--color-dc-online, #23a55a)" }}
           >
             <PhoneIcon size={14} />
@@ -108,7 +112,7 @@ export function DMConversation() {
             disabled={callDisabled}
             title={callTitle}
             aria-label={callTitle}
-            className="p-1.5 rounded-md transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className="dc-press p-1.5 rounded-md transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             style={{ color: "var(--color-dc-interactive-normal)" }}
           >
             <PhoneIcon />

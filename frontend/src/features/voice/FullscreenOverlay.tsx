@@ -40,7 +40,7 @@ export function FullscreenOverlay({ tile, onClose }: FullscreenOverlayProps) {
   return (
     <div
       data-testid="fullscreen-overlay"
-      className="fixed inset-0 z-[9999] bg-black flex flex-col"
+      className="dc-modal-backdrop-in fixed inset-0 z-[9999] bg-black flex flex-col"
       onMouseMove={resetHideTimer}
     >
       {/* Video / avatar fills the space */}
@@ -54,8 +54,8 @@ export function FullscreenOverlay({ tile, onClose }: FullscreenOverlayProps) {
         {/* Name label */}
         <div
           data-testid="participant-name-label"
-          className="absolute bottom-4 left-4 px-2 py-1 rounded text-sm font-medium"
-          style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
+          className="absolute bottom-4 left-4 px-2 py-1 rounded-md text-sm font-medium"
+          style={{ backgroundColor: "color-mix(in srgb, var(--color-dc-bg-floating) 80%, transparent)", color: "var(--color-dc-text-normal)" }}
         >
           {tile.type === "broadcast" ? `${participant.name}'s Screen` : participant.name}
         </div>
@@ -64,8 +64,8 @@ export function FullscreenOverlay({ tile, onClose }: FullscreenOverlayProps) {
         <button
           aria-label="exit fullscreen"
           onClick={onClose}
-          className="absolute top-4 right-4 px-3 py-1.5 rounded-md text-xs font-semibold transition-opacity"
-          style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1", border: "1px solid #4f5660" }}
+          className="dc-press dc-elevated absolute top-4 right-4 px-3 py-1.5 rounded-md text-xs font-semibold"
+          style={{ backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)" }}
         >
           ✕ Exit
         </button>
@@ -73,7 +73,7 @@ export function FullscreenOverlay({ tile, onClose }: FullscreenOverlayProps) {
 
       {/* Floating controls bar — fades on inactivity */}
       <div
-        className="flex-shrink-0 transition-opacity duration-300"
+        className="flex-shrink-0 transition-opacity duration-300 motion-reduce:duration-100"
         style={{
           opacity: controlsVisible ? 1 : 0,
           background: "linear-gradient(transparent, rgba(0,0,0,0.8))",

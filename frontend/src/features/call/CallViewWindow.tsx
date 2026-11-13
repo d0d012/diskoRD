@@ -165,14 +165,14 @@ export function CallViewWindow() {
   // Row mode fills the window with a near-square grid; column mode stacks everything.
   const columns = layout === "column" ? 1 : Math.max(1, Math.ceil(Math.sqrt(tiles.length)));
   const rows = Math.max(1, Math.ceil(tiles.length / columns));
-  const iconButton = "p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]";
+  const iconButton = "dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]";
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden select-none"
       style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}>
       {/* Title bar — drag anywhere on it to move the window */}
-      <div data-tauri-drag-region className="h-8 flex-shrink-0 flex items-center gap-2 pl-3 pr-1.5 cursor-grab"
-        style={{ borderBottom: "1px solid var(--color-dc-bg-floating)" }}>
+      <div data-tauri-drag-region className="h-8 flex-shrink-0 flex items-center gap-2 pl-3 pr-1.5 cursor-grab shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+        style={{ borderBottom: "1px solid var(--color-dc-bg-floating)", backgroundColor: "var(--color-dc-bg-tertiary)" }}>
         <span data-tauri-drag-region className="w-2 h-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: status ? "var(--color-dc-idle)" : "var(--color-dc-online)" }} />
         <span data-tauri-drag-region className="text-xs font-medium truncate flex-1" style={{ color: "var(--color-dc-header-primary)" }}>
@@ -220,7 +220,7 @@ export function CallViewWindow() {
 
       {/* Soundboard */}
       {controls && soundsOpen && (
-        <div className="flex-shrink-0 mx-2 mb-2 p-2 rounded-lg max-h-36 overflow-y-auto"
+        <div className="dc-slide-up-in flex-shrink-0 mx-2 mb-2 p-2 rounded-lg border border-white/[0.05] max-h-36 overflow-y-auto"
           style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}>
           {!controls.soundboard.available && (
             <p className="text-xs mb-1.5" style={{ color: "var(--color-dc-text-muted)" }}>Unmute and undeafen to play sounds.</p>
@@ -229,7 +229,7 @@ export function CallViewWindow() {
             {controls.soundboard.sounds.map((sound) => (
               <button key={sound.id} disabled={!controls.soundboard.available}
                 onClick={() => send({ type: "sound", id: sound.id })}
-                className="h-8 px-2 rounded flex items-center gap-1.5 text-xs truncate transition-colors bg-white/5 hover:bg-white/15 active:bg-white/25 disabled:opacity-40"
+                className="dc-press h-8 px-2 rounded flex items-center gap-1.5 text-xs truncate transition-colors bg-white/5 hover:bg-white/15 active:bg-white/25 disabled:opacity-40"
                 title={`${sound.name} · Play for everyone`}>
                 <span aria-hidden="true">{sound.emoji ?? "🔊"}</span>
                 <span className="truncate">{sound.name}</span>
@@ -313,8 +313,9 @@ function ControlButton({ label, icon, onClick, active, on, danger }: {
   on?: boolean;
   danger?: boolean;
 }) {
-  const background = danger ? "var(--color-dc-red, #ed4245)"
-    : on ? "var(--color-dc-online, #23a55a)"
+  const background = danger ? "var(--color-dc-red)"
+    : on ? "var(--color-dc-green-button)"
+    : active ? "color-mix(in srgb, var(--color-dc-red) 16%, var(--color-dc-bg-tertiary))"
     : "var(--color-dc-bg-tertiary)";
   const color = danger || on ? "#fff" : active ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-normal)";
   return (
@@ -323,7 +324,7 @@ function ControlButton({ label, icon, onClick, active, on, danger }: {
       title={label}
       aria-label={label}
       aria-pressed={danger ? undefined : !!(active || on)}
-      className="w-9 h-9 rounded-full flex items-center justify-center transition-[filter] hover:brightness-125"
+      className="dc-press dc-voice-control w-9 h-9 rounded-full flex items-center justify-center"
       style={{ backgroundColor: background, color }}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{icon}</svg>

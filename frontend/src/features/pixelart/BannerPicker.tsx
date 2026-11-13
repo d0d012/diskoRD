@@ -18,7 +18,7 @@ function BannerThumb({ doc, selected, label, onClick }: { doc: PixelArtDoc | nul
       aria-label={label}
       aria-pressed={selected}
       title={label}
-      className="relative rounded-md overflow-hidden transition-transform hover:scale-[1.03]"
+      className="dc-press relative rounded-md overflow-hidden hover:brightness-110"
       style={{ width: 150, height: 48, outline: selected ? "2px solid var(--color-dc-brand)" : "1px solid rgba(255,255,255,0.08)", outlineOffset: selected ? 2 : 0 }}
     >
       {doc && <SharpArtImage doc={doc} width={150} height={48} alt="" draggable={false} />}
@@ -51,7 +51,12 @@ export function BannerPicker({ userId, cardRef, onClose }: {
   }, [gallery, loadGallery]);
 
   useLayoutEffect(() => {
-    placeBeside(panelRef.current, cardRef.current);
+    const panel = panelRef.current;
+    const card = cardRef.current;
+    if (!panel || !card) return;
+    placeBeside(panel, card);
+    panel.style.setProperty("--dc-origin", Number.parseFloat(panel.style.left) < card.getBoundingClientRect().left ? "top right" : "top left");
+    panel.classList.add("dc-pop-in");
   });
 
   // Escape closes the picker (the editor handles its own Escape while open).
@@ -93,12 +98,12 @@ export function BannerPicker({ userId, cardRef, onClose }: {
           data-avatar-lightbox
           role="dialog"
           aria-label="Choose banner"
-          className="fixed z-[10001] w-[336px] rounded-xl p-3 shadow-2xl flex flex-col gap-3 text-sm"
+          className="dc-elevated fixed z-[10001] w-[336px] rounded-xl p-3 flex flex-col gap-3 text-sm"
           style={{ left: -9999, top: 0, backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)", border: "1px solid rgba(255,255,255,0.06)" }}
         >
           <div className="flex items-baseline justify-between">
             <span className="font-semibold">Banner</span>
-            <button onClick={onClose} aria-label="Close" className="w-6 h-6 rounded flex items-center justify-center hover:bg-[var(--color-dc-bg-modifier-hover)]" style={muted}>
+            <button onClick={onClose} aria-label="Close" className="dc-press w-6 h-6 rounded flex items-center justify-center hover:bg-[var(--color-dc-bg-modifier-hover)]" style={muted}>
               <Icon name="close" size={14} />
             </button>
           </div>
@@ -137,12 +142,12 @@ export function BannerPicker({ userId, cardRef, onClose }: {
 
           {error && <p className="text-xs" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}
           <div className="flex gap-1.5">
-            <button onClick={startDrawing} className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium" style={{ backgroundColor: "var(--color-dc-brand)", color: "#fff" }}>
+            <button onClick={startDrawing} className="dc-btn-primary flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium text-white">
               <Icon name="brush" size={14} />
               {current ? "Edit or draw your own" : "Draw your own"}
             </button>
             {current && (
-              <button onClick={() => void choose(null)} className="px-3 h-8 rounded-md text-xs" style={pill} title="Back to your banner color">
+              <button onClick={() => void choose(null)} className="dc-press px-3 h-8 rounded-md text-xs hover:brightness-110" style={pill} title="Back to your banner color">
                 Remove
               </button>
             )}

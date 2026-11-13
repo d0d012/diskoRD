@@ -8,6 +8,7 @@ import { Icon } from "./Icon";
 import { BUDDY_MAX_HEIGHT as MAX_HEIGHT, BUDDY_MIN_HEIGHT as MIN_HEIGHT, buddyWidth, snapHeight, trimmedImage } from "./decorationImage";
 import type { PixelArtDoc } from "./lib/doc";
 import { snapDevicePixel, useArtContainer, useDevicePixelRatio, useSharpArtUrl } from "./sharpScale";
+import "./profileArt.css";
 
 const MAX_Y = 1000;
 
@@ -56,6 +57,7 @@ function BuddySprite({ buddy, index, selected, editing, onPointerDown }: {
         src={sharp.url}
         alt=""
         draggable={false}
+        className="drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"
         style={{
           width: "100%",
           height: "100%",
@@ -175,11 +177,6 @@ export function ProfileBuddies({ userId, editing, onEditingChange, cardRef }: La
           }}
         />
       )}
-      <style>{`
-        .buddy-idle { animation: buddy-bob 1.8s ease-in-out infinite alternate; }
-        @keyframes buddy-bob { from { transform: translateY(0); } to { transform: translateY(var(--buddy-bob, -3px)); } }
-        @media (prefers-reduced-motion: reduce) { .buddy-idle { animation: none; } }
-      `}</style>
     </>
   );
 }
@@ -219,7 +216,12 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
 
   // Sit beside the card (left if there's no room on the right).
   useLayoutEffect(() => {
-    placeBeside(toolbarRef.current, cardRef.current);
+    const toolbar = toolbarRef.current;
+    const card = cardRef.current;
+    if (!toolbar || !card) return;
+    placeBeside(toolbar, card);
+    toolbar.style.setProperty("--dc-origin", Number.parseFloat(toolbar.style.left) < card.getBoundingClientRect().left ? "top right" : "top left");
+    toolbar.classList.add("dc-pop-in");
   }, [cardRef, picking]);
 
   const current = selected !== null ? buddies[selected] : null;
@@ -244,7 +246,7 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
       data-avatar-lightbox
       role="dialog"
       aria-label="Arrange buddies"
-      className="fixed z-[10001] w-60 rounded-xl p-3 shadow-2xl flex flex-col gap-3 text-sm"
+      className="dc-elevated fixed z-[10001] w-60 rounded-xl p-3 flex flex-col gap-3 text-sm"
       style={{ left: -9999, top: 0, backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)", border: "1px solid rgba(255,255,255,0.06)" }}
     >
       <div>
@@ -264,7 +266,7 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
               aria-checked={selected === i}
               aria-label={`Buddy ${i + 1}`}
               onClick={() => onSelect(i)}
-              className="w-10 h-10 rounded-md flex items-center justify-center"
+              className="dc-press w-10 h-10 rounded-md border border-white/[0.06] flex items-center justify-center"
               style={{ backgroundColor: "var(--color-dc-bg-tertiary)", outline: selected === i ? "2px solid var(--color-dc-brand)" : undefined }}
             >
               <ArtThumb doc={b.doc} size={30} />
@@ -318,7 +320,7 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
                   onClick={() => { onAdd(a.doc, a.id); setPicking(false); }}
                   title={a.title || "Untitled"}
                   aria-label={`Add ${a.title || "untitled"}`}
-                  className="w-10 h-10 rounded-md flex items-center justify-center hover:brightness-125"
+                  className="dc-press w-10 h-10 rounded-md border border-white/[0.06] flex items-center justify-center hover:brightness-125"
                   style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
                 >
                   <ArtThumb doc={a.doc} size={30} />
@@ -338,8 +340,8 @@ function BuddyToolbar({ cardRef, buddies, selected, onSelect, onChange, onAdd, o
 
       {error && <p className="text-xs" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}
       <div className="flex gap-1.5 justify-end">
-        <button onClick={onCancel} className="px-3 h-8 rounded-md text-xs" style={pill}>Cancel</button>
-        <button onClick={() => void save()} disabled={busy} className="px-3 h-8 rounded-md text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-dc-brand)" }}>
+        <button onClick={onCancel} className="dc-press px-3 h-8 rounded-md text-xs" style={pill}>Cancel</button>
+        <button onClick={() => void save()} disabled={busy} className="dc-btn-primary px-3 h-8 rounded-md text-xs font-medium text-white disabled:opacity-50">
           {busy ? "Saving…" : "Save"}
         </button>
       </div>

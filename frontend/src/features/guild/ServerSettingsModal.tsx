@@ -124,25 +124,26 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
   }
 
   return (
-    <div className="fixed inset-0 z-[9998] flex" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+    <div className="dc-modal-backdrop-in fixed inset-0 z-[9998] flex bg-black/72">
+      <div role="dialog" aria-modal="true" aria-label="Server Settings" className="dc-modal-in flex h-full w-full bg-dc-bg-primary">
       {/* Left nav */}
       <div
-        className="w-56 flex-shrink-0 flex flex-col py-8 px-3 overflow-y-auto"
+        className="w-56 flex-shrink-0 flex flex-col py-8 px-4 gap-1 overflow-y-auto border-r border-black/15"
         style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
       >
         {/* Guild name header */}
-        <p className="px-3 mb-4 text-xs font-semibold uppercase tracking-wider truncate" style={{ color: "var(--color-dc-text-muted)" }}>
+        <p className="px-3 mb-5 text-[11px] font-bold uppercase tracking-wider truncate" style={{ color: "var(--color-dc-text-muted)" }}>
           {guildName}
         </p>
 
         {/* Server Management section */}
-        <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
+        <p className="px-3 mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
           Server Management
         </p>
         <NavItem label="Overview" active={activeSection === "overview"} onClick={() => setActiveSection("overview")} />
 
         {/* User Management section */}
-        <p className="px-3 mt-4 mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
+        <p className="px-3 mt-5 mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
           User Management
         </p>
         <NavItem label="Roles" active={activeSection === "roles"} onClick={() => setActiveSection("roles")} />
@@ -150,7 +151,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
         {/* Danger Zone — owner only */}
         {isOwner && (
           <>
-            <div className="my-3 mx-3 border-t" style={{ borderColor: "var(--color-dc-bg-floating)" }} />
+            <div className="my-3 mx-3 border-t border-white/5" />
             <NavItem
               label="Delete Server"
               active={activeSection === "danger"}
@@ -164,13 +165,13 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
       {/* Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 flex-shrink-0 border-b" style={{ borderColor: "var(--color-dc-bg-floating)" }}>
-          <h2 className="text-lg font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
+        <div className="flex items-center justify-between px-8 py-5 flex-shrink-0 border-b border-white/5">
+          <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-dc-header-primary)" }}>
             {activeSection === "overview" ? "Overview" : activeSection === "roles" ? "Roles" : "Delete Server"}
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded flex items-center justify-center transition-colors"
+            className="dc-press w-9 h-9 rounded-full border border-dc-interactive-muted/60 flex items-center justify-center transition-colors hover:border-dc-interactive-normal"
             style={{ color: "var(--color-dc-interactive-normal)" }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -194,7 +195,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                   onClick={() => iconInputRef.current?.click()}
                   disabled={!isOwner || iconBusy}
                   aria-label="Change server icon"
-                  className="relative w-20 h-20 rounded-full overflow-hidden group flex-shrink-0 flex items-center justify-center disabled:cursor-default"
+                  className="dc-press relative w-20 h-20 rounded-full overflow-hidden group flex-shrink-0 flex items-center justify-center disabled:cursor-default"
                   style={{ backgroundColor: "var(--color-dc-brand)" }}
                 >
                   {iconUrl ? (
@@ -219,8 +220,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                         type="button"
                         onClick={() => iconInputRef.current?.click()}
                         disabled={iconBusy}
-                        className="px-4 h-8 rounded text-sm font-medium text-white whitespace-nowrap hover:brightness-110 disabled:opacity-60"
-                        style={{ backgroundColor: "var(--color-dc-brand)" }}
+                        className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white whitespace-nowrap disabled:opacity-60"
                       >
                         Upload Image
                       </button>
@@ -229,7 +229,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                           type="button"
                           onClick={handleRemoveIcon}
                           disabled={iconBusy}
-                          className="px-3 h-8 rounded text-sm font-medium whitespace-nowrap hover:underline disabled:opacity-60"
+                          className="dc-press px-3 h-9 rounded-md text-sm font-medium whitespace-nowrap hover:bg-dc-bg-modifier-hover transition-colors disabled:opacity-60"
                           style={{ color: "var(--color-dc-text-normal)" }}
                         >
                           Remove
@@ -254,7 +254,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={!isOwner || saving}
-                className="w-full px-3 py-2 rounded text-sm outline-none mb-3"
+                className="w-full h-10 px-3 rounded-md text-sm outline-none mb-3 border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none disabled:opacity-50"
                 style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
               />
               {saveError && <p className="text-sm mb-3" style={{ color: "var(--color-dc-red, #ed4245)" }}>{saveError}</p>}
@@ -262,8 +262,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                 <button
                   onClick={handleSaveOverview}
                   disabled={saving || !name.trim() || name.trim() === guildName}
-                  className="px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-dc-brand)" }}
+                  className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white disabled:opacity-50"
                 >
                   {saving ? "Saving…" : "Save Changes"}
                 </button>
@@ -289,7 +288,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
                 </p>
                 <button
                   onClick={() => setShowConfirm(true)}
-                  className="px-4 py-2 rounded text-sm font-medium text-white transition-opacity"
+                  className="dc-press px-4 h-9 rounded-md text-sm font-medium text-white transition-opacity shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
                   style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
@@ -300,6 +299,8 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
             </div>
           )}
         </div>
+      </div>
+
       </div>
 
       {cropFile && (
@@ -316,9 +317,9 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
 
       {/* Confirmation dialog */}
       {showConfirm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+        <div className="dc-modal-backdrop-in fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.72)" }}>
           <div
-            className="w-full max-w-sm mx-4 rounded-lg p-6 shadow-xl"
+            className="dc-modal-in w-full max-w-sm mx-4 rounded-xl p-6 overflow-hidden"
             style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
           >
             <h3 className="text-lg font-bold mb-2" style={{ color: "var(--color-dc-header-primary)" }}>
@@ -332,11 +333,11 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
               <p className="text-sm mb-4" style={{ color: "var(--color-dc-red, #ed4245)" }}>{deleteError}</p>
             )}
 
-            <div className="flex gap-3 justify-end">
+            <div className="-mx-6 -mb-6 px-6 py-4 flex gap-3 justify-end border-t border-white/5 bg-dc-bg-secondary">
               <button
                 onClick={() => { setShowConfirm(false); setDeleteError(""); }}
                 disabled={deleting}
-                className="px-4 py-2 rounded text-sm font-medium transition-colors"
+                className="dc-press px-4 h-9 rounded-md text-sm font-medium transition-colors"
                 style={{ color: "var(--color-dc-text-normal)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -346,7 +347,7 @@ export function ServerSettingsModal({ guildId, guildName, isOwner, onClose }: Pr
               <button
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
-                className="px-4 py-2 rounded text-sm font-medium text-white transition-opacity disabled:opacity-50"
+                className="dc-press px-4 h-9 rounded-md text-sm font-medium text-white transition-opacity hover:brightness-110 disabled:opacity-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
                 style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
               >
                 {deleting ? "Deleting…" : "Delete Server"}
@@ -363,7 +364,7 @@ function NavItem({ label, active, danger, onClick }: { label: string; active?: b
   return (
     <div
       onClick={onClick}
-      className="px-3 py-1.5 rounded text-sm cursor-pointer transition-colors"
+      className={`dc-press px-3 py-2 min-h-9 rounded-md text-sm font-medium cursor-pointer transition-colors ${active ? "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]" : ""}`}
       style={{
         backgroundColor: active ? "var(--color-dc-bg-modifier-selected)" : "transparent",
         color: danger

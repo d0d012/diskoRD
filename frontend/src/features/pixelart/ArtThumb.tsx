@@ -17,6 +17,7 @@ export function ArtThumb({ doc, size, alt = "" }: { doc: PixelArtDoc; size: numb
       src={sharp.url}
       alt={alt}
       draggable={false}
+      className="drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"
       style={{
         width: image.width * scale,
         height: image.height * scale,

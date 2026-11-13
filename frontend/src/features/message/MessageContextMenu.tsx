@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { Message } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
@@ -52,12 +52,11 @@ function MenuItem({
       data-menu-item
       title={title}
       onClick={onClick}
-      className={`w-full flex items-center justify-between gap-3 px-2 h-8 rounded text-[13px] text-left transition-colors ${
+      className={`dc-press w-full flex items-center justify-between gap-3 px-2 h-8 rounded text-[13px] text-left transition-colors hover:text-white focus-visible:text-white hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] ${
         danger
-          ? "hover:bg-[var(--color-dc-red)] hover:text-white"
-          : "hover:bg-[var(--color-dc-brand)] hover:text-white"
+          ? "text-dc-red hover:bg-dc-red focus-visible:bg-dc-red"
+          : "text-dc-text-normal hover:bg-dc-brand focus-visible:bg-dc-brand"
       }`}
-      style={{ color: danger ? "var(--color-dc-red)" : "var(--color-dc-text-normal)" }}
     >
       <span className="truncate">{label}</span>
       <span style={{ opacity: 0.85 }}>
@@ -202,15 +201,14 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
         role="menu"
         aria-label="Message actions"
         onKeyDown={handleMenuKeyDown}
-        className="fixed z-[10000] p-1.5 rounded-lg message-menu-in"
+        className="dc-elevated dc-pop-in fixed z-[10000] p-1.5 rounded-lg"
         style={{
           top: pos?.top ?? -9999,
           left: pos?.left ?? -9999,
           minWidth: 200,
           backgroundColor: "var(--color-dc-bg-floating)",
-          boxShadow: "0 8px 28px rgba(0,0,0,0.55)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
+          "--dc-origin": `${pos && pos.left < x ? "right" : "left"} ${pos && pos.top < y ? "bottom" : "top"}`,
+        } as CSSProperties}
       >
         {/* Quick reactions */}
         <div role="group" aria-label="Quick reactions" className="flex items-center gap-0.5 px-1 pb-1.5">
@@ -336,14 +334,14 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
       {confirming &&
         createPortal(
           <div
-            className="fixed inset-0 z-[10002] flex items-center justify-center p-4"
+            className="dc-modal-backdrop-in fixed inset-0 z-[10002] flex items-center justify-center p-4"
             style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
             onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirming(false); }}
             role="dialog"
             aria-modal="true"
             aria-label="Delete Message"
           >
-            <div className="w-96 rounded-lg p-5 shadow-xl" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+            <div className="dc-modal-in w-96 rounded-xl p-5" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
               <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--color-dc-header-primary)" }}>
                 Delete Message
               </h3>
@@ -358,7 +356,7 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirming(false)}
-                  className="px-4 py-2 rounded text-sm hover:underline"
+                  className="dc-press px-4 py-2 rounded text-sm hover:underline"
                   style={{ color: "var(--color-dc-text-normal)" }}
                 >
                   Cancel
@@ -366,7 +364,7 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
                 <button
                   autoFocus
                   onClick={confirmDelete}
-                  className="px-4 py-2 rounded text-sm font-medium text-white hover:brightness-110"
+                  className="dc-press px-4 py-2 rounded text-sm font-medium text-white hover:brightness-110"
                   style={{ backgroundColor: "var(--color-dc-red)" }}
                 >
                   Delete
@@ -376,12 +374,6 @@ export function MessageContextMenu({ message, x, y, onEdit, onDecorate, onClose 
           </div>,
           document.body
         )}
-
-      <style>{`
-        .message-menu-in { animation: message-menu-in 100ms ease-out; }
-        @keyframes message-menu-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
-        @media (prefers-reduced-motion: reduce) { .message-menu-in { animation: none; } }
-      `}</style>
     </>
   );
 }

@@ -10,12 +10,11 @@ import { fitScale } from "./decorationImage";
 import { SharpArtImage } from "./SharpArtImage";
 import { decodeDoc } from "./lib/doc";
 import { artToPng, downloadBlob, shareScale } from "./render";
+import "./profileArt.css";
 
 /** Tiles shown before "+N"; 5 × 46px fills the card's 252px inner panel. */
 const ROW = 5;
 const TILE = 46;
-
-const checker = "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 8px 8px";
 
 interface Props {
   userId: string;
@@ -72,26 +71,26 @@ export function ProfileShowcase({ userId, isSelf, onOverlayChange }: Props) {
       </div>
 
       {pieces.length === 0 && !isSelf ? (
-        <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>Nothing on display yet.</p>
+        <p className="pixel-vitrine rounded-lg px-3 py-4 text-xs" style={{ color: "var(--color-dc-text-muted)" }}>Nothing on display yet.</p>
       ) : pieces.length === 0 ? (
         <button
           onClick={() => setOverlay({ kind: "editor", piece: null, remix: false })}
-          className="w-full h-12 rounded-md flex items-center justify-center gap-1.5 text-xs hover:bg-[var(--color-dc-bg-modifier-hover)]"
-          style={{ border: "1px dashed var(--color-dc-text-muted)", color: "var(--color-dc-text-muted)" }}
+          className="pixel-vitrine dc-press w-full h-16 rounded-lg flex items-center justify-center gap-1.5 text-xs text-dc-text-muted hover:text-dc-text-normal"
+          style={{ border: "1px dashed rgba(255,255,255,0.12)" }}
         >
           <Icon name="brush" size={16} />
           Add your pixel art
         </button>
       ) : (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${ROW}, ${TILE}px)` }}>
+        <div className="pixel-vitrine grid justify-center gap-1 rounded-lg p-1 -mx-1" style={{ gridTemplateColumns: `repeat(${ROW}, ${TILE}px)` }}>
           {visible.map((piece, i) => (
             <button
               key={piece.id}
               onClick={() => setOverlay({ kind: "viewer", index: i })}
               title={piece.title || "Untitled"}
               aria-label={`View ${piece.title || "untitled pixel art"}`}
-              className="rounded-md flex items-center justify-center overflow-hidden transition-transform hover:scale-105"
-              style={{ width: TILE, height: TILE, background: checker }}
+              className="pixel-display-tile dc-press rounded-md flex items-center justify-center overflow-hidden"
+              style={{ width: TILE, height: TILE }}
             >
               <ArtThumb doc={piece.doc} size={TILE - 6} />
             </button>
@@ -100,7 +99,7 @@ export function ProfileShowcase({ userId, isSelf, onOverlayChange }: Props) {
             <button
               onClick={() => setExpanded(true)}
               aria-label={`Show ${hidden} more`}
-              className="rounded-md text-sm font-semibold hover:brightness-125"
+              className="dc-press rounded-md border border-white/[0.06] text-sm font-semibold hover:brightness-125"
               style={{ width: TILE, height: TILE, backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
             >
               +{hidden}
@@ -197,12 +196,12 @@ export function ShowcaseViewer({ pieces, index, isSelf, onIndex, onRemix, onClos
     onIndex(to);
   }
 
-  const navButton = "w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-25 hover:bg-white/10";
-  const pill = { backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" };
+  const navButton = "dc-press w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-25 hover:bg-white/10";
+  const pill = { color: "var(--color-dc-text-normal)" };
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[10003] flex flex-col items-center justify-center gap-4 p-6"
+      className="dc-modal-backdrop-in fixed inset-0 z-[10003] flex flex-col items-center justify-center gap-4 p-6"
       style={{ backgroundColor: "rgba(0,0,0,0.88)" }}
       role="dialog"
       aria-modal="true"
@@ -214,7 +213,7 @@ export function ShowcaseViewer({ pieces, index, isSelf, onIndex, onRemix, onClos
         <button onClick={() => onIndex(index - 1)} disabled={index === 0} aria-label="Previous" className={navButton} style={{ color: "#fff" }}>
           <Icon name="chevronLeft" size={28} />
         </button>
-        <div className="rounded-lg overflow-hidden shadow-2xl" style={{ width: px, height: px, background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 24px 24px" }}>
+        <div className="dc-modal-in rounded-lg overflow-hidden" style={{ width: px, height: px, background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 24px 24px" }}>
           <SharpArtImage doc={piece.doc} width={px} height={px} alt={piece.title || "Pixel art"} draggable={false} />
         </div>
         <button onClick={() => onIndex(index + 1)} disabled={index === pieces.length - 1} aria-label="Next" className={navButton} style={{ color: "#fff" }}>
@@ -230,21 +229,21 @@ export function ShowcaseViewer({ pieces, index, isSelf, onIndex, onRemix, onClos
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-sm">
+      <div className="dc-elevated flex items-center gap-2 rounded-full bg-dc-bg-tertiary px-2 py-1 text-sm">
         {isSelf ? (
           <>
-            <button onClick={() => void move(-1)} disabled={index === 0} className="px-3 h-9 rounded-md disabled:opacity-30" style={pill} title="Show earlier on your profile">← Move</button>
-            <button onClick={() => onRemix(piece)} className="flex items-center gap-1.5 px-3 h-9 rounded-md" style={pill}>
+            <button onClick={() => void move(-1)} disabled={index === 0} className="dc-press px-3 h-9 rounded-full hover:bg-white/10 disabled:opacity-30" style={pill} title="Show earlier on your profile">← Move</button>
+            <button onClick={() => onRemix(piece)} className="dc-press flex items-center gap-1.5 px-3 h-9 rounded-full hover:bg-white/10" style={pill}>
               <Icon name="edit" size={16} /> Edit
             </button>
-            <button onClick={() => void move(1)} disabled={index === pieces.length - 1} className="px-3 h-9 rounded-md disabled:opacity-30" style={pill} title="Show later on your profile">Move →</button>
+            <button onClick={() => void move(1)} disabled={index === pieces.length - 1} className="dc-press px-3 h-9 rounded-full hover:bg-white/10 disabled:opacity-30" style={pill} title="Show later on your profile">Move →</button>
           </>
         ) : (
-          <button onClick={() => onRemix(piece)} className="flex items-center gap-1.5 px-3 h-9 rounded-md font-medium" style={{ backgroundColor: "var(--color-dc-brand)", color: "#fff" }} title="Open a copy in your editor; it credits the artist">
+          <button onClick={() => onRemix(piece)} className="dc-btn-primary flex items-center gap-1.5 px-3 h-9 rounded-full font-medium text-white" title="Open a copy in your editor; it credits the artist">
             <Icon name="remix" size={16} /> Remix
           </button>
         )}
-        <button onClick={() => void download()} className="flex items-center gap-1.5 px-3 h-9 rounded-md" style={pill}>
+        <button onClick={() => void download()} className="dc-press flex items-center gap-1.5 px-3 h-9 rounded-full hover:bg-white/10" style={pill}>
           <Icon name="download" size={16} /> PNG
         </button>
       </div>

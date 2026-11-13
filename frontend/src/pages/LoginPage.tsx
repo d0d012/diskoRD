@@ -10,7 +10,7 @@ interface FieldError {
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState<FieldError>({});
   const [shaking, setShaking] = useState(false);
   const { login, isLoading } = useAuthStore();
@@ -48,12 +48,12 @@ const [rememberMe, setRememberMe] = useState(true);
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
+      className="min-h-screen flex items-center justify-center py-8"
+      style={{ background: "radial-gradient(circle at 18% 22%, rgba(88,101,242,0.24) 0%, transparent 48%), radial-gradient(circle at 82% 78%, rgba(88,101,242,0.14) 0%, transparent 45%), #111214" }}
     >
       <div
         ref={formRef}
-        className={`flex rounded-md shadow-2xl overflow-hidden w-full max-w-[784px] mx-4 ${shaking ? "shake" : ""}`}
+        className={`flex rounded-[8px] border border-dc-border-subtle shadow-[0_20px_48px_rgba(0,0,0,0.55)] overflow-hidden w-full max-w-[784px] mx-4 ${shaking ? "motion-safe:animate-[shake_0.4s_ease]" : ""}`}
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Form panel */}
@@ -81,14 +81,7 @@ const [rememberMe, setRememberMe] = useState(true);
                 type="text"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}
-                className="px-2.5 py-2 rounded text-base outline-none focus:ring-2"
-                style={{
-                  backgroundColor: "var(--color-dc-bg-tertiary)",
-                  color: "var(--color-dc-text-normal)",
-                  border: errors.email ? "1px solid var(--color-dc-red)" : "none",
-                  // @ts-expect-error css var
-                  "--tw-ring-color": "var(--color-dc-brand)",
-                }}
+                className={`h-10 px-3 rounded-[4px] text-base outline-none bg-dc-bg-tertiary text-dc-text-body border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none ${errors.email ? "border-dc-red focus:border-dc-red focus:shadow-[0_0_0_2px_rgba(237,66,69,0.25)]" : ""}`}
               />
             </div>
 
@@ -102,10 +95,7 @@ const [rememberMe, setRememberMe] = useState(true);
                     <span>Password <span style={{ color: "var(--color-dc-red)" }}>*</span></span>
                   )}
                 </span>
-                <a href="#" className="text-xs font-normal normal-case" style={{ color: "var(--color-dc-text-link)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                >
+                <a href="#" className="text-xs font-normal normal-case hover:underline" style={{ color: "var(--color-dc-text-link)" }}>
                   Forgot your password?
                 </a>
               </label>
@@ -113,31 +103,29 @@ const [rememberMe, setRememberMe] = useState(true);
                 type="password"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: undefined })); }}
-                className="px-2.5 py-2 rounded text-base outline-none focus:ring-2"
-                style={{
-                  backgroundColor: "var(--color-dc-bg-tertiary)",
-                  color: "var(--color-dc-text-normal)",
-                  border: errors.password ? "1px solid var(--color-dc-red)" : "none",
-                }}
+                className={`h-10 px-3 rounded-[4px] text-base outline-none bg-dc-bg-tertiary text-dc-text-body border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none ${errors.password ? "border-dc-red focus:border-dc-red focus:shadow-[0_0_0_2px_rgba(237,66,69,0.25)]" : ""}`}
               />
             </div>
 
             <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--color-dc-header-secondary)" }}>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-              />
+              <span className="relative inline-flex shrink-0">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="peer appearance-none w-[18px] h-[18px] rounded-[4px] border border-[#80848e] bg-dc-bg-tertiary checked:bg-dc-brand checked:border-dc-brand cursor-pointer transition-colors duration-150 motion-reduce:transition-none forced-colors:appearance-auto"
+                />
+                <svg className="absolute inset-0 hidden peer-checked:block pointer-events-none text-white forced-colors:hidden" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="m4 9 3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
               Keep me logged in
             </label>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 rounded text-white font-medium text-base mt-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer select-none"
-              style={{ backgroundColor: "var(--color-dc-brand)", borderRadius: "3px" }}
-              onMouseEnter={(e) => { if (!isLoading) (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)"); }}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand)")}
+              className="dc-btn-primary dc-press w-full h-11 rounded-[4px] bg-dc-brand enabled:hover:bg-dc-brand-560 text-white font-medium text-base mt-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer select-none"
             >
               {isLoading ? "Logging in..." : "Log In"}
             </button>
@@ -152,6 +140,8 @@ const [rememberMe, setRememberMe] = useState(true);
           </form>
         </div>
 
+        <div className="hidden md:block w-px my-10 bg-dc-border-subtle" />
+
         {/* QR Code panel */}
         <div
           className="hidden md:flex flex-col items-center justify-center px-10 py-10 gap-5 w-64 flex-shrink-0"
@@ -159,8 +149,7 @@ const [rememberMe, setRememberMe] = useState(true);
         >
           {/* QR code placeholder */}
           <div
-            className="w-40 h-40 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: "white", padding: "12px" }}
+            className="relative w-40 h-40 rounded-[8px] p-3 bg-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
           >
             <div className="w-full h-full grid grid-cols-7 grid-rows-7 gap-0.5">
               {Array.from({ length: 49 }).map((_, i) => {
@@ -184,6 +173,9 @@ const [rememberMe, setRememberMe] = useState(true);
                 );
               })}
             </div>
+            <span aria-hidden="true" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-[8px] bg-dc-brand text-white text-xs font-bold ring-4 ring-white">
+              dR
+            </span>
           </div>
 
           <div className="text-center">
@@ -192,7 +184,7 @@ const [rememberMe, setRememberMe] = useState(true);
             </p>
             <p className="text-sm leading-snug" style={{ color: "var(--color-dc-header-secondary)" }}>
               Scan this with the{" "}
-              <span style={{ color: "var(--color-dc-text-link)" }}>Discord mobile app</span>
+              <span style={{ color: "var(--color-dc-text-link)" }}>diskoRD mobile app</span>
               {" "}to log in instantly.
             </p>
           </div>

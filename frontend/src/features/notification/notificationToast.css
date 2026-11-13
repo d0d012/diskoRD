@@ -1,0 +1,55 @@
+.notification-deck {
+  display: grid;
+  align-items: start;
+  isolation: isolate;
+}
+
+.notification-layer {
+  --toast-visual-index: min(var(--toast-index), 3);
+  grid-area: 1 / 1;
+  position: relative;
+  transform-origin: top center;
+  transform: translateY(calc(var(--toast-visual-index) * 12px)) scale(calc(1 - var(--toast-visual-index) * 0.04));
+  opacity: calc(1 - var(--toast-visual-index) * 0.075);
+}
+
+.notification-deck:hover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-deck:hover .notification-layer {
+  transform: none;
+  opacity: 1;
+}
+
+/* Bridge only the gaps so moving between cards keeps the deck expanded. */
+.notification-deck:hover .notification-layer + .notification-layer::before {
+  content: "";
+  position: absolute;
+  inset: -8px 0 auto;
+  height: 8px;
+  pointer-events: auto;
+}
+
+.notification-progress { transform-origin: left; }
+.notification-deck:hover .notification-progress { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .notification-layer { transition: transform 200ms var(--ease-out-expo), opacity 200ms ease-out; }
+  .notification-card { animation: notification-enter 220ms var(--ease-out-expo) both; }
+  .notification-progress { animation: notification-progress var(--toast-duration) linear forwards; }
+  @keyframes notification-enter {
+    from { opacity: 0; transform: translateX(24px) scale(0.95); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes notification-progress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-progress { display: none; }
+}

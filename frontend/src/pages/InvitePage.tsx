@@ -52,19 +52,16 @@ export function InvitePage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
+      className="min-h-screen flex items-center justify-center py-8 px-4"
+      style={{ background: "radial-gradient(circle at 18% 22%, rgba(88,101,242,0.24) 0%, transparent 48%), radial-gradient(circle at 82% 78%, rgba(88,101,242,0.14) 0%, transparent 45%), #111214" }}
     >
       <div
-        className="w-[440px] rounded-[5px] overflow-hidden text-center"
+        className="w-full max-w-[440px] rounded-[8px] border border-dc-border-subtle shadow-[0_20px_48px_rgba(0,0,0,0.55)] overflow-hidden text-center"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Header */}
         <div
-          className="h-24 flex items-center justify-center"
-          style={{
-            background: "linear-gradient(135deg, var(--color-dc-brand) 0%, #7289da 100%)",
-          }}
+          className="h-24 flex items-center justify-center bg-dc-brand"
         >
           <svg width="48" height="36" viewBox="0 0 71 55" fill="white" aria-hidden="true">
             <path d="M60.105 4.898A58.55 58.55 0 0 0 45.653.415a.22.22 0 0 0-.233.11 40.784 40.784 0 0 0-1.8 3.697c-5.456-.817-10.886-.817-16.23 0-.485-1.164-1.201-2.587-1.828-3.697a.228.228 0 0 0-.233-.11 58.386 58.386 0 0 0-14.451 4.483.207.207 0 0 0-.095.082C1.578 18.73-.944 32.144.293 45.39a.244.244 0 0 0 .093.167c6.073 4.46 11.955 7.167 17.729 8.962a.23.23 0 0 0 .249-.082 42.08 42.08 0 0 0 3.627-5.9.225.225 0 0 0-.123-.312 38.772 38.772 0 0 1-5.539-2.64.228.228 0 0 1-.022-.378 31.17 31.17 0 0 0 1.1-.862.22.22 0 0 1 .23-.03c11.619 5.304 24.198 5.304 35.68 0a.219.219 0 0 1 .233.027 28.246 28.246 0 0 0 1.1.865.228.228 0 0 1-.02.378 36.384 36.384 0 0 1-5.54 2.637.227.227 0 0 0-.121.315 47.249 47.249 0 0 0 3.624 5.897.225.225 0 0 0 .249.084c5.801-1.794 11.684-4.502 17.757-8.961a.228.228 0 0 0 .092-.164c1.48-15.315-2.48-28.618-10.497-40.412a.18.18 0 0 0-.093-.084zm-36.38 32.427c-3.497 0-6.38-3.211-6.38-7.156 0-3.944 2.827-7.156 6.38-7.156 3.583 0 6.438 3.24 6.382 7.156 0 3.945-2.827 7.156-6.381 7.156zm23.593 0c-3.498 0-6.38-3.211-6.38-7.156 0-3.944 2.826-7.156 6.38-7.156 3.582 0 6.437 3.24 6.38 7.156 0 3.945-2.826 7.156-6.38 7.156z"/>
@@ -79,7 +76,7 @@ export function InvitePage() {
             a Server
           </h2>
           <p className="text-sm mb-6" style={{ color: "var(--color-dc-text-muted)" }}>
-            Invite code: <span className="font-mono font-semibold" style={{ color: "var(--color-dc-text-normal)" }}>{code}</span>
+            Invite code: <span className="font-mono font-semibold text-dc-text-body">{code}</span>
           </p>
 
           {error && (
@@ -94,10 +91,7 @@ export function InvitePage() {
           <button
             onClick={handleJoin}
             disabled={loading}
-            className="w-full py-3 rounded font-semibold text-base text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-dc-brand)" }}
-            onMouseEnter={(e) => !loading && (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand)")}
+            className="dc-btn-primary dc-press w-full h-11 rounded-[4px] bg-dc-brand enabled:hover:bg-dc-brand-560 font-medium text-base text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Joining…" : "Accept Invite"}
           </button>
@@ -105,8 +99,7 @@ export function InvitePage() {
           {!isTauri() && (
             <a
               href={`diskord://invite/${code}`}
-              className="mt-3 block w-full py-2.5 rounded font-semibold text-base no-underline"
-              style={{ backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" }}
+              className="dc-press mt-3 flex items-center justify-center w-full h-11 rounded-[4px] border border-white/5 font-medium text-base no-underline bg-dc-bg-secondary hover:bg-dc-bg-modifier-hover text-dc-text-body transition-colors duration-150 motion-reduce:transition-none"
             >
               Open in diskoRD app
             </a>
@@ -114,10 +107,7 @@ export function InvitePage() {
 
           <button
             onClick={() => navigate("/app")}
-            className="mt-3 w-full py-2 text-sm transition-colors"
-            style={{ color: "var(--color-dc-text-muted)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-text-muted)")}
+            className="dc-press mt-3 w-full h-10 rounded-[4px] text-sm text-dc-text-muted hover:text-dc-text-body hover:bg-dc-bg-modifier-hover transition-colors duration-150 motion-reduce:transition-none"
           >
             Not interested
           </button>

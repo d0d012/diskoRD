@@ -23,8 +23,8 @@ function displayColor(roles: GuildRole[] | undefined): string | null {
 function RoleBadge({ role }: { role: GuildRole }) {
   return (
     <span
-      className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase leading-none"
-      style={{ backgroundColor: `${role.color}22`, color: role.color, border: `1px solid ${role.color}44` }}
+      className="text-[10px] px-1.5 py-0.5 rounded-[4px] font-semibold uppercase tracking-wide leading-none border"
+      style={{ backgroundColor: `color-mix(in srgb, ${role.color} 12%, transparent)`, color: role.color, borderColor: `color-mix(in srgb, ${role.color} 25%, transparent)` }}
     >
       {role.name}
     </span>
@@ -60,11 +60,8 @@ function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildI
     <div className="group relative">
       <div
         ref={rowRef}
-        className="flex items-center gap-2 mx-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors"
-        style={{ opacity: isOnline ? 1 : 0.5 }}
+        className={`flex items-center h-[42px] gap-3 mx-2 px-2 rounded-[6px] cursor-pointer hover:bg-dc-bg-modifier-hover transition-[background-color,opacity] duration-150 motion-reduce:transition-none ${isOnline ? "" : "opacity-45 hover:opacity-100 focus-within:opacity-100"}`}
         onClick={() => setShowProfile(true)}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
       >
         <Avatar name={live.username} src={live.avatarUrl} size={32} status={liveStatus} ringColor="var(--color-dc-bg-secondary)" />
         <div className="min-w-0 flex-1">
@@ -84,7 +81,7 @@ function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildI
 
         <button
           onClick={(e) => { e.stopPropagation(); useShowcaseOverlayStore.getState().open(member.id); }}
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0 hover:bg-[var(--color-dc-bg-floating)]"
+          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 w-7 h-7 rounded-[4px] flex items-center justify-center transition-[background-color,opacity] duration-150 motion-reduce:transition-none flex-shrink-0 hover:bg-dc-bg-floating"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           title="View Showcase"
           aria-label={`View ${live.displayName ?? live.username}'s showcase`}
@@ -97,11 +94,10 @@ function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildI
           <button
             ref={addBtnRef}
             onClick={handleAddClick}
-            className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 w-7 h-7 rounded-[4px] flex items-center justify-center transition-[background-color,opacity] duration-150 motion-reduce:transition-none flex-shrink-0 hover:bg-dc-bg-floating"
             style={{ color: "var(--color-dc-interactive-normal)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-floating)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
             title="Manage roles"
+            aria-label="Manage roles"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z" />

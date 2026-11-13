@@ -1,29 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { VoiceParticipant } from "../../hooks/useVoice";
 import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
 import { VideoTile } from "./VideoTile";
 import { VolumeMenu } from "./VolumeMenu";
 
-// Speaking ring — injected once into <head>
-const SPEAKING_STYLE = `
-@keyframes voice-pulse {
-  0%, 100% { box-shadow: 0 0 0 0px rgba(35,165,90,0.8); }
-  50%       { box-shadow: 0 0 0 4px rgba(35,165,90,0); }
-}
-.voice-speaking {
-  animation: voice-pulse 1s ease-in-out infinite;
-  border: 2px solid #23a55a !important;
-}
-`;
-
-function injectSpeakingStyles() {
-  if (document.getElementById("voice-speaking-styles")) return;
-  const el = document.createElement("style");
-  el.id = "voice-speaking-styles";
-  el.textContent = SPEAKING_STYLE;
-  document.head.appendChild(el);
-}
+import "./voice.css";
 
 interface ParticipantTileProps {
   participant: VoiceParticipant;
@@ -47,11 +29,8 @@ export function ParticipantTile({
   const [showExpand, setShowExpand] = useState(false);
   const [volumeMenu, setVolumeMenu] = useState<{ x: number; y: number } | null>(null);
 
-  useEffect(() => { injectSpeakingStyles(); }, []);
-
   const { name, isSpeaking, isMicEnabled, cameraTrack, isLocal, isCameraEnabled } = participant;
   const hasVideo = isCameraEnabled && cameraTrack !== null;
-  const color = `hsl(${(name.charCodeAt(0) * 37) % 360}, 55%, 40%)`;
   const live = useLiveUser(participant.identity, { id: participant.identity, username: name });
 
   const isSidebar = variant === "sidebar";
@@ -63,10 +42,10 @@ export function ParticipantTile({
     <>
     <div
       data-testid={`participant-tile-${participant.identity}`}
-      className={`relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 transition-all duration-200 cursor-pointer select-none ${
-        isSpeaking ? "voice-speaking" : "border-transparent"
-      } ${isPinned ? "ring-2 ring-[#5865f2]" : ""}`}
-      style={{ backgroundColor: hasVideo ? "#000" : color, width: "100%", height: "100%" }}
+      data-speaking={isSpeaking}
+      data-speaking-ring={hasVideo || isSidebar ? "tile" : "avatar"}
+      className={`dc-voice-tile relative flex flex-col items-center justify-center overflow-hidden rounded-xl cursor-pointer select-none ${isPinned ? "outline-2 outline-dc-brand outline-offset-2" : ""}`}
+      style={{ backgroundColor: hasVideo ? "#000" : "var(--color-dc-bg-tertiary)", width: "100%", height: "100%" }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => variant === "main" && setShowExpand(true)}
@@ -77,14 +56,18 @@ export function ParticipantTile({
       {hasVideo && cameraTrack ? (
         <VideoTile track={cameraTrack} />
       ) : (
-        <Avatar name={live.username ?? name} src={live.avatarUrl} size={isSidebar ? 28 : 40} />
+        <div className="dc-voice-avatar" data-speaking={isSpeaking && !isSidebar}>
+          <Avatar name={live.username ?? name} src={live.avatarUrl} size={isSidebar ? 28 : variant === "main" ? 80 : 64} />
+        </div>
       )}
+
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_65%,rgba(0,0,0,0.7)_100%)]" />
 
       {/* Name label */}
       <div className={`absolute bottom-1.5 left-2 right-2 flex items-center gap-1 ${isSidebar ? "justify-center" : ""}`}>
         <div
-          className={`flex items-center gap-1.5 px-1 py-0.5 rounded overflow-hidden max-w-full`}
-          style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "#dbdee1" }}
+          className={`flex items-center gap-1.5 ${isSidebar ? "px-1.5 py-0.5" : "px-2 py-1"} rounded-md overflow-hidden max-w-full`}
+          style={{ backgroundColor: "color-mix(in srgb, var(--color-dc-bg-floating) 80%, transparent)", color: "var(--color-dc-text-normal)" }}
         >
           <span className={`${nameSize} font-medium truncate`}>
             {isLocal ? "You" : name}
@@ -101,7 +84,7 @@ export function ParticipantTile({
           )}
         </div>
         {isPinned && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="#5865f2" style={{ flexShrink: 0 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--color-dc-brand)" style={{ flexShrink: 0 }}>
             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2l-2-2z"/>
           </svg>
         )}
@@ -111,7 +94,7 @@ export function ParticipantTile({
       {/* Expand button — only on main stage tile, on hover */}
       {variant === "main" && showExpand && (
         <button
-          className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-medium"
+          className="dc-press absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-medium"
           style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
           onClick={(e) => { e.stopPropagation(); onDoubleClick?.(); }}
           title="Expand to fullscreen"

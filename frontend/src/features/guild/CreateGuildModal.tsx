@@ -45,18 +45,21 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="dc-modal-backdrop-in fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-[440px] rounded-[5px] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Customize Your Server"
+        className="dc-modal-in relative w-full max-w-[440px] max-h-[90vh] rounded-xl overflow-y-auto"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 transition-colors"
+          className="dc-press absolute top-3 right-3 w-8 h-8 rounded-md flex items-center justify-center transition-colors hover:bg-dc-bg-modifier-hover"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
@@ -114,11 +117,11 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !loading && handleCreate()}
               maxLength={100}
-              className="w-full px-3 py-2.5 rounded text-base outline-none"
+              className="w-full h-10 px-3 rounded-md text-base outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
               style={{
                 backgroundColor: "var(--color-dc-bg-tertiary)",
                 color: "var(--color-dc-text-normal)",
-                border: error ? "1px solid var(--color-dc-red)" : "1px solid transparent",
+                borderColor: error ? "var(--color-dc-red)" : undefined,
               }}
             />
             {error && (
@@ -153,24 +156,23 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
                 onChange={(e) => setInviteInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleJoin()}
                 placeholder="Paste an invite link or code"
-                className="flex-1 px-3 py-2 rounded text-sm outline-none"
+                className="min-w-0 flex-1 h-10 px-3 rounded-md text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
                 style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
               />
               <button
                 onClick={handleJoin}
                 disabled={!inviteCode}
-                className="px-3 py-2 rounded text-white text-sm font-medium disabled:opacity-50"
-                style={{ backgroundColor: "var(--color-dc-brand)" }}
+                className="dc-btn-primary dc-press px-4 h-10 rounded-md text-white text-sm font-medium disabled:opacity-50"
               >
                 Join
               </button>
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="-mx-6 -mb-6 px-6 py-4 flex justify-between items-center border-t border-white/5 bg-dc-bg-secondary">
             <button
               onClick={onClose}
-              className="text-base hover:underline"
+              className="dc-press px-4 h-10 rounded-md text-sm font-medium hover:bg-dc-bg-modifier-hover transition-colors"
               style={{ color: "var(--color-dc-text-normal)" }}
             >
               Back
@@ -178,10 +180,7 @@ export function CreateGuildModal({ onClose }: CreateGuildModalProps) {
             <button
               onClick={handleCreate}
               disabled={loading || !name.trim()}
-              className="px-4 py-2.5 rounded text-white font-medium text-base transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-dc-brand)" }}
-              onMouseEnter={(e) => !loading && (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand)")}
+              className="dc-btn-primary dc-press px-5 h-10 rounded-md text-white font-medium text-sm disabled:opacity-50"
             >
               {loading ? "Creating…" : "Create"}
             </button>

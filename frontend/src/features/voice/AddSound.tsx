@@ -123,7 +123,7 @@ export function AddSound({ guildId, onDone }: Props) {
   return (
     <form onSubmit={upload} className="p-3 flex flex-col gap-3 border-t border-white/10">
       <div className="flex items-center justify-between text-sm font-semibold">
-        <span>Add a server sound</span><button type="button" onClick={() => onDone()} aria-label="Cancel adding sound" className="px-2">✕</button>
+        <span>Add a server sound</span><button type="button" onClick={() => onDone()} aria-label="Cancel adding sound" className="dc-press w-8 h-8 rounded-md hover:bg-dc-bg-modifier-hover transition-colors">✕</button>
       </div>
       <p className="text-xs opacity-70">Anyone in this server can add sounds. Pick up to {MAX_SOUND_SECONDS} seconds from any clip · 8 MB input.</p>
       <input aria-label="Audio file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a" disabled={busy}
@@ -142,13 +142,13 @@ export function AddSound({ guildId, onDone }: Props) {
       )}
       <div className="flex gap-2">
         <input aria-label="Sound name" required maxLength={32} value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="Give it a name" disabled={busy} className="min-w-0 flex-1 rounded px-2 py-1 text-sm bg-black/20" />
-        <button type="button" disabled={!source || busy || deafened} className="px-2 text-xs disabled:opacity-40 w-14"
+          placeholder="Give it a name" disabled={busy} className="min-w-0 flex-1 h-9 rounded-md px-3 text-sm bg-dc-bg-tertiary outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none" />
+        <button type="button" disabled={!source || busy || deafened} className="dc-press px-2 h-9 rounded-md border border-white/5 bg-dc-bg-secondary hover:bg-dc-bg-modifier-hover text-xs disabled:opacity-40 w-16 transition-colors"
           onClick={togglePreview}>{playhead !== null ? "Stop" : "Preview"}</button>
       </div>
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
       <button type="submit" disabled={!source || !name.trim() || busy}
-        className="rounded py-1.5 text-sm font-medium disabled:opacity-40" style={{ backgroundColor: "var(--color-dc-brand, #5865f2)", color: "white" }}>
+        className="dc-btn-primary dc-press rounded-md h-9 text-sm font-medium disabled:opacity-40" style={{ color: "white" }}>
         {busy ? (uploading ? "Adding…" : "Preparing…") : "Add sound"}
       </button>
     </form>
