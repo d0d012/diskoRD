@@ -23,15 +23,15 @@ function Modal({ label, width, onClose, children }: { label: string; width: numb
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[10003] flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-[10003] flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
       role="dialog"
       aria-modal="true"
       aria-label={label}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="max-w-full max-h-full overflow-auto rounded-xl shadow-2xl p-5"
+        className="dc-modal-in max-w-full max-h-full overflow-auto rounded-xl p-5"
         style={{ width, backgroundColor: "var(--color-dc-bg-primary)", border: "1px solid var(--color-dc-bg-modifier-selected)", color: "var(--color-dc-text-normal)" }}
       >
         {children}
@@ -43,7 +43,6 @@ function Modal({ label, width, onClose, children }: { label: string; width: numb
 
 const muted = { color: "var(--color-dc-text-muted)" };
 const secondaryButton = { backgroundColor: "var(--color-dc-bg-secondary)", color: "var(--color-dc-text-normal)" };
-const primaryButton = { backgroundColor: "var(--color-dc-brand)", color: "#fff" };
 
 /** "My art": pick a saved piece to open, toggle it on the profile, or delete it. */
 export function GalleryPicker({ onOpen, onClose }: { onOpen: (piece: PixelArtPiece) => void; onClose: () => void }) {
@@ -108,7 +107,7 @@ export function GalleryPicker({ onOpen, onClose }: { onOpen: (piece: PixelArtPie
               <div key={piece.id} className="group relative rounded-lg p-2 flex flex-col gap-1.5" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
                 <button
                   onClick={() => onOpen(piece)}
-                  className="h-20 rounded-md flex items-center justify-center"
+                  className="dc-press h-20 rounded-md flex items-center justify-center"
                   style={{ background: "repeating-conic-gradient(#3a3c42 0% 25%, #2e3035 0% 50%) 0 0 / 12px 12px" }}
                   aria-label={`Open ${piece.title || "untitled"}`}
                   title="Open in editor"
@@ -122,8 +121,8 @@ export function GalleryPicker({ onOpen, onClose }: { onOpen: (piece: PixelArtPie
                     aria-label={onProfile ? "Remove from profile" : "Show on profile"}
                     aria-pressed={onProfile}
                     title={onProfile ? "Shown on your profile" : "Show on your profile"}
-                    className="w-6 h-6 rounded flex items-center justify-center text-sm"
-                    style={{ color: onProfile ? "#f0b232" : "var(--color-dc-text-muted)" }}
+                    className="dc-press w-6 h-6 rounded flex items-center justify-center text-sm hover:bg-dc-bg-modifier-hover transition-colors"
+                    style={{ color: onProfile ? "var(--color-dc-idle)" : "var(--color-dc-text-muted)" }}
                   >
                     {onProfile ? "★" : "☆"}
                   </button>
@@ -135,15 +134,15 @@ export function GalleryPicker({ onOpen, onClose }: { onOpen: (piece: PixelArtPie
                   <div className="absolute inset-0 rounded-lg flex flex-col items-center justify-center gap-2 p-2" style={{ backgroundColor: "rgba(17,18,20,0.92)" }}>
                     <span className="text-xs">Delete this piece?</span>
                     <div className="flex gap-1">
-                      <button onClick={() => setConfirmDelete(null)} className="px-2 h-7 rounded text-xs" style={secondaryButton}>Keep</button>
-                      <button onClick={() => void remove(piece.id)} className="px-2 h-7 rounded text-xs text-white" style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}>Delete</button>
+                      <button onClick={() => setConfirmDelete(null)} className="dc-press px-2 h-7 rounded text-xs hover:brightness-110" style={secondaryButton}>Keep</button>
+                      <button onClick={() => void remove(piece.id)} className="dc-press px-2 h-7 rounded text-xs text-white hover:brightness-110" style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}>Delete</button>
                     </div>
                   </div>
                 ) : (
                   <button
                     onClick={() => setConfirmDelete(piece.id)}
                     aria-label={`Delete ${piece.title || "untitled"}`}
-                    className="absolute top-1 right-1 w-6 h-6 rounded items-center justify-center hidden group-hover:flex"
+                    className="dc-press absolute top-1 right-1 w-6 h-6 rounded items-center justify-center flex opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                     style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}
                   >
                     <Icon name="trash" size={14} />
@@ -156,8 +155,8 @@ export function GalleryPicker({ onOpen, onClose }: { onOpen: (piece: PixelArtPie
       )}
 
       {error && <p className="text-xs mt-3" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}
-      <div className="flex justify-end mt-4">
-        <button onClick={onClose} className="px-3 h-8 rounded-md text-sm" style={secondaryButton}>Close</button>
+      <div className="-mx-5 -mb-5 px-5 py-4 flex justify-end mt-4 border-t border-white/5 bg-dc-bg-secondary">
+        <button onClick={onClose} className="dc-press px-4 h-9 rounded-md text-sm hover:brightness-110 transition-colors" style={secondaryButton}>Close</button>
       </div>
     </Modal>
   );
@@ -219,7 +218,7 @@ export function SaveDialog({ target, onSave, onClose }: {
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !busy) void save(false); }}
           placeholder="Lil hamster"
-          className="h-9 rounded-md px-2.5 text-sm outline-none"
+          className="h-10 rounded-md px-3 text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
           style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
         />
       </label>
@@ -238,12 +237,12 @@ export function SaveDialog({ target, onSave, onClose }: {
         {target.remixOf ? " It keeps credit to the original artist." : ""}
       </p>
       {error && <p className="text-xs mb-3" style={{ color: "var(--color-dc-red, #ed4245)" }}>{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="px-3 h-8 rounded-md text-sm" style={secondaryButton}>Cancel</button>
+      <div className="-mx-5 -mb-5 px-5 py-4 flex justify-end gap-2 border-t border-white/5 bg-dc-bg-secondary">
+        <button onClick={onClose} className="dc-press px-3 h-9 rounded-md text-sm hover:brightness-110 transition-colors" style={secondaryButton}>Cancel</button>
         {updating && (
-          <button onClick={() => void save(true)} disabled={busy} className="px-3 h-8 rounded-md text-sm disabled:opacity-50" style={secondaryButton}>Save as copy</button>
+          <button onClick={() => void save(true)} disabled={busy} className="dc-press px-3 h-9 rounded-md text-sm hover:brightness-110 transition-colors disabled:opacity-50" style={secondaryButton}>Save as copy</button>
         )}
-        <button onClick={() => void save(false)} disabled={busy} className="px-3 h-8 rounded-md text-sm font-medium disabled:opacity-50" style={primaryButton}>
+        <button onClick={() => void save(false)} disabled={busy} className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white disabled:opacity-50">
           {busy ? "Saving…" : updating ? "Save changes" : "Save"}
         </button>
       </div>

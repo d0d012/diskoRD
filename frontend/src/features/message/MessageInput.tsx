@@ -5,6 +5,7 @@ import { PixelArtEditor } from "../pixelart/PixelArtEditor";
 import { GifPicker } from "./GifPicker";
 import { klipyConfigured } from "../../lib/klipy";
 import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
+import "./message.css";
 
 const ACCEPTED = "image/jpeg,image/png,image/gif,image/webp";
 const ACCEPTED_TYPES = ACCEPTED.split(",");
@@ -39,6 +40,10 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
   const startPlacement = useDecorationPlacementStore((s) => s.start);
   const { sendMessage, uploadImage, typingUsers, replyingTo, cancelReply } = useMessageStore();
   const reply = replyingTo?.channelId === channelId ? replyingTo.message : null;
+  // Preserve the contents while the drawer animates closed.
+  const [lastReply, setLastReply] = useState(reply);
+  if (reply && reply !== lastReply) setLastReply(reply);
+  const drawerReply = reply ?? lastReply;
   useEffect(() => { if (reply) textareaRef.current?.focus(); }, [reply]);
   // A reply belongs to the channel it was started in, so switching channels
   // drops it (Discord-like) instead of letting it reappear on return.
@@ -237,15 +242,21 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
 
   return (
     <div className="px-4 pb-6 flex-shrink-0">
-      {reply && (
-        <div className="flex items-center justify-between rounded-t-lg px-4 py-2 text-sm" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
-          <span>Replying to <strong>{reply.author?.displayName ?? reply.author?.username ?? "Deleted User"}</strong></span>
-          <button type="button" aria-label="Cancel reply" onClick={cancelReply}>✕</button>
+      <div className="dc-reply-drawer" data-open={!!reply} aria-hidden={!reply}>
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex h-9 items-center justify-between gap-2 rounded-t-[8px] border-b border-dc-border-subtle bg-dc-bg-secondary px-4 text-sm text-dc-text-body">
+            {drawerReply && (
+              <>
+                <span className="truncate">Replying to <strong>{drawerReply.author?.displayName ?? drawerReply.author?.username ?? "Deleted User"}</strong></span>
+                <button type="button" aria-label="Cancel reply" onClick={cancelReply} className="dc-press flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-dc-text-muted hover:text-dc-text-body hover:bg-dc-bg-modifier-hover transition-colors duration-150 motion-reduce:transition-none">✕</button>
+              </>
+            )}
+          </div>
         </div>
-      )}
+      </div>
       <div
-        className="relative flex items-end gap-2 px-4 py-2.5 rounded-lg"
-        style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}
+        className={`dc-composer relative flex min-h-[44px] items-end gap-2 px-4 py-2.5 ${reply ? "rounded-t-none rounded-b-[8px]" : "rounded-[8px]"}`}
+        style={{ backgroundColor: "var(--color-dc-bg-composer)" }}
       >
         {gifChannel === channelId && <GifPicker triggerRef={gifTriggerRef} onClose={closeGifPicker} onSend={async (url) => {
           if (sending) throw new Error("Message send in progress");
@@ -264,7 +275,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
             id={mentionListId}
             role="listbox"
             aria-label="Mention members"
-            className="absolute bottom-full left-0 right-0 mb-2 p-2 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20"
+            className="dc-elevated dc-pop-in absolute bottom-full left-0 right-0 mb-2 p-2 rounded-lg max-h-60 overflow-y-auto z-20 [--dc-origin:bottom_left]"
             style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
           >
             {matches.map((user, index) => (
@@ -303,11 +314,10 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
-          className="flex-shrink-0 p-1 rounded transition-colors"
+          type="button"
+          aria-label="Upload image"
+          className="dc-press flex h-7 w-7 flex-shrink-0 items-center justify-center self-end my-0.5 rounded-full bg-dc-interactive-normal text-dc-bg-composer hover:bg-dc-header-primary transition-colors duration-150 motion-reduce:transition-none disabled:opacity-40"
           title="Upload image"
-          style={{ color: "var(--color-dc-interactive-normal)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -317,12 +327,9 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
         <button
           onClick={() => setPixelArtOpen(true)}
           disabled={sending}
-          className="flex-shrink-0 p-1 rounded transition-colors"
+          className="dc-message-action dc-press flex-shrink-0 p-1 rounded-[4px] text-dc-interactive-normal transition-colors duration-150 disabled:opacity-40"
           title="Draw pixel art"
           aria-label="Draw pixel art"
-          style={{ color: "var(--color-dc-interactive-normal)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h4v4h-4v-4zm4 4h4v4h-4v-4z" />
@@ -333,10 +340,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           ref={textareaRef}
           autoFocus
           rows={1}
-          className="flex-1 min-w-0 bg-transparent text-sm outline-none resize-none max-h-36 overflow-y-auto leading-5 py-1"
-          style={{
-            color: "var(--color-dc-text-normal)",
-          }}
+          className="flex-1 min-w-0 bg-transparent text-[15px] text-dc-text-body placeholder:text-dc-text-muted outline-none focus-visible:shadow-none resize-none max-h-36 overflow-y-auto leading-5 py-1"
           placeholder={placeholder ?? `Message #${channelName}`}
           value={content}
           aria-autocomplete="list"
@@ -359,13 +363,13 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
           aria-expanded={gifChannel === channelId}
           disabled={sending || !klipyConfigured()}
           onClick={() => setGifChannel(current => current === channelId ? null : channelId)}
-          className="flex-shrink-0 self-end my-1 px-1 rounded text-[10px] leading-5 font-extrabold disabled:opacity-40"
+          className="dc-press flex-shrink-0 self-end my-1 px-1 rounded text-[10px] leading-5 font-extrabold hover:brightness-110 disabled:opacity-40"
           style={{ backgroundColor: "var(--color-dc-interactive-normal)", color: "var(--color-dc-bg-secondary)" }}
         >GIF</button>
         <button
           onClick={handleSubmit}
           disabled={!content.trim() || sending}
-          className="flex-shrink-0 p-1 rounded transition-colors"
+          className="dc-message-action dc-press flex-shrink-0 p-1 rounded transition-colors"
           style={{
             color: content.trim()
               ? "var(--color-dc-brand)"
@@ -399,9 +403,9 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
       )}
 
       {/* Typing indicator */}
-      <div className="h-5 px-1 pt-1">
+      <div className="h-6 px-1 pt-1">
         {typingText && (
-          <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>
+          <p className="dc-slide-up-in text-xs" style={{ color: "var(--color-dc-text-muted)" }}>
             <TypingDots />
             {" "}{typingText}
           </p>
@@ -413,13 +417,13 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
 
 function TypingDots() {
   return (
-    <span className="inline-flex gap-0.5 mr-1 align-middle">
+    <span className="inline-flex gap-[3px] mr-1 align-middle" aria-hidden="true">
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="inline-block w-1 h-1 rounded-full animate-bounce"
+          className="dc-typing-dot inline-block w-1.5 h-1.5 rounded-full"
           style={{
-            backgroundColor: "var(--color-dc-text-muted)",
+            backgroundColor: "var(--color-dc-text-normal)",
             animationDelay: `${i * 0.15}s`,
           }}
         />

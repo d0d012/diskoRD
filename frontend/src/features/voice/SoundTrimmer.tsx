@@ -114,7 +114,7 @@ export function SoundTrimmer({ duration, peaks, start, end, onChange, playhead =
       {hasOverview && (
         <div
           ref={overviewRef}
-          className="relative h-5 rounded bg-black/30 overflow-hidden cursor-pointer touch-none"
+          className="relative h-5 rounded-md bg-dc-bg-tertiary ring-1 ring-black/30 overflow-hidden cursor-pointer touch-none"
           onPointerDown={(e) => onPointerDown("overview", e)}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -133,7 +133,7 @@ export function SoundTrimmer({ duration, peaks, start, end, onChange, playhead =
 
       <div
         ref={mainRef}
-        className="relative h-16 rounded bg-black/30 overflow-hidden touch-none"
+        className="relative h-16 rounded-md bg-dc-bg-tertiary ring-1 ring-black/30 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] overflow-hidden touch-none"
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}

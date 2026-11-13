@@ -3,6 +3,8 @@ import { useCallStore } from "../../stores/callStore";
 import { startLoop, stopLoop } from "../../lib/sounds";
 import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
+import "./call.css";
+import "../voice/voice.css";
 
 export function IncomingCallOverlay() {
   const { state, call, acceptCall, declineCall } = useCallStore();
@@ -18,15 +20,17 @@ export function IncomingCallOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-[10000] flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
     >
       <div
-        className="flex flex-col items-center gap-5 p-8 rounded-2xl shadow-2xl"
-        style={{ backgroundColor: "var(--color-dc-bg-secondary)", minWidth: 280 }}
+        className="dc-modal-in flex flex-col items-center gap-5 p-8 rounded-xl border border-white/[0.06]"
+        style={{ backgroundColor: "var(--color-dc-bg-floating)", minWidth: 280 }}
       >
         {/* Avatar */}
-        <Avatar name={live.username ?? call.recipientName} src={live.avatarUrl} size={80} />
+        <div className="dc-call-sonar my-2">
+          <Avatar name={live.username ?? call.recipientName} src={live.avatarUrl} size={80} />
+        </div>
 
         <div className="text-center">
           <p className="text-base font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
@@ -41,7 +45,7 @@ export function IncomingCallOverlay() {
           {/* Decline */}
           <button
             onClick={() => declineCall(call.channelId)}
-            className="w-14 h-14 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
+            className="dc-press dc-voice-control w-14 h-14 rounded-full flex items-center justify-center"
             title="Decline"
             style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
           >
@@ -53,9 +57,9 @@ export function IncomingCallOverlay() {
           {/* Accept */}
           <button
             onClick={() => acceptCall(call.channelId)}
-            className="w-14 h-14 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
+            className="dc-press dc-voice-control w-14 h-14 rounded-full flex items-center justify-center"
             title="Accept"
-            style={{ backgroundColor: "#23a55a" }}
+            style={{ backgroundColor: "var(--color-dc-green-button)" }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
               <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>

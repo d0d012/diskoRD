@@ -20,7 +20,7 @@ export function Soundboard({ compact = false }: SoundboardProps) {
     <>
       <button ref={trigger} type="button" title="Soundboard" aria-label="Soundboard" aria-haspopup="dialog"
         aria-expanded={open} aria-controls={open ? id : undefined}
-        onClick={() => setOpen(!open)} className={`${compact ? "p-1" : "p-2"} shrink-0 rounded-full transition-colors hover:brightness-125`}
+        onClick={() => setOpen(!open)} className={`dc-press ${compact ? "p-1" : "p-2"} shrink-0 rounded-full transition-colors hover:brightness-125`}
         style={{ color: open ? "var(--color-dc-header-primary)" : "var(--color-dc-interactive-normal)", backgroundColor: open ? "var(--color-dc-brand, #5865f2)" : "var(--color-dc-bg-tertiary)" }}>
         <svg width={compact ? 16 : 20} height={compact ? 16 : 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" />
@@ -60,6 +60,7 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
       const top = above >= 8 ? above : Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - height - 8));
       element!.style.left = `${left}px`;
       element!.style.top = `${top}px`;
+      element!.style.setProperty("--dc-origin", above >= 8 ? "bottom right" : "top right");
     }
     position();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(position) : null;
@@ -96,7 +97,7 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
     return (
       <div key={sound.id} className="relative group min-w-0">
         <button type="button" disabled={!canPlay} title={`${sound.name}${preview ? " · Only you" : " · Play for everyone"}`}
-          className="w-full flex items-center gap-1.5 h-10 rounded-md px-2 text-xs transition-colors bg-white/5 hover:bg-white/15 active:bg-white/25 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-indigo-400"
+          className="dc-press w-full flex items-center gap-1.5 h-10 rounded-md px-2 text-xs border border-white/5 transition-colors bg-white/5 hover:bg-white/15 active:bg-white/25 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-dc-brand"
           onClick={(e) => {
             e.currentTarget.animate?.([{ backgroundColor: "rgba(88,101,242,.6)" }, { backgroundColor: "rgba(255,255,255,.05)" }], { duration: 220 });
             void session?.play(sound.id, preview);
@@ -104,7 +105,7 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
           <span aria-hidden="true" className="text-lg shrink-0">{sound.emoji ?? "🔊"}</span><span className="truncate">{sound.name}</span>
         </button>
         {sound.canDelete && <button aria-label={`Remove ${sound.name}`} title="Remove sound"
-          className="absolute -right-1 -top-1 w-4 h-4 rounded-full text-xs bg-[var(--color-dc-bg-tertiary)] opacity-0 group-hover:opacity-100 focus:opacity-100"
+          className="dc-press absolute right-1 top-1 w-6 h-6 rounded-full text-xs bg-dc-bg-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-dc-red transition-opacity"
           onClick={() => setRemoving(sound as GuildSound)}>×</button>}
       </div>
     );
@@ -112,24 +113,24 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
   const builtins = SOUNDBOARD_SOUNDS.filter((s) => matches(s.name));
   const custom = sounds.filter((s) => matches(s.name));
   return (
-    <div ref={panel} id={id} role="dialog" aria-modal="false" aria-label="Soundboard" className="fixed z-[10002] w-[368px] max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] flex flex-col rounded-xl shadow-2xl border border-white/10 overflow-hidden"
-      style={{ backgroundColor: "var(--color-dc-bg-floating, #18191c)", color: "var(--color-dc-text-normal)" }}>
+    <div ref={panel} id={id} role="dialog" aria-modal="false" aria-label="Soundboard" className="dc-elevated dc-pop-in fixed z-[10002] w-[368px] max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] flex flex-col rounded-xl overflow-hidden"
+      style={{ backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-text-normal)" }}>
       <div className="flex items-center gap-2 p-3 pb-2">
         <input ref={search} aria-label="Search sounds" placeholder="Find a sound…" value={query} onChange={(e) => setQuery(e.target.value)}
-          className="min-w-0 flex-1 rounded-md bg-black/25 px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-indigo-400" />
-        <button onClick={() => onClose(true)} aria-label="Close soundboard" className="p-1 text-sm opacity-60 hover:opacity-100">✕</button>
+          className="min-w-0 flex-1 h-9 rounded-md bg-dc-bg-tertiary px-3 text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none" />
+        <button onClick={() => onClose(true)} aria-label="Close soundboard" className="dc-press w-8 h-8 rounded-md text-sm opacity-60 hover:opacity-100 hover:bg-dc-bg-modifier-hover transition-colors">✕</button>
       </div>
       <div className="overflow-y-auto min-h-0 px-3 pb-3 max-h-[320px]">
         {guildId && <section aria-label="Server sounds">
           <div className="flex items-center justify-between py-2 gap-2">
             <h3 className="text-[10px] font-bold uppercase tracking-wider truncate opacity-70">{guildName} · {sounds.length}/48</h3>
             <button onClick={() => { setAdding(!adding); setRemoving(null); }} disabled={sounds.length >= MAX_GUILD_SOUNDS}
-              className="text-xs shrink-0 hover:underline disabled:opacity-40" title={sounds.length >= MAX_GUILD_SOUNDS ? "Remove a sound to make room" : "All members can add sounds"}>+ Add sound</button>
+              className="dc-press px-2 h-8 rounded-md text-xs shrink-0 hover:bg-dc-bg-modifier-hover disabled:opacity-40 transition-colors" title={sounds.length >= MAX_GUILD_SOUNDS ? "Remove a sound to make room" : "All members can add sounds"}>+ Add sound</button>
           </div>
           <div className="grid grid-cols-3 gap-1.5">{custom.map(tile)}</div>
           {!sounds.length && !loading && !catalogError && <p className="text-xs opacity-60 py-2">Your server's inside jokes go here. Add the first sound!</p>}
           {loading && <p role="status" className="text-xs opacity-60 py-1">Loading sounds…</p>}
-          {catalogError && <p role="alert" className="text-xs text-red-400 py-1">{catalogError} <button className="underline" onClick={() => void refresh()}>Retry</button></p>}
+          {catalogError && <p role="alert" className="text-xs text-red-400 py-1">{catalogError} <button className="dc-press underline" onClick={() => void refresh()}>Retry</button></p>}
         </section>}
         <section aria-label="Built-in sounds">
           <div className="flex items-center justify-between py-2">
@@ -143,15 +144,15 @@ function SoundboardPopover({ id, trigger, onClose }: PopoverProps) {
       {adding && guildId && <div className="overflow-y-auto min-h-0"><AddSound key={guildId} guildId={guildId} onDone={(added) => { setAdding(false); if (added) setQuery(""); }} /></div>}
       {removing && <div className="p-3 text-xs border-t border-white/10 flex gap-2 items-center">
         <span className="flex-1 truncate">Remove “{removing.name}”?</span>
-        <button disabled={deleting} className="text-red-400" onClick={() => void removeSound()}>Remove</button>
-        <button disabled={deleting} onClick={() => setRemoving(null)}>Cancel</button>
+        <button disabled={deleting} className="dc-press px-2 h-8 rounded-md text-dc-red hover:bg-dc-red/10 transition-colors" onClick={() => void removeSound()}>Remove</button>
+        <button disabled={deleting} className="dc-press px-2 h-8 rounded-md hover:bg-dc-bg-modifier-hover transition-colors" onClick={() => setRemoving(null)}>Cancel</button>
       </div>}
       <div className="border-t border-white/10 px-3 py-2 flex items-center gap-2">
         <button aria-label="Preview sounds only for me" aria-pressed={preview} title="Preview mode — only you hear it" onClick={() => setPreview(!preview)}
-          className={`rounded px-2 py-1 text-xs ${preview ? "bg-indigo-500/25 text-indigo-300" : "opacity-70 hover:opacity-100"}`}>🎧 Preview</button>
+          className={`dc-press rounded-md px-2 h-8 text-xs transition-colors ${preview ? "bg-dc-brand/25 text-dc-header-primary" : "opacity-70 hover:opacity-100 hover:bg-dc-bg-modifier-hover"}`}>🎧 Preview</button>
         <input aria-label="Soundboard volume" title={`Soundboard volume: ${Math.round(volume * 100)}% · Only affects you`} type="range" min="0" max="100" value={Math.round(volume * 100)}
           onChange={(e) => setVolume(Number(e.target.value) / 100)} className="min-w-0 flex-1 h-1 accent-indigo-400" />
-        <button onClick={() => session?.stop()} aria-label="Stop sounds for me" title="Stop sounds for me" className="px-1 opacity-70 hover:opacity-100">■</button>
+        <button onClick={() => session?.stop()} aria-label="Stop sounds for me" title="Stop sounds for me" className="dc-press w-8 h-8 rounded-md opacity-70 hover:opacity-100 hover:bg-dc-bg-modifier-hover transition-colors">■</button>
       </div>
       {(error || !session || (!available && !preview)) && <p role="status" className="px-3 pb-2 text-[11px] opacity-70">
         {error ?? (!session ? "Join voice or a call to play sounds." : "Connect, unmute and undeafen to play for everyone.")}

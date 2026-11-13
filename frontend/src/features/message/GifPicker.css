@@ -2,13 +2,14 @@
   position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 40;
   width: min(420px, calc(100vw - 40px)); height: min(440px, calc(100dvh - 150px));
   display: flex; flex-direction: column; gap: 8px; padding: 12px;
-  border-radius: 12px; background: var(--color-dc-bg-floating); color: var(--color-dc-text-normal);
-  box-shadow: 0 8px 32px #0008; border: 1px solid var(--color-dc-bg-modifier-selected);
+  border-radius: 12px; background-color: var(--color-dc-bg-user-panel); color: var(--color-dc-text-normal);
+  --dc-origin: bottom right;
 }
 .gif-picker input { flex-shrink: 0; width: 100%; padding: 8px 10px; border-radius: 6px; outline: none; background: var(--color-dc-bg-secondary); }
 .gif-picker input:focus-visible { outline: 2px solid var(--color-dc-brand); }
 .gif-tabs { display: flex; gap: 8px; font-size: 12px; }
-.gif-tabs button { border-radius: 4px; padding: 4px 8px; }
+.gif-tabs button { border-radius: 4px; padding: 4px 8px; transition: background-color 120ms ease, color 120ms ease; }
+.gif-tabs button:hover { background-color: var(--color-dc-bg-modifier-hover); color: var(--color-dc-text-normal); }
 .gif-tabs [aria-selected="true"] { background: var(--color-dc-bg-modifier-selected); color: var(--color-dc-header-primary); }
 .gif-scroll { overflow-y: auto; min-height: 0; flex: 1; }
 .gif-grid { columns: 2; column-gap: 8px; }

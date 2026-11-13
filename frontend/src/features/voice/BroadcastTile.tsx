@@ -4,6 +4,7 @@ import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
 import { VideoTile } from "./VideoTile";
 import { VolumeMenu } from "./VolumeMenu";
+import "./voice.css";
 
 interface BroadcastTileProps {
   participant: VoiceParticipant;
@@ -31,14 +32,14 @@ export function BroadcastTile({
     <>
       <div
         data-testid={`broadcast-tile-${participant.identity}`}
-        className={`relative flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 transition-all duration-200 cursor-pointer select-none ${
-          isPinned ? "ring-2 ring-[#5865f2]" : "border-transparent"
+        className={`dc-voice-tile relative flex flex-col items-center justify-center overflow-hidden rounded-xl border cursor-pointer select-none ${
+          isPinned ? "outline-2 outline-dc-brand -outline-offset-2" : ""
         }`}
         style={{
-          backgroundColor: "#0a0a0b",
+          backgroundColor: "var(--color-dc-bg-floating)",
           width: "100%",
           height: "100%",
-          borderColor: isPinned ? undefined : "rgba(88,101,242,0.3)",
+          borderColor: isPinned ? "var(--color-dc-brand)" : "color-mix(in srgb, var(--color-dc-brand) 30%, transparent)",
         }}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
@@ -59,11 +60,13 @@ export function BroadcastTile({
           </div>
         )}
 
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_65%,rgba(0,0,0,0.7)_100%)]" />
+
         {/* LIVE badge */}
         {!isSidebar && (
           <div
             className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest"
-            style={{ backgroundColor: "rgba(237,66,69,0.85)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-dc-red)", color: "#fff" }}
           >
             LIVE
           </div>
@@ -85,8 +88,8 @@ export function BroadcastTile({
         {/* Bottom label: avatar + "Name's Screen" */}
         <div className="absolute bottom-1.5 left-2 right-2 flex items-center gap-1.5">
           <div
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded overflow-hidden max-w-full"
-            style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#dbdee1" }}
+            className={`flex items-center gap-1.5 ${isSidebar ? "px-1.5 py-0.5" : "px-2 py-1"} rounded-md overflow-hidden max-w-full`}
+            style={{ backgroundColor: "color-mix(in srgb, var(--color-dc-bg-floating) 80%, transparent)", color: "var(--color-dc-text-normal)" }}
           >
             {/* Mini avatar */}
             <Avatar name={live.username ?? name} src={live.avatarUrl} size={14} />
@@ -99,7 +102,7 @@ export function BroadcastTile({
             </svg>
           </div>
           {isPinned && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="#5865f2" style={{ flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="var(--color-dc-brand)" style={{ flexShrink: 0 }}>
               <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2l-2-2z"/>
             </svg>
           )}

@@ -1,8 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { useGuildStore } from "../../stores/guildStore";
 import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
+import "./notificationToast.css";
+
+const TOAST_LIFETIME = 4000;
 
 export interface ToastData {
   id: string;
@@ -39,9 +42,31 @@ function Toast({ toast }: { toast: ToastData }) {
   const { setActiveGuild, setActiveChannel } = useGuildStore();
   const live = useLiveUser(toast.authorId, { id: toast.authorId, username: toast.username, avatarUrl: toast.avatarUrl });
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const timer = setTimeout(() => dismiss(toast.id), 4000);
-    return () => clearTimeout(timer);
+    const deck = cardRef.current?.closest(".notification-deck");
+    let remaining = TOAST_LIFETIME;
+    let startedAt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function resume() {
+      startedAt = performance.now();
+      timer = setTimeout(() => dismiss(toast.id), remaining);
+    }
+    function pause() {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+      remaining = Math.max(0, remaining - (performance.now() - startedAt));
+    }
+    if (!deck?.matches(":hover")) resume();
+    deck?.addEventListener("mouseenter", pause);
+    deck?.addEventListener("mouseleave", resume);
+    return () => {
+      clearTimeout(timer);
+      deck?.removeEventListener("mouseenter", pause);
+      deck?.removeEventListener("mouseleave", resume);
+    };
   }, [toast.id, dismiss]);
 
   const preview =
@@ -59,15 +84,16 @@ function Toast({ toast }: { toast: ToastData }) {
 
   return (
     <div
+      ref={cardRef}
       onClick={handleClick}
-      className="flex items-start gap-3 px-4 py-3 rounded-lg shadow-xl cursor-pointer w-80 transition-opacity hover:opacity-90"
+      className="notification-card pointer-events-auto dc-elevated relative overflow-hidden flex items-start gap-3 px-4 py-3 rounded-[10px] cursor-pointer w-[340px] max-w-[calc(100vw-32px)]"
       style={{
-        backgroundColor: "var(--color-dc-bg-floating, #18191c)",
+        backgroundColor: "var(--color-dc-bg-floating)",
         border: toast.isMention
           ? "1px solid var(--color-dc-brand)"
-          : "1px solid var(--color-dc-bg-modifier-hover, #3a3c42)",
-        animation: "slideInRight 0.2s ease-out",
-      }}
+          : "1px solid rgba(255,255,255,0.06)",
+        "--toast-duration": `${TOAST_LIFETIME}ms`,
+      } as React.CSSProperties}
     >
       {/* Avatar */}
       <Avatar name={live.username ?? toast.username} src={live.avatarUrl} size={36} />
@@ -95,13 +121,14 @@ function Toast({ toast }: { toast: ToastData }) {
       {/* Dismiss */}
       <button
         onClick={(e) => { e.stopPropagation(); dismiss(toast.id); }}
-        className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+        className="dc-press flex-shrink-0 rounded p-0.5 opacity-50 hover:opacity-100 transition-opacity"
         style={{ color: "var(--color-dc-interactive-normal)" }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
         </svg>
       </button>
+      <span aria-hidden="true" className="notification-progress pointer-events-none absolute bottom-0 inset-x-0 h-0.5 bg-dc-brand" />
     </div>
   );
 }
@@ -113,20 +140,15 @@ export function NotificationToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <>
-      <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(110%); opacity: 0; }
-          to   { transform: translateX(0);    opacity: 1; }
-        }
-      `}</style>
-      <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div key={t.id} className="pointer-events-auto">
-            <Toast toast={t} />
-          </div>
-        ))}
-      </div>
-    </>
+    <div
+      className="notification-deck fixed top-4 right-4 z-[99999] pointer-events-none"
+      style={{ "--toast-count": toasts.length } as React.CSSProperties}
+    >
+      {toasts.map((t, index) => (
+        <div key={t.id} className="notification-layer" style={{ "--toast-index": index, zIndex: toasts.length - index } as React.CSSProperties}>
+          <Toast toast={t} />
+        </div>
+      ))}
+    </div>
   );
 }

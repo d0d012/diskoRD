@@ -97,10 +97,12 @@ describe("MessageList jump to latest", () => {
     setMessages([...msgs, ...makeMessages(12).slice(10)]);
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(jumpButton()).toHaveTextContent("2");
+    expect(screen.getByRole("separator", { name: "New messages" })).toHaveTextContent("NEW");
 
     fireEvent.click(jumpButton()!);
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth" });
     expect(jumpButton()).not.toHaveTextContent("2");
+    expect(screen.queryByRole("separator", { name: "New messages" })).not.toBeInTheDocument();
   });
 
   it("scrolls to the bottom when you send a message while scrolled up", () => {
@@ -160,6 +162,61 @@ describe("MessageList message grouping", () => {
     useMessageStore.setState({ fetchMessages: vi.fn().mockResolvedValue(undefined), messages: {}, hasMore: {} });
   });
 
+  it("animates only realtime appends, not history, pagination, or channel switches", () => {
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      const { container, rerender } = render(<MessageList channelId="c1" channelName="general" />);
+      setMessages(makeMessages(2));
+      expect(container.querySelector(".dc-message-live")).toBeNull();
+      act(() => useMessageStore.getState().prependMessages("c1", [{ ...makeMessages(1)[0], id: "older" }], false));
+      expect(frames).toHaveLength(0);
+
+      act(() => useMessageStore.getState().addMessage(makeMessages(3)[2], "c1", "me"));
+      expect(frames).toHaveLength(1);
+      act(() => frames[0](0));
+      const live = container.querySelector('[data-message-id="m2"]')!;
+      expect(live).not.toHaveClass("dc-message-live");
+      expect(live.querySelector(".dc-message-body")).toHaveClass("dc-message-live");
+      expect(container.querySelector('[data-message-id="m1"] .dc-message-body')).not.toHaveClass("dc-message-live");
+
+      rerender(<MessageList channelId="other" channelName="other" />);
+      rerender(<MessageList channelId="c1" channelName="general" />);
+      expect(container.querySelector(".dc-message-live")).toBeNull();
+      expect(frames).toHaveLength(1);
+    } finally {
+      requestFrame.mockRestore();
+    }
+  });
+
+  it("adds local-day dividers without changing author grouping", () => {
+    const [first, second] = pair(1);
+    first.createdAt = new Date(2026, 0, 1, 23, 59).toISOString();
+    second.createdAt = new Date(2026, 0, 2, 0, 0).toISOString();
+    render(<MessageList channelId="c1" channelName="general" />);
+    setMessages([first, second]);
+    expect(screen.getAllByRole("separator")).toHaveLength(2);
+    expect(profileButtons()).toHaveLength(1);
+    expect(screen.getByText("second").closest("[data-message-id]")).toHaveClass("mt-0", "py-0.5");
+  });
+
+  it("pops toggled reactions and rolls changed counts without animating hydrated reactions", () => {
+    render(<MessageList channelId="c1" channelName="general" />);
+    const message = { ...makeMessages(1)[0], reactions: [{ emoji: "👍", count: 1, selfReacted: false }] };
+    setMessages([message]);
+    const pill = screen.getByRole("button", { name: "👍1" });
+    expect(pill).not.toHaveClass("dc-reaction-pop");
+    expect(screen.getByText("1")).not.toHaveClass("dc-reaction-roll");
+    setMessages([{ ...message, reactions: [{ emoji: "👍", count: 2, selfReacted: true }] }]);
+    expect(pill).toHaveClass("dc-reaction-pop");
+    expect(pill).toHaveAttribute("data-reacted", "true");
+    expect(screen.getByText("2")).toHaveClass("dc-reaction-roll");
+    expect(screen.getByText("2").parentElement).toHaveClass("tabular-nums", "overflow-hidden");
+  });
+
   it("groups same-author messages inside the 10 minute window", () => {
     expect(MESSAGE_GROUP_WINDOW_MS).toBe(10 * 60 * 1000);
     render(<MessageList channelId="c1" channelName="general" />);
@@ -176,8 +233,8 @@ describe("MessageList message grouping", () => {
     reply.referencedMessage = { id: first.id, authorId: "other", authorName: "Parent author", content: "parent text", deleted };
     setMessages([first, reply, { ...reply, id: "following", content: "following", replyTo: undefined, referencedMessage: undefined }]);
     expect(profileButtons()).toHaveLength(2);
-    expect(screen.getByText("following").closest("[data-message-id]")).toHaveStyle({ paddingTop: "2px" });
-    expect(screen.getByText("second").closest("[data-message-id]")).toHaveStyle({ paddingTop: "16px" });
+    expect(screen.getByText("following").closest("[data-message-id]")).toHaveClass("mt-0", "py-0.5");
+    expect(screen.getByText("second").closest("[data-message-id]")).toHaveClass("mt-[17px]", "py-1");
   });
 
   it("renders a reply avatar and jumps to the original from the preview", () => {
@@ -212,12 +269,12 @@ describe("MessageList message grouping", () => {
     setMessages([first, second, { ...second, id: "third", content: "third", attachments: [], reactions: [] }]);
     for (const text of ["second", "third"]) {
       const row = screen.getByText(text).closest("[data-message-id]")!;
-      expect(row).toHaveStyle({ paddingTop: "2px" });
+      expect(row).toHaveClass("mt-0", "py-0.5");
       const timestamp = row.querySelector("span.invisible")!;
       expect(timestamp).toHaveClass("absolute", "select-none", "whitespace-nowrap");
       expect(timestamp).toHaveAttribute("aria-hidden", "true");
       expect(timestamp.parentElement).toHaveClass("select-none");
-      expect(screen.getByText(text)).toHaveClass("m-0", "leading-5");
+      expect(screen.getByText(text)).toHaveClass("m-0", "leading-[22px]");
     }
   });
 

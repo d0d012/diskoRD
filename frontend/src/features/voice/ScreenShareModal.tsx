@@ -31,13 +31,13 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-[440px] rounded-lg overflow-hidden shadow-2xl"
-        style={{ backgroundColor: "var(--color-dc-bg-secondary, #2b2d31)" }}
+        className="dc-modal-in w-full max-w-[440px] rounded-xl overflow-hidden"
+        style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Header */}
         <div className="relative flex items-center justify-center px-6 pt-6 pb-4">
@@ -46,7 +46,7 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
           </h2>
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 p-1 rounded transition-colors"
+            className="dc-press absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-md transition-colors hover:bg-dc-bg-modifier-hover"
             style={{ color: "var(--color-dc-interactive-normal, #b5bac1)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover, #dbdee1)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal, #b5bac1)")}
@@ -99,11 +99,8 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
                 <button
                   key={value}
                   onClick={() => setScreenShareResolution(value)}
-                  className="flex-1 py-1.5 rounded text-sm font-semibold transition-colors"
+                  className={`dc-press flex-1 h-9 rounded-md border border-white/5 text-sm font-semibold transition-colors ${screenShareResolution === value ? "dc-btn-primary" : "bg-dc-bg-tertiary hover:bg-dc-bg-modifier-hover"}`}
                   style={{
-                    backgroundColor: screenShareResolution === value
-                      ? "var(--color-dc-brand, #5865f2)"
-                      : "var(--color-dc-bg-tertiary, #1e1f22)",
                     color: screenShareResolution === value
                       ? "#fff"
                       : "var(--color-dc-interactive-normal, #b5bac1)",
@@ -123,11 +120,8 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
                 <button
                   key={fps}
                   onClick={() => setScreenShareFps(fps)}
-                  className="flex-1 py-1.5 rounded text-sm font-semibold transition-colors"
+                  className={`dc-press flex-1 h-9 rounded-md border border-white/5 text-sm font-semibold transition-colors ${screenShareFps === fps ? "dc-btn-primary" : "bg-dc-bg-tertiary hover:bg-dc-bg-modifier-hover"}`}
                   style={{
-                    backgroundColor: screenShareFps === fps
-                      ? "var(--color-dc-brand, #5865f2)"
-                      : "var(--color-dc-bg-tertiary, #1e1f22)",
                     color: screenShareFps === fps
                       ? "#fff"
                       : "var(--color-dc-interactive-normal, #b5bac1)",
@@ -140,10 +134,10 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-1">
+          <div className="-mx-6 -mb-6 px-6 py-4 flex gap-3 border-t border-white/5 bg-dc-bg-secondary">
             <button
               onClick={onClose}
-              className="flex-1 py-2 rounded text-sm font-medium transition-colors"
+              className="dc-press flex-1 h-10 rounded-md text-sm font-medium transition-colors"
               style={{
                 backgroundColor: "var(--color-dc-bg-tertiary, #1e1f22)",
                 color: "var(--color-dc-text-normal, #dbdee1)",
@@ -155,10 +149,8 @@ export function ScreenShareModal({ onClose }: ScreenShareModalProps) {
             </button>
             <button
               onClick={handleGoLive}
-              className="flex-1 py-2 rounded text-sm font-medium transition-colors"
-              style={{ backgroundColor: "var(--color-dc-brand, #5865f2)", color: "#fff" }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#4752c4")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand, #5865f2)")}
+              className="dc-btn-primary dc-press flex-1 h-10 rounded-md text-sm font-medium"
+              style={{ color: "#fff" }}
             >
               Go Live
             </button>

@@ -15,11 +15,11 @@ export function VoiceStatusBar() {
 
   return (
     <div
-      className="flex-shrink-0 px-2 py-2 border-t"
+      className="flex-shrink-0 px-2 py-2 border-t shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       style={{ borderColor: "var(--color-dc-bg-floating)", backgroundColor: "var(--color-dc-bg-tertiary)" }}
     >
-      <div className="flex items-center gap-2 px-2 py-1 rounded-md mb-1" style={{ backgroundColor: "rgba(35,165,90,0.12)" }}>
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--color-dc-online, #23a55a)" }} />
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded-md mb-1 border border-dc-online/10" style={{ backgroundColor: "color-mix(in srgb, var(--color-dc-online) 10%, transparent)" }}>
+        <span className="w-2 h-2 rounded-full flex-shrink-0 shadow-[0_0_8px_color-mix(in_srgb,var(--color-dc-online)_25%,transparent)]" style={{ backgroundColor: "var(--color-dc-online, #23a55a)" }} />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold truncate" style={{ color: "var(--color-dc-online, #23a55a)" }}>Voice Connected</p>
           <p
@@ -37,7 +37,7 @@ export function VoiceStatusBar() {
             title={voiceWindowOpen ? "Close call window" : "Open in a separate window"}
             aria-label={voiceWindowOpen ? "Close call window" : "Open in a separate window"}
             aria-pressed={voiceWindowOpen}
-            className="p-1 rounded transition-colors flex-shrink-0 hover:bg-[var(--color-dc-bg-modifier-hover)]"
+            className="dc-press p-1 rounded transition-colors flex-shrink-0 hover:bg-[var(--color-dc-bg-modifier-hover)]"
             style={{ color: voiceWindowOpen ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -49,7 +49,7 @@ export function VoiceStatusBar() {
         <button
           onClick={() => setMuted(!isMuted)}
           title={isMuted ? "Unmute" : "Mute"}
-          className="p-1 rounded transition-colors flex-shrink-0"
+          className="dc-press p-1 rounded transition-colors flex-shrink-0"
           style={{ color: isMuted ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}
@@ -63,7 +63,7 @@ export function VoiceStatusBar() {
         <button
           onClick={leaveVoice}
           title="Disconnect from voice"
-          className="p-1 rounded transition-colors flex-shrink-0"
+          className="dc-press p-1 rounded transition-colors flex-shrink-0"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; e.currentTarget.style.color = "var(--color-dc-red, #ed4245)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ""; e.currentTarget.style.color = "var(--color-dc-interactive-normal)"; }}

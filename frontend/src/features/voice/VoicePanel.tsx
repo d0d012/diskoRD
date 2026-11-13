@@ -81,8 +81,8 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
           </span>
         )}
         {isConnected && (
-          <span className="text-xs ml-2 flex items-center gap-1" style={{ color: "#23a55a" }}>
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#23a55a]" />
+          <span className="text-xs ml-2 flex items-center gap-1" style={{ color: "var(--color-dc-online)" }}>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-dc-online" />
             Connected
           </span>
         )}
@@ -93,7 +93,7 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
           <button
             onClick={() => setManualLayout(layoutMode === "grid" ? null : "grid")}
             title="Grid view"
-            className="p-1.5 rounded transition-colors"
+            className="dc-press p-1.5 rounded transition-colors"
             style={{
               backgroundColor: layoutMode === "grid" ? "var(--color-dc-bg-modifier-selected)" : "transparent",
               color: layoutMode === "grid" ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
@@ -111,7 +111,7 @@ export function VoicePanel({ participants, connectionState }: VoicePanelProps) {
           <button
             onClick={() => setManualLayout(layoutMode === "stage" ? null : "stage")}
             title="Focus view"
-            className="p-1.5 rounded transition-colors"
+            className="dc-press p-1.5 rounded transition-colors"
             style={{
               backgroundColor: layoutMode === "stage" ? "var(--color-dc-bg-modifier-selected)" : "transparent",
               color: layoutMode === "stage" ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",

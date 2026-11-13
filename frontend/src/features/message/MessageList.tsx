@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useCallback, useState, type ReactNode } from "react";
+import "./message.css";
 import { useMessageStore } from "../../stores/messageStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useDecorationPlacementStore } from "../../stores/decorationPlacementStore";
@@ -89,6 +90,28 @@ export function MessageList({ channelId, channelName, intro }: Props) {
     }
   }, [msgs.length]);
 
+  useEffect(() => {
+    const frames = new Set<number>();
+    const unsubscribe = useMessageStore.subscribe((state, previous) => {
+      const before = previous.messages[channelId];
+      const after = state.messages[channelId];
+      if (before === after) return;
+      if (loadingRef.current || previous.hasMore[channelId] == null || !before || !after) return;
+      if (after.length !== before.length + 1 || after[before.length - 1]?.id !== before[before.length - 1]?.id) return;
+      const id = after[after.length - 1].id;
+      const frame = requestAnimationFrame(() => {
+        frames.delete(frame);
+        const row = containerRef.current?.querySelector('[data-message-id="' + CSS.escape(id) + '"]');
+        row?.querySelectorAll(".dc-message-body, .dc-message-avatar").forEach((el) => el.classList.add("dc-message-live"));
+      });
+      frames.add(frame);
+    });
+    return () => {
+      unsubscribe();
+      frames.forEach(cancelAnimationFrame);
+    };
+  }, [channelId]);
+
   // Preserve scroll position when prepending older messages
   useEffect(() => {
     const el = containerRef.current;
@@ -135,20 +158,21 @@ export function MessageList({ channelId, channelName, intro }: Props) {
       >
         {/* Channel intro */}
         {!more && (intro ?? (
-          <div className="px-4 pt-14 pb-4">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-              style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
-            >
-              <span className="text-3xl font-bold" style={{ color: "var(--color-dc-text-muted)" }}>#</span>
+          <div className="px-4 pt-14 pb-5">
+            <div className="relative mb-3 h-[68px] w-[68px]">
+              <div className="dc-history-badge relative flex h-full w-full items-center justify-center rounded-full bg-dc-bg-secondary text-dc-header-primary">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16" />
+                </svg>
+              </div>
             </div>
             <h2
-              className="text-2xl font-bold mb-1"
+              className="text-[32px] leading-tight font-extrabold tracking-[-0.02em] mb-2"
               style={{ color: "var(--color-dc-header-primary)" }}
             >
               Welcome to #{channelName}!
             </h2>
-            <p className="text-sm" style={{ color: "var(--color-dc-text-muted)" }}>
+            <p className="text-[15px]" style={{ color: "var(--color-dc-text-muted)" }}>
               This is the start of the #{channelName} channel.
             </p>
           </div>
@@ -158,7 +182,7 @@ export function MessageList({ channelId, channelName, intro }: Props) {
         {more && (
           <div className="flex justify-center py-4">
             <div
-              className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
+              className="w-5 h-5 rounded-full border-2 border-t-transparent motion-safe:animate-spin"
               style={{ borderColor: "var(--color-dc-brand) transparent transparent transparent" }}
             />
           </div>
@@ -170,7 +194,28 @@ export function MessageList({ channelId, channelName, intro }: Props) {
           {msgs.map((msg, i) => {
             const prev = i > 0 ? msgs[i - 1] : null;
             const grouped = !msg.replyTo && !msg.referencedMessage && prev != null && isSameAuthorAndClose(prev, msg);
-            return <MessageItem key={msg.id} message={msg} isGrouped={grouped} />;
+            const date = new Date(msg.createdAt);
+            const dayChanged = !prev || date.toDateString() !== new Date(prev.createdAt).toDateString();
+            return (
+              <Fragment key={msg.id}>
+                {dayChanged && (
+                  <div className="mx-4 my-4 flex items-center gap-2" role="separator" aria-label={date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}>
+                    <span className="h-px flex-1 bg-dc-border-subtle" />
+                    <time dateTime={msg.createdAt} className="shrink-0 px-2 text-xs font-semibold text-dc-text-muted">
+                      {date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}
+                    </time>
+                    <span className="h-px flex-1 bg-dc-border-subtle" />
+                  </div>
+                )}
+                {newCount > 0 && i === Math.max(0, msgs.length - newCount) && (
+                  <div className="mx-4 my-2 flex items-center" role="separator" aria-label="New messages">
+                    <span className="h-px flex-1 bg-dc-red" />
+                    <span className="rounded-[3px] bg-dc-red px-[5px] py-px text-[10px] font-extrabold tracking-[0.04em] text-white">NEW</span>
+                  </div>
+                )}
+                <MessageItem message={msg} isGrouped={grouped} />
+              </Fragment>
+            );
           })}
         </div>
 
@@ -195,20 +240,18 @@ export function MessageList({ channelId, channelName, intro }: Props) {
           onClick={() => scrollToBottom()}
           aria-label="Jump to latest message"
           title="Jump to latest message"
-          className="absolute bottom-3 right-5 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors hover:brightness-110"
+          className="dc-elevated dc-slide-up-in dc-press absolute bottom-3 right-5 h-8 rounded-full flex items-center justify-center gap-2 px-3.5 text-xs font-semibold transition-colors hover:brightness-110"
           style={{
-            backgroundColor: "var(--color-dc-bg-floating)",
+            backgroundColor: "var(--color-dc-bg-secondary)",
             color: "var(--color-dc-interactive-hover)",
           }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
           </svg>
+          <span>Jump to present</span>
           {newCount > 0 && (
-            <span
-              className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center"
-              style={{ backgroundColor: "var(--color-dc-brand)", color: "#fff" }}
-            >
+            <span className="flex min-w-5 h-5 items-center justify-center rounded-full bg-dc-brand px-1.5 text-[11px] font-bold tabular-nums text-white">
               {newCount > 99 ? "99+" : newCount}
             </span>
           )}

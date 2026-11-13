@@ -108,8 +108,7 @@ export function RolesSettings({ guildId }: Props) {
     <div className="flex h-full">
       {/* Left: role list */}
       <div
-        className="w-64 flex-shrink-0 flex flex-col border-r overflow-y-auto"
-        style={{ borderColor: "var(--color-dc-bg-floating)" }}
+        className="w-64 flex-shrink-0 flex flex-col border-r border-white/5 overflow-y-auto"
       >
         <div className="p-4 flex items-center justify-between flex-shrink-0">
           <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
@@ -118,7 +117,7 @@ export function RolesSettings({ guildId }: Props) {
           <button
             onClick={handleCreate}
             title="Create Role"
-            className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+            className="dc-press w-8 h-8 rounded-md border border-white/5 flex items-center justify-center transition-colors"
             style={{ color: "var(--color-dc-interactive-normal)" }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -127,12 +126,12 @@ export function RolesSettings({ guildId }: Props) {
           </button>
         </div>
 
-        <div className="flex-1 pb-4">
+        <div className="flex-1 px-2 pb-4 space-y-1">
           {[...roles].sort((a, b) => b.position - a.position).map((role) => (
             <button
               key={role.id}
               onClick={() => setSelectedId(role.id)}
-              className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors"
+              className="dc-press w-full min-h-10 flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors"
               style={{
                 backgroundColor: selectedId === role.id ? "var(--color-dc-bg-modifier-selected)" : "transparent",
               }}
@@ -166,12 +165,12 @@ export function RolesSettings({ guildId }: Props) {
         ) : (
           <>
             {/* Tabs */}
-            <div className="flex border-b px-6 pt-4 flex-shrink-0" style={{ borderColor: "var(--color-dc-bg-floating)" }}>
+            <div className="flex gap-2 border-b border-white/5 px-6 pt-4 flex-shrink-0">
               {(["display", "members"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className="px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px"
+                  className="dc-press px-4 h-10 rounded-t-md text-sm font-semibold capitalize transition-colors border-b-2 -mb-px hover:bg-dc-bg-modifier-hover"
                   style={{
                     borderColor: activeTab === tab ? "var(--color-dc-brand)" : "transparent",
                     color: activeTab === tab ? "var(--color-dc-header-primary)" : "var(--color-dc-text-muted)",
@@ -193,12 +192,8 @@ export function RolesSettings({ guildId }: Props) {
                     <input
                       value={name}
                       onChange={(e) => { setName(e.target.value); setDirty(true); }}
-                      className="w-full px-3 py-2 rounded text-sm outline-none"
-                      style={{
-                        backgroundColor: "var(--color-dc-bg-tertiary)",
-                        color: "var(--color-dc-text-normal)",
-                        border: "1px solid var(--color-dc-bg-floating)",
-                      }}
+                      className="w-full h-10 px-3 rounded-md text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
+                      style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
                     />
                   </div>
 
@@ -212,7 +207,7 @@ export function RolesSettings({ guildId }: Props) {
                         <button
                           key={c}
                           onClick={() => { setColor(c); setDirty(true); }}
-                          className="w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0"
+                          className="dc-press w-7 h-7 rounded-full motion-safe:hover:scale-110 flex-shrink-0"
                           style={{
                             backgroundColor: c,
                             outline: color === c ? `2px solid white` : "none",
@@ -226,12 +221,8 @@ export function RolesSettings({ guildId }: Props) {
                       <input
                         value={color}
                         onChange={(e) => { setColor(e.target.value); setDirty(true); }}
-                        className="px-2 py-1 rounded text-sm outline-none font-mono uppercase w-28"
-                        style={{
-                          backgroundColor: "var(--color-dc-bg-tertiary)",
-                          color: "var(--color-dc-text-normal)",
-                          border: "1px solid var(--color-dc-bg-floating)",
-                        }}
+                        className="px-3 h-9 rounded-md text-sm outline-none font-mono uppercase w-28 border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
+                        style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
                         maxLength={7}
                         placeholder="#99AAB5"
                       />
@@ -239,7 +230,7 @@ export function RolesSettings({ guildId }: Props) {
                   </div>
 
                   {/* Hoist */}
-                  <div className="flex items-center justify-between py-3 px-4 rounded-lg" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+                  <div className="flex items-center justify-between py-4 px-4 rounded-lg border border-white/5" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
                     <div>
                       <p className="text-sm font-medium" style={{ color: "var(--color-dc-header-primary)" }}>
                         Display role members separately
@@ -249,13 +240,16 @@ export function RolesSettings({ guildId }: Props) {
                       </p>
                     </div>
                     <button
+                      role="switch"
+                      aria-checked={hoist}
+                      aria-label="Display role members separately"
                       onClick={() => { setHoist(!hoist); setDirty(true); }}
-                      className="w-10 h-6 rounded-full transition-colors flex-shrink-0 relative ml-4"
-                      style={{ backgroundColor: hoist ? "var(--color-dc-brand)" : "var(--color-dc-bg-floating)" }}
+                      className="dc-press w-10 h-6 rounded-full transition-colors flex-shrink-0 relative ml-4 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dc-brand"
+                      style={{ backgroundColor: hoist ? "var(--color-dc-online)" : "var(--color-dc-interactive-muted)" }}
                     >
                       <span
-                        className="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform"
-                        style={{ left: hoist ? "calc(100% - 20px)" : 4 }}
+                        className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-150 motion-reduce:transition-none"
+                        style={{ transform: `translateX(${hoist ? 16 : 0}px)` }}
                       />
                     </button>
                   </div>
@@ -264,7 +258,7 @@ export function RolesSettings({ guildId }: Props) {
                   <div className="pt-2">
                     <button
                       onClick={handleDelete}
-                      className="text-sm px-3 py-1.5 rounded transition-colors"
+                      className="dc-press text-sm px-3 h-9 rounded-md transition-colors"
                       style={{ color: "var(--color-dc-red, #da373c)" }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(218,55,60,0.1)")}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -293,7 +287,7 @@ export function RolesSettings({ guildId }: Props) {
                                 <span className="text-sm" style={{ color: "var(--color-dc-text-normal)" }}>{m.username}</span>
                                 <button
                                   onClick={() => removeMemberFromRole(m.id)}
-                                  className="text-xs px-2 py-0.5 rounded transition-colors"
+                                  className="dc-press text-xs px-3 h-8 rounded-md transition-colors"
                                   style={{ color: "var(--color-dc-red, #da373c)" }}
                                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(218,55,60,0.1)")}
                                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -315,19 +309,15 @@ export function RolesSettings({ guildId }: Props) {
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           placeholder="Search members..."
-                          className="w-full px-3 py-2 rounded text-sm outline-none mb-2"
-                          style={{
-                            backgroundColor: "var(--color-dc-bg-tertiary)",
-                            color: "var(--color-dc-text-normal)",
-                            border: "1px solid var(--color-dc-bg-floating)",
-                          }}
+                          className="w-full h-10 px-3 rounded-md text-sm outline-none mb-2 border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
+                          style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
                         />
                         <div className="space-y-1 max-h-48 overflow-y-auto">
                           {assignable.map((m) => (
                             <button
                               key={m.id}
                               onClick={() => assignMemberToRole(m.id)}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors"
+                              className="dc-press w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors"
                               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
                               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                             >
@@ -351,8 +341,8 @@ export function RolesSettings({ guildId }: Props) {
             {/* Save bar */}
             {dirty && activeTab === "display" && (
               <div
-                className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-t"
-                style={{ borderColor: "var(--color-dc-bg-floating)", backgroundColor: "var(--color-dc-bg-secondary)" }}
+                className="dc-slide-up-in flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-white/5"
+                style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
               >
                 <p className="text-sm" style={{ color: "var(--color-dc-text-muted)" }}>Careful — you have unsaved changes!</p>
                 <div className="flex gap-2">
@@ -365,7 +355,7 @@ export function RolesSettings({ guildId }: Props) {
                         setDirty(false);
                       }
                     }}
-                    className="px-3 py-1.5 text-sm rounded transition-colors"
+                    className="dc-press px-4 h-9 text-sm rounded-md transition-colors"
                     style={{ color: "var(--color-dc-text-normal)" }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -375,8 +365,8 @@ export function RolesSettings({ guildId }: Props) {
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="px-4 py-1.5 text-sm rounded font-medium transition-colors"
-                    style={{ backgroundColor: "var(--color-dc-brand)", color: "white", opacity: saving ? 0.7 : 1 }}
+                    className="dc-btn-primary dc-press px-4 h-9 text-sm rounded-md font-medium"
+                    style={{ color: "white", opacity: saving ? 0.7 : 1 }}
                   >
                     {saving ? "Saving…" : "Save Changes"}
                   </button>

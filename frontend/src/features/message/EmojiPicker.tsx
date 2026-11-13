@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 const COMMON_EMOJIS = [
   "👍", "👎", "❤️", "😂", "🔥", "🎉",
@@ -54,14 +54,14 @@ export function EmojiPicker({ anchorRect, onSelect, onClose, preferAbove = true 
   return (
     <div
       ref={ref}
-      className="fixed z-[10001] p-2 shadow-xl rounded-xl grid grid-cols-6 gap-1"
+      className="dc-elevated dc-pop-in fixed z-[10001] p-2 rounded-xl grid grid-cols-6 gap-1"
       style={{
         top: pos?.top ?? -9999,
         left: pos?.left ?? -9999,
-        backgroundColor: "var(--color-dc-bg-floating)",
-        border: "1px solid var(--color-dc-background-modifier-accent, var(--color-dc-bg-modifier-hover))",
+        backgroundColor: "var(--color-dc-bg-user-panel)",
         width: "max-content",
-      }}
+        "--dc-origin": `${pos && pos.left < anchorRect.left ? "right" : "left"} ${pos && pos.top < anchorRect.top ? "bottom" : "top"}`,
+      } as CSSProperties}
     >
       {COMMON_EMOJIS.map((emoji) => (
         <button
@@ -69,7 +69,7 @@ export function EmojiPicker({ anchorRect, onSelect, onClose, preferAbove = true 
           type="button"
           onClick={() => onSelect(emoji)}
           aria-label={emoji}
-          className="text-lg w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+          className="dc-press text-lg w-8 h-8 flex items-center justify-center rounded-md transition-colors hover:bg-dc-bg-modifier-hover focus-visible:bg-dc-bg-modifier-hover"
           style={{ padding: 0 }}
         >
           {emoji}

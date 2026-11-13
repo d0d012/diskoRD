@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useGuildStore } from "../../stores/guildStore";
 import type { GuildRole } from "../../types";
 
@@ -20,7 +20,7 @@ export function RolePicker({ guildId, userId, assignedRoleIds, anchorRef, onClos
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Position near the anchor, clamped to viewport
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, origin: "top left" });
   useEffect(() => {
     if (!anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
@@ -34,7 +34,7 @@ export function RolePicker({ guildId, userId, assignedRoleIds, anchorRef, onClos
     // Flip above if not enough room below
     if (top + H > window.innerHeight - 8) top = rect.top - H - 4;
     if (top < 8) top = 8;
-    setPos({ top, left });
+    setPos({ top, left, origin: `${left < rect.left ? "right" : "left"} ${top < rect.top ? "bottom" : "top"}` });
   }, [anchorRef]);
 
   // Close on outside click
@@ -92,13 +92,13 @@ export function RolePicker({ guildId, userId, assignedRoleIds, anchorRef, onClos
   return (
     <div
       ref={containerRef}
-      className="fixed z-[9999] w-56 rounded-lg shadow-xl overflow-hidden"
+      className="dc-elevated dc-pop-in fixed z-[9999] w-56 rounded-xl overflow-hidden"
       style={{
         top: pos.top,
         left: pos.left,
-        backgroundColor: "var(--color-dc-bg-floating)",
-        border: "1px solid rgba(255,255,255,0.06)",
-      }}
+        backgroundColor: "var(--color-dc-bg-user-panel)",
+        "--dc-origin": pos.origin,
+      } as CSSProperties}
     >
       {/* Search */}
       <div className="p-2 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -113,7 +113,7 @@ export function RolePicker({ guildId, userId, assignedRoleIds, anchorRef, onClos
       </div>
 
       {/* Role list */}
-      <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
+      <div className="overflow-y-auto p-1" style={{ maxHeight: 260 }}>
         {filtered.length === 0 && (
           <p className="text-xs px-3 py-4 text-center" style={{ color: "var(--color-dc-text-muted)" }}>
             No roles found
@@ -126,10 +126,8 @@ export function RolePicker({ guildId, userId, assignedRoleIds, anchorRef, onClos
               key={role.id}
               onClick={() => toggle(role)}
               disabled={loading === role.id}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
+              className="dc-press w-full flex items-center gap-2 rounded px-2 py-2 text-left transition-colors hover:bg-dc-bg-modifier-hover focus-visible:bg-dc-bg-modifier-hover"
               style={{ opacity: loading === role.id ? 0.6 : 1 }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
             >
               {/* Color dot */}
               <span

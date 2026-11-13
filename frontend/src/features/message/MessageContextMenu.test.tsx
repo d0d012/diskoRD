@@ -64,17 +64,43 @@ beforeEach(() => {
 });
 
 describe("MessageItem hover stability", () => {
-  it("does not render the add-reaction button on hover when there are no reactions", () => {
+  it("keeps the floating toolbar out of layout when there are no reactions", () => {
     renderMessage({ ...baseMessage, reactions: [] });
-
-    expect(screen.queryByTitle("Add Reaction")).toBeNull();
+    const reaction = screen.getByRole("button", { name: "Add Reaction" });
+    const toolbar = reaction.parentElement!.parentElement!;
+    expect(toolbar).toHaveClass("absolute", "opacity-0", "group-hover:opacity-100", "focus-within:opacity-100");
     fireEvent.mouseEnter(document.querySelector(".group")!);
-    expect(screen.queryByTitle("Add Reaction")).toBeNull();
+    expect(screen.getAllByTitle("Add Reaction")).toHaveLength(1);
   });
 
-  it("keeps the add-reaction button when reactions exist", () => {
+  it("keeps the inline add-reaction button when reactions exist", () => {
     renderMessage({ ...baseMessage, reactions: [{ emoji: "👍", count: 1, selfReacted: false }] });
-    expect(screen.getByTitle("Add Reaction")).toBeInTheDocument();
+    expect(screen.getAllByTitle("Add Reaction")).toHaveLength(2);
+  });
+
+  it("starts a reply from the icon toolbar", () => {
+    renderMessage(baseMessage);
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+    expect(useMessageStore.getState().replyingTo).toEqual({ channelId: "c1", message: baseMessage });
+  });
+
+  it("opens the existing menu from More", async () => {
+    renderMessage(baseMessage);
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByRole("menu", { name: "Message actions" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Edit Message/ })).toBeInTheDocument();
+  });
+
+  it("uses the existing picker to react from the toolbar", () => {
+    const toggleReaction = vi.fn().mockResolvedValue(undefined);
+    useMessageStore.setState({ toggleReaction });
+    renderMessage({ ...baseMessage, reactions: [] });
+    const reaction = screen.getByRole("button", { name: "Add Reaction" });
+    fireEvent.click(reaction);
+    expect(reaction).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "👍" }));
+    expect(toggleReaction).toHaveBeenCalledWith("m1", "c1", "👍");
+    expect(reaction).toHaveAttribute("aria-expanded", "false");
   });
 });
 

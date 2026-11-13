@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { EmojiPicker } from "./EmojiPicker";
+import "./message.css";
 
 interface AddReactionButtonProps {
   messageId: string;
@@ -31,26 +32,16 @@ export function AddReactionButton({ messageId, channelId }: AddReactionButtonPro
             setAnchorRect(buttonRef.current.getBoundingClientRect());
           }
         }}
-        className="flex items-center justify-center w-6 h-6 rounded-full transition-colors"
-        style={{
-          backgroundColor: "var(--color-dc-bg-tertiary)",
-          border: "1px solid var(--color-dc-bg-floating)",
-          color: "var(--color-dc-text-muted)"
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)";
-          e.currentTarget.style.border = "1px solid var(--color-dc-interactive-hover)";
-          e.currentTarget.style.color = "var(--color-dc-interactive-active)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "var(--color-dc-bg-tertiary)";
-          e.currentTarget.style.border = "1px solid var(--color-dc-bg-floating)";
-          e.currentTarget.style.color = "var(--color-dc-text-muted)";
-        }}
+        className="dc-message-action dc-press flex items-center justify-center w-7 h-7 rounded-[4px] text-dc-interactive-normal transition-colors duration-150"
         title="Add Reaction"
+        aria-label="Add Reaction"
+        aria-expanded={!!anchorRect}
       >
-        <svg fill="currentColor" width="14" height="14" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.5 13H13v3.5h-2V15H7.5v-2H11v-3.5h2V13h3.5v2z"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <path d="M20.5 13a8.5 8.5 0 1 1-9.5-9.5M16 5h6m-3-3v6" />
+          <path d="M8 14a4.5 4.5 0 0 0 8 0" />
+          <circle cx="8.5" cy="9.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="15.5" cy="9.5" r="1" fill="currentColor" stroke="none" />
         </svg>
       </button>
 

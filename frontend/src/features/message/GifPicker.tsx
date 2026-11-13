@@ -40,7 +40,7 @@ export function GifPicker({ onSend, onClose, triggerRef }: Props) {
   }, [onClose, triggerRef, client]);
   const waiting = query.trim() !== debounced;
   return (
-    <div ref={root} role="dialog" aria-label="GIF picker" className="gif-picker">
+    <div ref={root} role="dialog" aria-label="GIF picker" className="gif-picker dc-elevated dc-pop-in">
       <input autoFocus placeholder="Search KLIPY" aria-label="Search KLIPY" value={query} onChange={e => setQuery(e.target.value)} />
       {!query.trim() && <div className="gif-tabs" role="tablist" aria-label="GIF categories">
         <button role="tab" aria-selected={tab === "trending"} onClick={() => setTab("trending")}>Trending</button>

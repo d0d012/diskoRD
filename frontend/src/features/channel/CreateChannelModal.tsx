@@ -42,18 +42,21 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="dc-modal-backdrop-in fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-[460px] rounded-[5px] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create Channel"
+        className="dc-modal-in relative w-full max-w-[460px] max-h-[90vh] rounded-xl overflow-y-auto"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 transition-colors"
+          className="dc-press absolute top-3 right-3 w-8 h-8 rounded-md flex items-center justify-center transition-colors hover:bg-dc-bg-modifier-hover"
           style={{ color: "var(--color-dc-interactive-normal)" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
@@ -63,7 +66,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
           </svg>
         </button>
 
-        <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "var(--color-dc-bg-floating)" }}>
+        <div className="px-6 pt-6 pb-4 border-b border-white/5">
           <h2 className="text-xl font-bold" style={{ color: "var(--color-dc-header-primary)" }}>
             Create Channel
           </h2>
@@ -85,7 +88,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
               <button
                 key={t}
                 onClick={() => setType(t)}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-colors"
+                className="dc-press flex items-center gap-3 px-3 py-3 rounded-lg border border-white/5 text-left transition-colors"
                 style={{
                   backgroundColor: type === t ? "var(--color-dc-bg-modifier-selected)" : "transparent",
                 }}
@@ -134,7 +137,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
             Channel Name
           </p>
           <div
-            className="flex items-center gap-2 px-3 py-2 rounded mb-1"
+            className="flex items-center gap-2 h-10 px-3 rounded-md mb-1 border border-black/30 focus-within:border-dc-brand focus-within:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none"
             style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
           >
             {type === "text" ? (
@@ -153,7 +156,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
               onKeyDown={(e) => e.key === "Enter" && !loading && handleCreate()}
               placeholder={type === "text" ? "new-channel" : "new-voice"}
               maxLength={100}
-              className="flex-1 bg-transparent text-sm outline-none"
+              className="dc-no-focus-ring min-w-0 flex-1 bg-transparent text-sm outline-none"
               style={{ color: "var(--color-dc-text-normal)" }}
             />
           </div>
@@ -164,12 +167,12 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
 
         {/* Footer */}
         <div
-          className="px-6 py-4 flex justify-end gap-3"
+          className="px-6 py-4 flex justify-end gap-3 border-t border-white/5"
           style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
         >
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium rounded transition-colors"
+            className="dc-press px-4 h-10 text-sm font-medium rounded-md transition-colors hover:bg-dc-bg-modifier-hover"
             style={{ color: "var(--color-dc-text-normal)" }}
             onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
             onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "")}
@@ -179,10 +182,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
           <button
             onClick={handleCreate}
             disabled={loading || !normalizeChannelName(name)}
-            className="px-4 py-2 text-sm font-medium rounded text-white disabled:opacity-50 transition-colors"
-            style={{ backgroundColor: "var(--color-dc-brand)" }}
-            onMouseEnter={(e) => !loading && (e.currentTarget.style.backgroundColor = "var(--color-dc-brand-560)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-brand)")}
+            className="dc-btn-primary dc-press px-4 h-10 text-sm font-medium rounded-md text-white disabled:opacity-50"
           >
             {loading ? "Creating…" : "Create Channel"}
           </button>

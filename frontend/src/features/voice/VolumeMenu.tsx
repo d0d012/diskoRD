@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { useVoiceStore } from "../../stores/voiceStore";
 
 interface VolumeMenuProps {
@@ -31,8 +31,8 @@ export function VolumeMenu({ userId, name, x, y, onClose }: VolumeMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 rounded-lg shadow-2xl p-3 flex flex-col gap-2"
-      style={{ left, top, width: menuW, backgroundColor: "var(--color-dc-bg-floating, #111214)" }}
+      className="dc-elevated dc-pop-in fixed z-50 rounded-lg p-3 flex flex-col gap-2"
+      style={{ left, top, width: menuW, backgroundColor: "var(--color-dc-bg-floating)", "--dc-origin": `${left < x ? "right" : "left"} ${top < y ? "bottom" : "top"}` } as CSSProperties}
       onContextMenu={(e) => e.preventDefault()}
     >
       <p className="text-xs font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>
@@ -49,17 +49,14 @@ export function VolumeMenu({ userId, name, x, y, onClose }: VolumeMenuProps) {
           step={0.01}
           value={volume}
           onChange={(e) => setRemoteVolume(userId, parseFloat(e.target.value))}
-          className="flex-1 accent-[#5865f2]"
+          className="flex-1 accent-dc-brand"
         />
         <span className="text-xs w-8 text-right tabular-nums" style={{ color: "var(--color-dc-text-muted)" }}>
           {Math.round(volume * 100)}%
         </span>
       </div>
       <button
-        className="text-xs text-left px-1 py-0.5 rounded transition-colors"
-        style={{ color: "var(--color-dc-text-muted)" }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+        className="dc-press text-xs text-left px-2 py-1 rounded text-dc-text-muted transition-colors hover:bg-dc-brand hover:text-white focus-visible:bg-dc-brand focus-visible:text-white hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
         onClick={() => { setRemoteVolume(userId, 1); onClose(); }}
       >
         Reset to 100%

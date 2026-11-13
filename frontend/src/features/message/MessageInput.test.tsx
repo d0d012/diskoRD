@@ -64,6 +64,29 @@ describe("MessageInput", () => {
     expect(textarea).toHaveStyle({ height: "28px" });
   });
 
+  it("joins the reply banner to the composer surface", () => {
+    const textarea = renderInput();
+    const composer = textarea.parentElement!;
+    expect(composer).toHaveStyle({ backgroundColor: "var(--color-dc-bg-composer)" });
+    expect(composer).toHaveClass("dc-composer", "rounded-[8px]");
+    const drawer = composer.previousElementSibling!;
+    expect(drawer).toHaveClass("dc-reply-drawer");
+    expect(drawer).toHaveAttribute("data-open", "false");
+    const message: Message = {
+      id: "parent", channelId: "c1", guildId: "g1", content: "hello",
+      createdAt: "2026-01-01T00:00:00Z",
+      author: { id: "alice", username: "alice", status: "online", createdAt: "2026-01-01T00:00:00Z" },
+    };
+    act(() => useMessageStore.getState().startReply(message));
+    expect(composer).toHaveClass("rounded-t-none", "rounded-b-[8px]");
+    expect(drawer).toHaveAttribute("data-open", "true");
+    expect(screen.getByText(/Replying to/).parentElement).toHaveClass("rounded-t-[8px]", "border-b");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel reply" }));
+    expect(drawer).toHaveAttribute("data-open", "false");
+    expect(composer).toHaveClass("rounded-[8px]");
+    expect(composer).not.toHaveClass("rounded-t-none");
+  });
+
   it("keeps focus after sending so the next message can be typed right away", async () => {
     const textarea = renderInput();
     textarea.focus();
@@ -174,7 +197,11 @@ describe("MessageInput", () => {
     act(() => useMessageStore.getState().startReply(parent));
     expect(screen.getByText(/Replying to/)).toHaveTextContent("Replying to alice");
     fireEvent.keyDown(textarea, { key: "Escape" });
-    expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
+    const drawer = screen.getByText(/Replying to/).closest(".dc-reply-drawer");
+    expect(drawer).toHaveAttribute("data-open", "false");
+    expect(drawer).toHaveAttribute("aria-hidden", "true");
+    expect(drawer).toHaveTextContent("Replying to alice");
+    expect(useMessageStore.getState().replyingTo).toBeNull();
     act(() => useMessageStore.getState().startReply(parent));
     fireEvent.change(textarea, { target: { value: "my reply" } });
     fireEvent.keyDown(textarea, { key: "Enter" });

@@ -71,6 +71,20 @@ describe("VoicePanel layout switching", () => {
   });
 });
 
+describe("VoicePanel speaking feedback", () => {
+  it("updates tile and avatar rings from the existing speaking state", () => {
+    const { rerender } = render(<VoicePanel participants={[mkp()]} connectionState={ConnectionState.Connected} />);
+    const tile = screen.getByTestId("participant-tile-u1");
+    expect(tile).toHaveAttribute("data-speaking", "false");
+    expect(tile.querySelector(".dc-voice-avatar")).toHaveAttribute("data-speaking", "false");
+    rerender(<VoicePanel participants={[mkp({ isSpeaking: true })]} connectionState={ConnectionState.Connected} />);
+    expect(tile).toHaveAttribute("data-speaking", "true");
+    expect(tile.querySelector(".dc-voice-avatar")).toHaveAttribute("data-speaking", "true");
+    rerender(<VoicePanel participants={[mkp()]} connectionState={ConnectionState.Connected} />);
+    expect(tile).toHaveAttribute("data-speaking", "false");
+  });
+});
+
 describe("VoicePanel fullscreen", () => {
   it("opens FullscreenOverlay on double-click of a grid tile", async () => {
     const user = userEvent.setup();

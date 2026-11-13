@@ -152,13 +152,13 @@ export function AvatarCropper({ file, title = "Edit Image", onCancel, onApply }:
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[10002] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-[10002] flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-[360px] rounded-lg overflow-hidden shadow-2xl" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+      <div className="dc-modal-in w-[360px] max-w-full rounded-xl overflow-hidden" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-lg font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>{title}</h3>
           <p className="text-xs mt-0.5" style={{ color: "var(--color-dc-text-muted)" }}>
@@ -220,25 +220,24 @@ export function AvatarCropper({ file, title = "Edit Image", onCancel, onApply }:
           </svg>
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-5 py-4 mt-4" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+        <div className="flex items-center justify-between gap-2 px-5 py-4 mt-4 border-t border-white/5" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
           <button
             type="button"
             onClick={() => natural && fit(natural.w, natural.h)}
-            className="text-sm hover:underline"
+            className="dc-press px-3 h-9 rounded-md text-sm hover:bg-dc-bg-modifier-hover transition-colors"
             style={{ color: "var(--color-dc-text-muted)" }}
           >
             Reset
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={onCancel} className="px-4 h-9 rounded text-sm hover:underline" style={{ color: "var(--color-dc-text-normal)" }}>
+            <button type="button" onClick={onCancel} className="dc-press px-4 h-9 rounded-md text-sm hover:bg-dc-bg-modifier-hover transition-colors" style={{ color: "var(--color-dc-text-normal)" }}>
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void handleApply()}
               disabled={!natural || applying}
-              className="px-4 h-9 rounded text-sm font-medium text-white hover:brightness-110 disabled:opacity-60"
-              style={{ backgroundColor: "var(--color-dc-brand)" }}
+              className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white disabled:opacity-60"
             >
               {applying ? "Applying…" : "Apply"}
             </button>

@@ -18,13 +18,15 @@ export function MainLayout({ children }: MainLayoutProps) {
   const isHome = activeGuildId === null;
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full overflow-hidden bg-dc-bg-tertiary">
       <ServerSidebar />
-      {isHome ? <FriendsSidebar /> : <ChannelSidebar />}
-      <main className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
-        {children}
-      </main>
-      {!isHome && <MembersPanel />}
+      <div className="dc-workspace relative flex flex-1 min-w-0 overflow-hidden rounded-tl-lg">
+        {isHome ? <FriendsSidebar /> : <ChannelSidebar />}
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+          {children}
+        </main>
+        {!isHome && <MembersPanel />}
+      </div>
     </div>
   );
 }

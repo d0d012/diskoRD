@@ -399,7 +399,7 @@ export function DMCallPanel() {
 
   const noticeToast = notice ? (
     <div
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-2 rounded-md text-sm font-medium shadow-lg"
+      className="dc-elevated dc-slide-up-in fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-2 rounded-md text-sm font-medium"
       style={{ backgroundColor: "var(--color-dc-bg-floating)", color: "var(--color-dc-header-primary)" }}
       role="status"
     >
@@ -443,7 +443,7 @@ export function DMCallPanel() {
       {!hidden && !desktop && (
       <div
         ref={panelRef}
-        className="fixed z-[9000] flex flex-col rounded-lg overflow-hidden shadow-2xl border"
+        className="dc-elevated dc-pop-in fixed z-[9000] flex flex-col rounded-xl overflow-hidden border [--dc-origin:bottom_right]"
         style={{
           width: panelWidth,
           maxWidth: `calc(100vw - ${MARGIN * 2}px)`,
@@ -454,14 +454,14 @@ export function DMCallPanel() {
       >
         {/* Mini header — drag to move, double-click to snap back to the corner */}
         <div
-          className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 cursor-grab active:cursor-grabbing select-none touch-none"
+          className="flex items-center justify-between px-3 py-2 flex-shrink-0 cursor-grab active:cursor-grabbing select-none touch-none shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
           style={{ borderBottom: collapsed ? undefined : "1px solid var(--color-dc-bg-floating)" }}
           onPointerDown={startDrag}
           onDoubleClick={(e) => { if (!(e.target as Element).closest("button")) resetPosition(); }}
           title="Drag to move · double-click to reset"
         >
           <div className="flex min-w-0 items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "#23a55a" }} />
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--color-dc-online)" }} />
             <span className="text-xs font-medium truncate" style={{ color: "var(--color-dc-header-primary)" }}>
               {isConnecting ? "Connecting…" : `In call with ${call.recipientName}`}
             </span>
@@ -472,7 +472,7 @@ export function DMCallPanel() {
             {/* Mute */}
             <button
               onClick={() => setMuted(!isMuted)}
-              className="p-1 rounded transition-colors"
+              className="dc-press p-1 rounded transition-colors"
               title={isMuted ? "Unmute" : "Mute"}
               style={{ color: isMuted ? "var(--color-dc-red, #ed4245)" : "var(--color-dc-interactive-normal)" }}
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
@@ -491,7 +491,7 @@ export function DMCallPanel() {
 
             <button
               onClick={() => setDeafened(!isDeafened)}
-              className="p-1 rounded transition-colors"
+              className="dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
               title={isDeafened ? "Undeafen" : "Deafen"}
               aria-label={isDeafened ? "Undeafen" : "Deafen"}
               aria-pressed={isDeafened}
@@ -506,7 +506,7 @@ export function DMCallPanel() {
             {/* Noise Cancellation */}
             <button
               onClick={toggleNC}
-              className="p-1 rounded transition-colors"
+              className="dc-press p-1 rounded transition-colors"
               title={isNCEnabled ? "Noise cancellation on" : "Noise cancellation off"}
               style={{
                 color: isNCEnabled
@@ -534,7 +534,7 @@ export function DMCallPanel() {
             {/* Row / column layout */}
             <button
               onClick={toggleLayout}
-              className="p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+              className="dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
               title={column ? "Show participants side by side" : "Stack participants vertically"}
               aria-label={column ? "Show participants side by side" : "Stack participants vertically"}
               style={{ color: "var(--color-dc-interactive-normal)" }}
@@ -552,7 +552,7 @@ export function DMCallPanel() {
             <button
               onClick={() => setCameraChannel(cameraOn ? null : call.channelId)}
               disabled={isConnecting}
-              className="p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-40"
+              className="dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)] disabled:opacity-40"
               title={cameraOn ? "Turn off camera" : "Turn on camera"}
               aria-label={cameraOn ? "Turn off camera" : "Turn on camera"}
               aria-pressed={cameraOn}
@@ -567,7 +567,7 @@ export function DMCallPanel() {
             {/* Collapse / expand */}
             <button
               onClick={() => setCollapsed((c) => !c)}
-              className="p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+              className="dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
               title={collapsed ? "Show call" : "Minimize call"}
               aria-label={collapsed ? "Show call" : "Minimize call"}
               aria-expanded={!collapsed}
@@ -581,7 +581,7 @@ export function DMCallPanel() {
             {/* End call */}
             <button
               onClick={() => endCall(call.channelId)}
-              className="p-1 rounded transition-colors"
+              className="dc-press p-1 rounded transition-colors"
               title="End call"
               style={{ color: "var(--color-dc-red, #ed4245)" }}
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
@@ -597,7 +597,7 @@ export function DMCallPanel() {
             {/* Hide window — the call keeps running */}
             <button
               onClick={() => setCallPanelHidden(true)}
-              className="p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+              className="dc-press p-1 rounded transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
               title="Hide call window (call continues — reopen from the sidebar)"
               aria-label="Hide call window"
               style={{ color: "var(--color-dc-interactive-normal)" }}

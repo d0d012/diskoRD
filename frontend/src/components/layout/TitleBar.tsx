@@ -10,14 +10,12 @@ export function TitleBar() {
   return (
     <div
       data-tauri-drag-region
-      className="flex items-center justify-between h-8 flex-shrink-0 select-none"
-      style={{ backgroundColor: "var(--color-dc-bg-tertiary, #1e1f22)" }}
+      className="flex items-center justify-between h-8 flex-shrink-0 select-none bg-dc-bg-tertiary"
     >
       {/* Left: app name */}
       <span
         data-tauri-drag-region
-        className="pl-3 text-xs font-semibold"
-        style={{ color: "var(--color-dc-text-muted, #80848e)" }}
+        className="pl-3 text-xs font-semibold tracking-[0.02em] text-dc-text-muted"
       >
         diskoRD
       </span>
@@ -27,10 +25,7 @@ export function TitleBar() {
         {/* Minimize */}
         <button
           onClick={() => win.minimize()}
-          className="w-11 h-full flex items-center justify-center transition-colors"
-          style={{ color: "var(--color-dc-interactive-normal, #b5bac1)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+          className="w-11 h-full flex items-center justify-center text-dc-interactive-normal hover:text-dc-interactive-active hover:bg-white/10 active:bg-white/15 transition-colors duration-100"
           title="Minimize"
         >
           <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
@@ -41,10 +36,7 @@ export function TitleBar() {
         {/* Maximize */}
         <button
           onClick={() => win.toggleMaximize()}
-          className="w-11 h-full flex items-center justify-center transition-colors"
-          style={{ color: "var(--color-dc-interactive-normal, #b5bac1)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+          className="w-11 h-full flex items-center justify-center text-dc-interactive-normal hover:text-dc-interactive-active hover:bg-white/10 active:bg-white/15 transition-colors duration-100"
           title="Maximize"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
@@ -55,10 +47,7 @@ export function TitleBar() {
         {/* Close */}
         <button
           onClick={() => win.close()}
-          className="w-11 h-full flex items-center justify-center transition-colors"
-          style={{ color: "var(--color-dc-interactive-normal, #b5bac1)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#ed4245"; e.currentTarget.style.color = "#fff"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--color-dc-interactive-normal, #b5bac1)"; }}
+          className="w-11 h-full flex items-center justify-center text-dc-interactive-normal hover:bg-dc-red hover:text-white active:bg-dc-dnd active:text-white transition-colors duration-100"
           title="Close"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">

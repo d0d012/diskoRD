@@ -6,8 +6,9 @@ import { useMessageStore } from "../../stores/messageStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useNotificationStore } from "../../stores/notificationStore";
 import { useLiveUser } from "../../hooks/useLiveUser";
-import { statusColor, statusLabel } from "../../lib/avatar";
+import { statusLabel } from "../../lib/avatar";
 import { Avatar } from "../ui/Avatar";
+import { PresenceDot } from "../ui/PresenceDot";
 import { UserProfileCard } from "../../features/profile/UserProfileCard";
 import { InviteModal } from "../../features/guild/InviteModal";
 import { CreateChannelModal } from "../../features/channel/CreateChannelModal";
@@ -114,7 +115,7 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
 
   return (
     <>
-      <div className="relative flex items-center">
+      <div className="relative flex items-center mx-2">
         {/* Unread pill on the left edge */}
         {unread && !active && (
           <div
@@ -124,30 +125,18 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
         )}
         <div
           onClick={onClick}
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm cursor-pointer group transition-colors relative flex-1"
-          style={{
-            backgroundColor: active ? "var(--color-dc-bg-modifier-selected)" : "",
-            color: active
-              ? "var(--color-dc-interactive-active)"
+          className={`flex items-center h-8 gap-1.5 px-2 rounded-[6px] text-[15px] font-medium cursor-pointer group transition-colors duration-100 motion-reduce:transition-none relative flex-1 min-w-0 ${
+            active
+              ? "bg-[var(--color-dc-bg-modifier-selected)] text-[var(--color-dc-header-primary)]"
               : unread
-              ? "var(--color-dc-header-primary)"
-              : "var(--color-dc-interactive-normal)",
-          }}
-          onMouseEnter={(e) => {
-            if (!active) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)";
-            e.currentTarget.style.color = active ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-hover)";
-          }}
-          onMouseLeave={(e) => {
-            if (!active) e.currentTarget.style.backgroundColor = "";
-            e.currentTarget.style.color = active
-              ? "var(--color-dc-interactive-active)"
-              : unread
-              ? "var(--color-dc-header-primary)"
-              : "var(--color-dc-interactive-normal)";
-          }}
+                ? "text-[var(--color-dc-header-primary)] hover:bg-[var(--color-dc-bg-modifier-hover)]"
+                : "text-[var(--color-dc-text-muted)] hover:text-[var(--color-dc-text-body)] hover:bg-[var(--color-dc-bg-modifier-hover)]"
+          }`}
         >
         {channel.type === "text" ? (
-          <span className="text-base leading-none flex-shrink-0" style={{ color: "var(--color-dc-channel-default)" }}>#</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className={`flex-shrink-0 transition-colors duration-100 motion-reduce:transition-none ${active || unread ? "text-[var(--color-dc-header-primary)]" : "text-[var(--color-dc-channel-default)] group-hover:text-[var(--color-dc-text-body)]"}`}>
+            <path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16" />
+          </svg>
         ) : (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0" style={{ color: "var(--color-dc-channel-default)" }}>
             <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"/>
@@ -301,18 +290,16 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
 
   return (
     <>
-      <div className="relative flex items-center">
+      <div className="relative flex items-center mx-2">
         <div
           onClick={onJoin}
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm cursor-pointer group transition-colors relative flex-1"
-          style={{
-            backgroundColor: isActive ? "var(--color-dc-bg-modifier-selected)" : "",
-            color: isActive ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)",
-          }}
-          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; e.currentTarget.style.color = "var(--color-dc-interactive-hover)"; }}
-          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = ""; e.currentTarget.style.color = isActive ? "var(--color-dc-interactive-active)" : "var(--color-dc-interactive-normal)"; }}
+          className={`flex items-center h-8 gap-1.5 px-2 rounded-[6px] text-[15px] font-medium cursor-pointer group transition-colors duration-100 motion-reduce:transition-none relative flex-1 min-w-0 ${
+            isActive
+              ? "bg-[var(--color-dc-bg-modifier-selected)] text-[var(--color-dc-header-primary)]"
+              : "text-[var(--color-dc-text-muted)] hover:text-[var(--color-dc-text-body)] hover:bg-[var(--color-dc-bg-modifier-hover)]"
+          }`}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0" style={{ color: "var(--color-dc-channel-default)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={`flex-shrink-0 transition-colors duration-100 motion-reduce:transition-none ${isActive ? "text-[var(--color-dc-header-primary)]" : "text-[var(--color-dc-channel-default)] group-hover:text-[var(--color-dc-text-body)]"}`}>
             <path d="M12 3c-4.97 0-9 4.03-9 9v4a3 3 0 0 0 3 3h1a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H6.29A7 7 0 0 1 19 12h-1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1a3 3 0 0 0 3-3v-4c0-4.97-4.03-9-9-9z"/>
           </svg>
           <span className="truncate flex-1">{channel.name}</span>
@@ -337,27 +324,24 @@ function VoiceChannelItem({ channel, guildId, isOwner, isActive, isConnected, on
 
       {/* Participants list under channel */}
       {(voiceParticipants?.length ?? 0) > 0 && (
-        <div className="ml-6 mb-1">
+        <div className="ml-7 mr-2 mb-1">
           {voiceParticipants!.map((p) => (
             <div
               key={p.userId}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded cursor-default"
+              className="group flex items-center gap-2 px-2 py-1 rounded-[6px] cursor-default hover:bg-[var(--color-dc-bg-modifier-hover)] transition-colors duration-100 motion-reduce:transition-none"
               onContextMenu={p.userId !== currentUserId ? (e) => {
                 e.preventDefault();
                 setVolumeMenu({ userId: p.userId, username: p.username, x: e.clientX, y: e.clientY });
               } : undefined}
-              onMouseEnter={(e) => { if (p.userId !== currentUserId) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             >
               <div
-                className="w-5 h-5 rounded-full flex-shrink-0"
+                className="w-6 h-6 rounded-full flex-shrink-0 cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); setProfileAnchor({ userId: p.userId, rect: e.currentTarget.getBoundingClientRect() }); }}
               >
-                <VoiceParticipantAvatar userId={p.userId} username={p.username} size={20} />
+                <VoiceParticipantAvatar userId={p.userId} username={p.username} size={24} />
               </div>
               <span
-                className="text-xs truncate hover:underline cursor-pointer"
-                style={{ color: "var(--color-dc-text-muted)" }}
+                className="text-[13px] font-medium truncate cursor-pointer text-[var(--color-dc-text-muted)] group-hover:text-[var(--color-dc-text-body)] transition-colors duration-100 motion-reduce:transition-none"
                 onClick={(e) => { e.stopPropagation(); setProfileAnchor({ userId: p.userId, rect: e.currentTarget.getBoundingClientRect() }); }}
               >
                 {p.username}
@@ -402,20 +386,16 @@ function CategoryHeader({
   onAdd: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-2 py-1 group">
+    <div className="flex items-center justify-between mx-2 px-2 pt-4 pb-1 group text-[var(--color-dc-text-muted)] hover:text-[var(--color-dc-text-body)] transition-colors duration-100 motion-reduce:transition-none">
       <span
-        className="text-xs font-semibold uppercase tracking-wide cursor-default"
-        style={{ color: "var(--color-dc-channel-default)" }}
+        className="text-[11px] font-bold uppercase tracking-[0.04em] cursor-default"
       >
         {label}
       </span>
       <button
         onClick={onAdd}
-        className="opacity-0 group-hover:opacity-100 transition-opacity rounded p-0.5"
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-100 motion-reduce:transition-none rounded p-0.5"
         title={`Create ${label.slice(0, -1)}`}
-        style={{ color: "var(--color-dc-channel-default)" }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-channel-default)")}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
           <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -457,12 +437,10 @@ function UserPanel() {
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-full min-w-0">
       <div
-        className="flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors"
+        className="flex items-center gap-2 p-1 rounded-[6px]"
         title={user?.displayName ?? user?.username ?? ""}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}
       >
         {/* Avatar + status dot (clickable) */}
         <div
@@ -475,28 +453,25 @@ function UserPanel() {
             src={user?.avatarUrl}
             size={32}
             status={status}
-            ringColor="var(--color-dc-bg-tertiary)"
+            ringColor="var(--color-dc-bg-user-panel)"
           />
         </div>
 
-        <div className="flex flex-col min-w-0">
+        <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm font-semibold leading-tight truncate" style={{ color: "var(--color-dc-header-primary)" }}>
             {user?.username ?? "…"}
           </span>
-          <span className="text-xs leading-tight" style={{ color: statusColor(status) }}>
+          <span className="text-xs leading-tight" style={{ color: "var(--color-dc-text-muted)" }}>
             {statusLabel(status)}
           </span>
         </div>
 
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center flex-shrink-0">
           <button
             onClick={() => user && useShowcaseOverlayStore.getState().open(user.id)}
-            className="p-1 rounded transition-colors"
+            className="w-8 h-8 rounded-[6px] flex items-center justify-center text-[var(--color-dc-interactive-normal)] hover:text-[var(--color-dc-text-body)] hover:bg-[var(--color-dc-bg-modifier-hover)] transition-colors duration-120 motion-reduce:transition-none"
             title="My showcase"
             aria-label="My showcase"
-            style={{ color: "var(--color-dc-interactive-normal)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M4 3h16v2H4V3zm1 4h14v10H5V7zm2 2v6h10V9H7zm-3 10h16v2H4v-2z" />
@@ -504,12 +479,9 @@ function UserPanel() {
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="p-1 rounded transition-colors"
+            className="w-8 h-8 rounded-[6px] flex items-center justify-center text-[var(--color-dc-interactive-normal)] hover:text-[var(--color-dc-text-body)] hover:bg-[var(--color-dc-bg-modifier-hover)] transition-colors duration-120 motion-reduce:transition-none"
             title="User Settings"
             aria-label="User Settings"
-            style={{ color: "var(--color-dc-interactive-normal)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-dc-interactive-normal)")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.477.477 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -533,14 +505,14 @@ function UserPanel() {
       {/* Status dropdown */}
       {open && (
         <div
-          className="absolute bottom-full left-0 mb-1 w-48 rounded-lg py-1 shadow-xl z-50"
-          style={{ backgroundColor: "var(--color-dc-bg-floating, #18191c)", border: "1px solid var(--color-dc-bg-modifier-hover)" }}
+          className="dc-elevated dc-pop-in absolute bottom-full left-0 mb-1 w-48 rounded-lg p-1 z-50 [--dc-origin:bottom_left]"
+          style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
         >
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => { void setStatus(opt.value).catch(() => {}); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left"
+              className="dc-press w-full flex items-center gap-2.5 px-2 py-2 rounded text-sm transition-colors text-left"
               style={{
                 backgroundColor: status === opt.value ? "var(--color-dc-bg-modifier-selected)" : "transparent",
                 color: "var(--color-dc-text-normal)",
@@ -548,7 +520,9 @@ function UserPanel() {
               onMouseEnter={(e) => { if (status !== opt.value) e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)"; }}
               onMouseLeave={(e) => { if (status !== opt.value) e.currentTarget.style.backgroundColor = "transparent"; }}
             >
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(opt.value) }} />
+              <span className="relative w-3 h-3 flex-shrink-0">
+                <PresenceDot status={opt.value} size={10} borderColor="var(--color-dc-bg-floating)" />
+              </span>
               <span className="flex flex-col">
                 <span>{opt.label}</span>
                 {opt.description && (
@@ -591,10 +565,8 @@ export function ChannelSidebar() {
       >
         {/* Guild header */}
         <div
-          className="h-12 px-4 flex items-center justify-between border-b flex-shrink-0 cursor-pointer transition-colors"
-          style={{ borderColor: "var(--color-dc-bg-floating)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-dc-bg-modifier-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}
+          className="relative z-10 h-12 px-4 flex items-center justify-between gap-2 flex-shrink-0"
+          style={{ boxShadow: "var(--shadow-dc-header)" }}
         >
           <span className="font-semibold text-base truncate" style={{ color: "var(--color-dc-header-primary)" }}>
             {activeGuild?.name ?? "Direct Messages"}
@@ -631,7 +603,7 @@ export function ChannelSidebar() {
         </div>
 
         {/* Channel list */}
-        <div className="flex-1 overflow-y-auto py-2 px-2">
+        <div className="dc-sidebar-scrollbar flex-1 overflow-y-auto pb-2">
           {/* Text channels */}
           {(textChannels.length > 0 || (isOwner && activeGuildId)) && (
             <div className="mb-1">
@@ -704,8 +676,8 @@ export function ChannelSidebar() {
 
         {/* User panel */}
         <div
-          className="h-[52px] flex items-center px-2 flex-shrink-0"
-          style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
+          className="h-[52px] flex items-center px-2 flex-shrink-0 border-t border-white/[0.04]"
+          style={{ backgroundColor: "var(--color-dc-bg-user-panel)" }}
         >
           <UserPanel />
         </div>

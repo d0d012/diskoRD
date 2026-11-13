@@ -1,0 +1,33 @@
+.dc-call-sonar {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+}
+
+.dc-call-sonar::before,
+.dc-call-sonar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 2px solid color-mix(in srgb, var(--color-dc-brand) 55%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes dc-call-sonar {
+    from { transform: scale(1); opacity: 0.7; }
+    to { transform: scale(1.55); opacity: 0; }
+  }
+
+  .dc-call-sonar::before,
+  .dc-call-sonar::after {
+    animation: dc-call-sonar 1.8s var(--ease-out-expo) infinite;
+  }
+
+  .dc-call-sonar::after {
+    animation-delay: 600ms;
+  }
+}

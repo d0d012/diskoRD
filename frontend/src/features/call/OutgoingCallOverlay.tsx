@@ -3,7 +3,8 @@ import { useCallStore } from "../../stores/callStore";
 import { startLoop, stopLoop } from "../../lib/sounds";
 import { useLiveUser } from "../../hooks/useLiveUser";
 import { Avatar } from "../../components/ui/Avatar";
-import { avatarColor } from "../../lib/avatar";
+import "./call.css";
+import "../voice/voice.css";
 
 export function OutgoingCallOverlay() {
   const { state, call, cancelCall } = useCallStore();
@@ -17,23 +18,17 @@ export function OutgoingCallOverlay() {
 
   if (state !== "calling" || !call) return null;
 
-  const color = avatarColor(call.recipientName);
-
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-[10000] flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
     >
       <div
-        className="flex flex-col items-center gap-5 p-8 rounded-2xl shadow-2xl"
-        style={{ backgroundColor: "var(--color-dc-bg-secondary)", minWidth: 280 }}
+        className="dc-modal-in flex flex-col items-center gap-5 p-8 rounded-xl border border-white/[0.06]"
+        style={{ backgroundColor: "var(--color-dc-bg-floating)", minWidth: 280 }}
       >
         {/* Pulsing avatar */}
-        <div className="relative">
-          <div
-            className="absolute inset-0 rounded-full animate-ping opacity-30"
-            style={{ backgroundColor: color }}
-          />
+        <div className="dc-call-sonar my-2">
           <Avatar name={live.username ?? call.recipientName} src={live.avatarUrl} size={80} />
         </div>
 
@@ -49,7 +44,7 @@ export function OutgoingCallOverlay() {
         {/* Cancel */}
         <button
           onClick={() => cancelCall(call.channelId)}
-          className="w-14 h-14 rounded-full flex items-center justify-center transition-opacity hover:opacity-80 mt-2"
+          className="dc-press dc-voice-control w-14 h-14 rounded-full flex items-center justify-center mt-2"
           title="Cancel"
           style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
         >

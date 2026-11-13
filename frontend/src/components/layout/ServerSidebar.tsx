@@ -16,19 +16,19 @@ interface ServerIconProps {
 }
 
 function ServerIcon({ guild, active, unread, mentionCount, onClick }: ServerIconProps) {
+  const [tooltipTop, setTooltipTop] = useState(0);
+  const updateTooltipTop = (element: HTMLElement) => setTooltipTop(element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2);
   return (
-    <div className="relative flex items-center mb-2 group" onClick={onClick}>
+    <div className="dc-server-entry relative flex items-center mb-2 group" onClick={onClick} onMouseEnter={(e) => updateTooltipTop(e.currentTarget)} onFocus={(e) => updateTooltipTop(e.currentTarget)}>
       {/* Active indicator pill */}
       <div
-        className={`absolute -left-3 w-1 rounded-r-full bg-white transition-all duration-200 ${
-          active ? "h-10" : unread ? "h-2 group-hover:h-5" : "h-0 group-hover:h-5"
-        }`}
+        className="dc-server-pill absolute -left-3 w-1 rounded-r-full bg-dc-text-normal"
+        data-state={active ? "active" : unread ? "unread" : "hidden"}
       />
       <div
-        className={`w-12 h-12 flex items-center justify-center cursor-pointer transition-all duration-200 overflow-hidden ${
-          active
-            ? "rounded-2xl bg-[var(--color-dc-brand)]"
-            : "rounded-[50%] group-hover:rounded-2xl bg-[var(--color-dc-bg-secondary)]"
+        data-active={active}
+        className={`dc-server-icon w-12 h-12 flex items-center justify-center cursor-pointer overflow-hidden ${
+          active ? "bg-dc-brand" : `bg-dc-bg-primary ${guild.iconUrl ? "" : "group-hover:bg-dc-brand"}`
         }`}
       >
         {guild.iconUrl ? (
@@ -48,18 +48,18 @@ function ServerIcon({ guild, active, unread, mentionCount, onClick }: ServerIcon
       {mentionCount > 0 && !active && (
         <div
           className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white font-bold pointer-events-none"
-          style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", border: "2px solid var(--color-dc-bg-tertiary)" }}
+          style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", outline: "4px solid var(--color-dc-bg-tertiary)" }}
         >
           {mentionCount > 99 ? "99+" : mentionCount}
         </div>
       )}
       {/* Tooltip */}
       <div
-        className="absolute left-16 z-50 px-3 py-1.5 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap text-sm font-semibold"
+        className="dc-elevated dc-rail-tooltip fixed left-[76px] z-50 px-3 py-1.5 rounded-[6px] pointer-events-none whitespace-nowrap text-sm font-semibold"
         style={{
           backgroundColor: "var(--color-dc-bg-floating)",
           color: "var(--color-dc-header-primary)",
-          boxShadow: "0 8px 16px rgba(0,0,0,0.24)",
+          top: tooltipTop,
         }}
       >
         {guild.name}
@@ -82,18 +82,18 @@ function Divider() {
 }
 
 function HomeButton({ active, unreadCount, onClick }: { active: boolean; unreadCount: number; onClick: () => void }) {
+  const [tooltipTop, setTooltipTop] = useState(0);
+  const updateTooltipTop = (element: HTMLElement) => setTooltipTop(element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2);
   return (
-    <div className="relative flex items-center mb-2 group" onClick={onClick}>
+    <div className="dc-server-entry relative flex items-center mb-2 group" onClick={onClick} onMouseEnter={(e) => updateTooltipTop(e.currentTarget)} onFocus={(e) => updateTooltipTop(e.currentTarget)}>
       <div
-        className={`absolute -left-3 w-1 rounded-r-full bg-white transition-all duration-200 ${
-          active ? "h-10" : "h-0 group-hover:h-5"
-        }`}
+        className="dc-server-pill absolute -left-3 w-1 rounded-r-full bg-dc-text-normal"
+        data-state={active ? "active" : unreadCount > 0 ? "unread" : "hidden"}
       />
       <div
-        className={`w-12 h-12 flex items-center justify-center cursor-pointer transition-all duration-200 ${
-          active
-            ? "rounded-2xl bg-[var(--color-dc-brand)]"
-            : "rounded-[50%] group-hover:rounded-2xl bg-[var(--color-dc-bg-secondary)] group-hover:bg-[var(--color-dc-brand)]"
+        data-active={active}
+        className={`dc-server-icon w-12 h-12 flex items-center justify-center cursor-pointer ${
+          active ? "bg-dc-brand" : "bg-dc-bg-primary group-hover:bg-dc-brand"
         }`}
       >
         <svg width="28" height="20" viewBox="0 0 71 55" fill="white" aria-hidden="true">
@@ -101,10 +101,28 @@ function HomeButton({ active, unreadCount, onClick }: { active: boolean; unreadC
         </svg>
       </div>
       {unreadCount > 0 && (
-        <div aria-label={`${unreadCount} unread direct messages`} className="absolute -top-1 -right-1min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white font-bold pointer-events-none" style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", border: "2px solid var(--color-dc-bg-tertiary)" }}>
+        <div aria-label={`${unreadCount} unread direct messages`} className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white font-bold pointer-events-none" style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", outline: "4px solid var(--color-dc-bg-tertiary)" }}>
           {formatBadge(unreadCount)}
         </div>
       )}
+      <div
+        className="dc-elevated dc-rail-tooltip fixed left-[76px] z-50 px-3 py-1.5 rounded-[6px] pointer-events-none whitespace-nowrap text-sm font-semibold"
+        style={{
+          backgroundColor: "var(--color-dc-bg-floating)",
+          color: "var(--color-dc-header-primary)",
+          top: tooltipTop,
+        }}
+      >
+        Direct Messages
+        <div
+          className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-0 h-0"
+          style={{
+            borderTop: "5px solid transparent",
+            borderBottom: "5px solid transparent",
+            borderRight: "6px solid var(--color-dc-bg-floating)",
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -125,10 +143,12 @@ export function ServerSidebar() {
     if (mentionCounts[channelId]) guildMentions[guildId] = (guildMentions[guildId] ?? 0) + mentionCounts[channelId];
   }
 
+  const [addTooltipTop, setAddTooltipTop] = useState(0);
+
   return (
     <>
       <nav
-        className="w-[72px] flex-shrink-0 flex flex-col items-center pt-3 pb-2 overflow-y-auto overflow-x-hidden"
+        className="dc-sidebar-scrollbar w-[72px] flex-shrink-0 flex flex-col items-center pt-3 pb-2 overflow-y-auto overflow-x-hidden"
         style={{ backgroundColor: "var(--color-dc-bg-tertiary)" }}
       >
         <HomeButton active={activeGuildId === null} unreadCount={dmUnread} onClick={() => setActiveGuild(null)} />
@@ -145,22 +165,13 @@ export function ServerSidebar() {
         ))}
         {/* Add server button */}
         <div
-          className="group relative flex items-center mb-2"
+          className="dc-server-entry group relative flex items-center mb-2"
           onClick={() => setShowCreateModal(true)}
+          onMouseEnter={(e) => setAddTooltipTop(e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2)}
+          onFocus={(e) => setAddTooltipTop(e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2)}
         >
           <div
-            className="w-12 h-12 flex items-center justify-center cursor-pointer rounded-[50%] transition-all duration-200"
-            style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}
-            onMouseEnter={(e) => {
-              const el = e.currentTarget;
-              el.style.borderRadius = "16px";
-              el.style.backgroundColor = "var(--color-dc-online)";
-            }}
-            onMouseLeave={(e) => {
-              const el = e.currentTarget;
-              el.style.borderRadius = "50%";
-              el.style.backgroundColor = "var(--color-dc-bg-secondary)";
-            }}
+            className="dc-server-icon w-12 h-12 flex items-center justify-center cursor-pointer bg-dc-bg-primary group-hover:bg-dc-online"
           >
             <svg
               width="18"
@@ -172,7 +183,7 @@ export function ServerSidebar() {
             >
               <path
                 d="M9 1v16M1 9h16"
-                stroke="#23a559"
+                stroke="var(--color-dc-online)"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 className="group-hover:stroke-white"
@@ -181,11 +192,11 @@ export function ServerSidebar() {
           </div>
           {/* Tooltip */}
           <div
-            className="absolute left-16 z-50 px-3 py-1.5 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap text-sm font-semibold"
+            className="dc-elevated dc-rail-tooltip fixed left-[76px] z-50 px-3 py-1.5 rounded-[6px] pointer-events-none whitespace-nowrap text-sm font-semibold"
             style={{
               backgroundColor: "var(--color-dc-bg-floating)",
               color: "var(--color-dc-header-primary)",
-              boxShadow: "0 8px 16px rgba(0,0,0,0.24)",
+              top: addTooltipTop,
             }}
           >
             Add a Server

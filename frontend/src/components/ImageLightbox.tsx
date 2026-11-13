@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { openExternal } from "../lib/externalLinks";
+import "./ImageLightbox.css";
 
 export interface LightboxImage { src: string; alt: string }
 interface Props {
@@ -110,11 +111,11 @@ function Viewer({ images, index, onChange, onClose, returnFocus, variant = "gall
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={avatar ? image.alt : "Image viewer"}
       data-avatar-lightbox={avatar ? "" : undefined}
-      className={`fixed inset-0 z-[10003] flex items-center justify-center ${avatar ? "flex-col gap-3 p-6 lightbox-in" : ""}`}
-      style={{ backgroundColor: avatar ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,.9)" }}
+      className={`dc-modal-backdrop-in fixed inset-0 z-[10003] flex items-center justify-center ${avatar ? "flex-col gap-5 p-6" : ""}`}
+      style={{ backgroundColor: "rgba(0,0,0,0.86)" }}
       onMouseDown={e => { if (avatar && e.target === e.currentTarget) onClose(); }}
       onClick={e => { if (!avatar && e.target === e.currentTarget) onClose(); }}>
-      <div ref={stage} className={avatar ? "flex items-center justify-center" : "absolute inset-0 flex items-center justify-center overflow-hidden"}
+      <div ref={stage} className={avatar ? "lightbox-stage flex items-center justify-center" : "lightbox-stage absolute inset-x-0 top-0 bottom-[120px] flex items-center justify-center overflow-hidden"}
         style={avatar ? { width: "min(512px, 80vw, 75vh)", height: "min(512px, 80vw, 75vh)", touchAction: "none" } : { touchAction: "none" }}
         onClick={e => { if (!avatar && e.target === e.currentTarget && backdropGesture.current) onClose(); }}
         onDoubleClick={e => { if (!avatar) zoomAt(view.zoom === 1 ? 2 : 1, e.clientX, e.clientY); }}
@@ -147,24 +148,25 @@ function Viewer({ images, index, onChange, onClose, returnFocus, variant = "gall
         onLostPointerCapture={e => { pointers.current.delete(e.pointerId); setDragging(pointers.current.size > 0); }}>
         <img ref={img} src={image.src} alt={image.alt} draggable={false}
           onLoad={e => setUpscaled(e.currentTarget.offsetWidth > e.currentTarget.naturalWidth || e.currentTarget.offsetHeight > e.currentTarget.naturalHeight)}
-          className={`object-contain select-none ${avatar ? "w-full h-full rounded-lg shadow-2xl" : "max-w-[90vw] max-h-[90vh]"}`}
+          className={`lightbox-image object-contain select-none ${avatar ? "max-w-full max-h-full" : "max-w-[90vw] max-h-[calc(100vh-140px)]"}`}
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`, imageRendering: upscaled || view.zoom > 1 ? "pixelated" : "auto", cursor: avatar ? "auto" : view.zoom > 1 ? dragging ? "grabbing" : "grab" : "zoom-in" }} />
       </div>
-      {avatar ? <div className="flex items-center gap-4 text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
-        <a href={image.src} target="_blank" rel="noreferrer" className="hover:underline">Open original</a>
-        <button ref={closeButton} type="button" onClick={onClose} className="hover:underline">Close</button>
+      {avatar ? <div className="lightbox-dock dc-elevated dc-slide-up-in flex h-10 items-center gap-1 rounded-full px-3 text-sm">
+        <a href={image.src} target="_blank" rel="noreferrer" className="dc-press">Open original</a>
+        <button ref={closeButton} type="button" onClick={onClose} className="dc-press">Close</button>
       </div> : <>
-        <div className="absolute top-4 right-4 flex gap-2 text-white">
-          <button aria-label="Zoom out" onClick={() => zoomCenter(1 / 1.25)}>−</button>
-          <button aria-label="Zoom in" onClick={() => zoomCenter(1.25)}>+</button>
-          <button onClick={() => navigator.clipboard?.writeText(image.src)}>Copy link</button>
-          <button onClick={() => openExternal(image.src)}>Open in browser</button>
-          <button ref={closeButton} aria-label="Close image viewer" onClick={onClose}>×</button>
+        <div className="lightbox-dock dc-elevated dc-slide-up-in absolute bottom-5 flex h-10 max-w-[calc(100vw-24px)] items-center gap-1 rounded-full px-2 text-xs">
+          <button className="dc-press text-lg" aria-label="Zoom out" onClick={() => zoomCenter(1 / 1.25)}>−</button>
+          <button className="dc-press text-lg" aria-label="Zoom in" onClick={() => zoomCenter(1.25)}>+</button>
+          <span aria-hidden="true" className="mx-1 h-4 w-px bg-white/10" />
+          <button className="dc-press" onClick={() => navigator.clipboard?.writeText(image.src)}>Copy link</button>
+          <button className="dc-press" onClick={() => openExternal(image.src)}>Open in browser</button>
+          <button className="dc-press text-lg" ref={closeButton} aria-label="Close image viewer" onClick={onClose}>×</button>
         </div>
-        {images.length > 1 && <div className="absolute bottom-5 flex items-center gap-4 text-white">
-          <button aria-label="Previous image" onClick={() => onChange?.((index + images.length - 1) % images.length)}>‹</button>
-          <span>{index + 1} / {images.length}</span>
-          <button aria-label="Next image" onClick={() => onChange?.((index + 1) % images.length)}>›</button>
+        {images.length > 1 && <div className="absolute bottom-20 flex items-center gap-4 text-white">
+          <button className="dc-elevated dc-press flex h-8 w-8 items-center justify-center rounded-full bg-dc-bg-floating text-xl" aria-label="Previous image" onClick={() => onChange?.((index + images.length - 1) % images.length)}>‹</button>
+          <span className="text-xs font-medium tabular-nums drop-shadow-md">{index + 1} / {images.length}</span>
+          <button className="dc-elevated dc-press flex h-8 w-8 items-center justify-center rounded-full bg-dc-bg-floating text-xl" aria-label="Next image" onClick={() => onChange?.((index + 1) % images.length)}>›</button>
         </div>}
       </>}
     </div>, document.body,

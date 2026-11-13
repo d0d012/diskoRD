@@ -40,8 +40,8 @@ export function UserSettingsModal({ onClose, initialSection = "voice" }: Props) 
   const navItem = (id: Section, label: string) => (
     <button
       onClick={() => setSection(id)}
-      className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-medium transition-colors ${
-        section === id ? "" : "hover:bg-[var(--color-dc-bg-modifier-hover)]"
+      className={`dc-press w-full min-h-9 text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+        section === id ? "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]" : "hover:bg-[var(--color-dc-bg-modifier-hover)]"
       }`}
       style={{
         backgroundColor: section === id ? "var(--color-dc-bg-modifier-selected)" : undefined,
@@ -54,32 +54,32 @@ export function UserSettingsModal({ onClose, initialSection = "voice" }: Props) 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      className="dc-modal-backdrop-in fixed inset-0 z-[10000] flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.72)" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-label="User Settings"
     >
       <div
-        className="w-full max-w-[960px] h-[min(680px,90vh)] flex rounded-lg overflow-hidden shadow-2xl"
+        className="dc-modal-in w-full max-w-[960px] h-[min(680px,90vh)] flex rounded-xl overflow-hidden"
         style={{ backgroundColor: "var(--color-dc-bg-primary)" }}
       >
         {/* Nav */}
-        <nav className="w-52 flex-shrink-0 p-3 flex flex-col gap-0.5" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
-          <p className="px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>
+        <nav className="w-52 flex-shrink-0 p-4 pt-6 flex flex-col gap-1 border-r border-black/15" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+          <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
             My Account
           </p>
           {navItem("profile", "My Profile")}
-          <p className="px-2.5 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>
+          <p className="px-3 pt-5 pb-2 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--color-dc-text-muted)" }}>
             App Settings
           </p>
           {navItem("voice", "Voice & Video")}
           {navItem("permissions", "Permissions")}
-          <div className="my-2 h-px" style={{ backgroundColor: "var(--color-dc-bg-modifier-hover)" }} />
+          <div className="my-3 mx-3 h-px" style={{ backgroundColor: "var(--color-dc-bg-modifier-hover)" }} />
           <button
             onClick={() => setConfirmLogout(true)}
-            className="w-full text-left px-2.5 py-1.5 rounded text-sm font-medium transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+            className="dc-press w-full min-h-9 text-left px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-dc-red/10"
             style={{ color: "var(--color-dc-red)" }}
           >
             Log Out
@@ -88,15 +88,15 @@ export function UserSettingsModal({ onClose, initialSection = "voice" }: Props) 
 
         {/* Content */}
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-center justify-between px-6 pt-5 pb-3">
-            <h2 className="text-xl font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>
+          <div className="flex items-center justify-between px-6 py-5 mb-5 border-b border-white/5">
+            <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-dc-header-primary)" }}>
               {section === "profile" ? "My Profile" : section === "voice" ? "Voice & Video" : "Permissions"}
             </h2>
             <button
               onClick={onClose}
               aria-label="Close settings"
               title="Close (Esc)"
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+              className="dc-press w-9 h-9 rounded-full border border-dc-interactive-muted/60 flex items-center justify-center transition-colors hover:bg-dc-bg-modifier-hover hover:border-dc-interactive-normal"
               style={{ color: "var(--color-dc-interactive-normal)" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -111,19 +111,19 @@ export function UserSettingsModal({ onClose, initialSection = "voice" }: Props) 
       </div>
 
       {confirmLogout && (
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="w-80 rounded-lg p-5 shadow-xl" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+        <div className="dc-modal-backdrop-in fixed inset-0 z-[10001] flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.72)" }}>
+          <div className="dc-modal-in w-80 rounded-xl p-5 overflow-hidden" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
             <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--color-dc-header-primary)" }}>Log Out</h3>
             <p className="text-sm mb-5" style={{ color: "var(--color-dc-text-muted)" }}>Are you sure you want to log out?</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmLogout(false)} className="px-4 py-2 rounded text-sm hover:underline"
+            <div className="-mx-5 -mb-5 flex justify-end gap-2 px-5 py-4 border-t border-white/5 bg-dc-bg-secondary">
+              <button onClick={() => setConfirmLogout(false)} className="dc-press px-4 h-9 rounded-md text-sm hover:bg-dc-bg-modifier-hover transition-colors"
                 style={{ color: "var(--color-dc-text-normal)" }}>
                 Cancel
               </button>
               <button
                 autoFocus
                 onClick={() => { onClose(); logout(); }}
-                className="px-4 py-2 rounded text-sm font-medium text-white hover:brightness-110"
+                className="dc-press px-4 h-9 rounded-md text-sm font-medium text-white hover:brightness-110 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
                 style={{ backgroundColor: "var(--color-dc-red)" }}
               >
                 Log Out
@@ -154,7 +154,7 @@ function useDevices() {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--color-dc-header-secondary, var(--color-dc-text-muted))" }}>
+    <h3 className="text-[11px] font-bold uppercase tracking-wider mb-2.5" style={{ color: "var(--color-dc-header-secondary, var(--color-dc-text-muted))" }}>
       {children}
     </h3>
   );
@@ -177,7 +177,7 @@ function DeviceSelect({ label, kind, devices, value, onChange, disabled }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full h-10 px-3 rounded text-sm outline-none disabled:opacity-50"
+        className="w-full h-10 px-3 rounded-md text-sm outline-none border border-black/30 focus:border-dc-brand focus:shadow-[0_0_0_2px_rgba(88,101,242,0.25)] transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none disabled:opacity-50"
         style={{ backgroundColor: "var(--color-dc-bg-tertiary)", color: "var(--color-dc-text-normal)" }}
       >
         <option value="">Default</option>
@@ -204,8 +204,7 @@ function VoiceSettings() {
           <span className="flex-1">Device names are hidden until diskoRD can use your microphone.</span>
           <button
             onClick={() => requestPermission("microphone").then(refresh)}
-            className="px-3 py-1.5 rounded text-sm font-medium text-white hover:brightness-110"
-            style={{ backgroundColor: "var(--color-dc-brand)" }}
+            className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white"
           >
             Allow
           </button>
@@ -248,10 +247,10 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+      className="dc-press relative w-10 h-6 rounded-full transition-colors flex-shrink-0 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dc-brand"
       style={{ backgroundColor: checked ? "var(--color-dc-online)" : "var(--color-dc-interactive-muted)" }}
     >
-      <span className="absolute top-1 w-4 h-4 rounded-full bg-white transition-[left]" style={{ left: checked ? 20 : 4 }} />
+      <span className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-[left] duration-150 motion-reduce:transition-none" style={{ left: checked ? 20 : 4 }} />
     </button>
   );
 }
@@ -301,8 +300,8 @@ function MicTest() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => { setError(""); setTesting((t) => !t); }}
-          className="px-4 h-9 rounded text-sm font-medium text-white hover:brightness-110 flex-shrink-0"
-          style={{ backgroundColor: testing ? "var(--color-dc-red)" : "var(--color-dc-brand)" }}
+          className={`dc-press px-4 h-9 rounded-md text-sm font-medium text-white flex-shrink-0 ${testing ? "hover:brightness-110" : "dc-btn-primary"}`}
+          style={{ backgroundColor: testing ? "var(--color-dc-red)" : undefined }}
         >
           {testing ? "Stop Testing" : "Let's Check"}
         </button>
@@ -367,7 +366,7 @@ function PermissionSettings() {
           : state === "prompt" ? { text: "Not asked yet", color: "var(--color-dc-idle)" }
           : { text: "Unknown", color: "var(--color-dc-text-muted)" };
         return (
-          <div key={kind} className="flex items-center gap-4 rounded-lg p-4" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
+          <div key={kind} className="flex items-center gap-4 rounded-lg border border-white/5 p-4" style={{ backgroundColor: "var(--color-dc-bg-secondary)" }}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold" style={{ color: "var(--color-dc-header-primary)" }}>{label}</span>
@@ -382,8 +381,7 @@ function PermissionSettings() {
               <button
                 onClick={() => allow(kind)}
                 disabled={busy === kind}
-                className="px-3 py-1.5 rounded text-sm font-medium text-white hover:brightness-110 disabled:opacity-60"
-                style={{ backgroundColor: "var(--color-dc-brand)" }}
+                className="dc-btn-primary dc-press px-4 h-9 rounded-md text-sm font-medium text-white disabled:opacity-60"
               >
                 {busy === kind ? "Waiting…" : "Allow"}
               </button>
@@ -391,7 +389,7 @@ function PermissionSettings() {
             {systemSettings && (
               <button
                 onClick={() => openSystemPrivacySettings(kind)}
-                className="px-3 py-1.5 rounded text-sm font-medium transition-colors hover:bg-[var(--color-dc-bg-modifier-hover)]"
+                className="dc-press px-3 h-9 rounded-md text-sm font-medium transition-colors hover:bg-dc-bg-modifier-hover"
                 style={{ color: "var(--color-dc-text-normal)", border: "1px solid var(--color-dc-bg-modifier-hover)" }}
               >
                 Open Settings

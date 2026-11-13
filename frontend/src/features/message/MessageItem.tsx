@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Message } from "../../types";
+import "./message.css";
 import { useMessageStore } from "../../stores/messageStore";
 import { useMessageMenuStore } from "../../stores/messageMenuStore";
 import { useLiveUser } from "../../hooks/useLiveUser";
@@ -42,7 +43,6 @@ export function MessageItem({ message, isGrouped }: Props) {
   const closeMenu = useMessageMenuStore((s) => s.close);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
-  const [hovered, setHovered] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -113,30 +113,61 @@ export function MessageItem({ message, isGrouped }: Props) {
     <div
       ref={rowRef}
       tabIndex={-1}
-      className="group flex flex-wrap gap-x-4 px-4 py-0.5 rounded transition-colors relative outline-none"
+      className={`group relative flex flex-wrap gap-x-4 px-4 rounded-none outline-none transition-colors duration-150 motion-reduce:transition-none hover:bg-dc-bg-message-hover ${isGrouped ? "mt-0 py-0.5" : "mt-[17px] py-1"} ${menuOpen ? "bg-dc-bg-message-hover" : ""}`}
       data-message-id={message.id}
-      style={{
-        paddingTop: isGrouped ? "2px" : "16px",
-        backgroundColor: hovered || menuOpen ? "var(--color-dc-bg-modifier-hover)" : "transparent",
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onContextMenu={handleContextMenu}
       onKeyDown={handleRowKeyDown}
     >
       <MessageDecorations decorations={message.decorations} />
-      <button
-        type="button"
-        title="Reply"
-        aria-label="Reply"
-        onClick={() => startReply(message)}
-        className="absolute right-4 -top-3 hidden group-hover:block focus:block rounded px-2 py-1 text-xs shadow"
-        style={{ backgroundColor: "var(--color-dc-bg-floating)" }}
-      >Reply</button>
+      <div
+        className={`dc-message-toolbar absolute -top-4 right-4 z-10 flex h-8 items-center rounded-[6px] bg-dc-bg-secondary p-0.5 transition-opacity duration-150 motion-reduce:transition-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto has-[[aria-expanded=true]]:opacity-100 has-[[aria-expanded=true]]:pointer-events-auto ${menuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      >
+        <AddReactionButton messageId={message.id} channelId={message.channelId} />
+        <button
+          type="button"
+          title="Reply"
+          aria-label="Reply"
+          onClick={() => startReply(message)}
+          className="dc-message-action dc-press flex h-7 w-7 items-center justify-center rounded-[4px] text-dc-interactive-normal transition-colors duration-150"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M10 9V5l-7 7 7 7v-4c6 0 9 2 11 5-1-7-4-11-11-11z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          title="Stick Pixel Art"
+          aria-label="Stick Pixel Art"
+          onClick={() => setDecorating(true)}
+          className="dc-message-action dc-press flex h-7 w-7 items-center justify-center rounded-[4px] text-dc-interactive-normal transition-colors duration-150"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h4v4h-4v-4zm4 4h4v4h-4v-4z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          title="More"
+          aria-label="More"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            openMenu(message.id, rect.right, rect.bottom + 4);
+          }}
+          className="dc-message-action dc-press flex h-7 w-7 items-center justify-center rounded-[4px] text-dc-interactive-normal transition-colors duration-150"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="19" cy="12" r="2" />
+          </svg>
+        </button>
+      </div>
 
       {message.referencedMessage && (
         <div className="relative w-full pl-14 mb-1">
-          <span aria-hidden="true" className="reply-spine absolute select-none pointer-events-none" />
+          <span aria-hidden="true" className="reply-spine absolute select-none pointer-events-none" style={{ left: 20, top: 10, width: 32, height: 12, borderColor: "var(--color-dc-bg-message-hover)" }} />
           <button type="button" onClick={jumpToReply} className="reply-preview flex max-w-full items-center gap-1.5 text-xs leading-4 text-left">
             {message.referencedMessage.deleted ? (
               <span className="italic truncate">Original message was deleted</span>
@@ -161,7 +192,7 @@ export function MessageItem({ message, isGrouped }: Props) {
       )}
 
       {/* Out-of-flow timestamp cannot wrap or change a grouped row's height. */}
-      <div className="relative w-10 flex-shrink-0 select-none" style={{ WebkitUserSelect: "none" }}>
+      <div className="dc-message-avatar relative w-10 flex-shrink-0 select-none" style={{ WebkitUserSelect: "none" }}>
         {!isGrouped ? (
           <button
             onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
@@ -182,17 +213,17 @@ export function MessageItem({ message, isGrouped }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
+      <div className="dc-message-body flex-1 min-w-0">
         {!isGrouped && (
-          <div className="flex items-baseline gap-2 mb-0.5">
+          <div className="flex items-baseline gap-1 mb-0.5">
             <span
-              className="font-semibold text-sm hover:underline cursor-pointer"
+              className="font-medium text-[15px] leading-[22px] hover:underline cursor-pointer"
               style={{ color: "var(--color-dc-header-primary)" }}
               onClick={(e) => setProfileAnchor(e.currentTarget.getBoundingClientRect())}
             >
               {authorName}
             </span>
-            <span className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>
+            <span className="ml-1 text-xs font-normal" style={{ color: "var(--color-dc-text-muted)" }}>
               {formatDate(message.createdAt)}
             </span>
             {message.editedAt && (
@@ -245,31 +276,11 @@ export function MessageItem({ message, isGrouped }: Props) {
           {message.reactions && message.reactions.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1 items-center">
               {message.reactions.map((r) => (
-                <button
+                <ReactionPill
                   key={r.emoji}
-                  onClick={() => toggleReaction(message.id, message.channelId, r.emoji)}
-                  className="flex items-center gap-1 px-2 py-0.5 mb-1 rounded-full text-xs font-medium cursor-pointer transition-colors"
-                  style={{
-                    backgroundColor: r.selfReacted ? "rgba(88,101,242,0.15)" : "var(--color-dc-bg-tertiary)",
-                    border: `1px solid ${r.selfReacted ? "#5865f2" : "var(--color-dc-bg-floating)"}`,
-                    color: r.selfReacted ? "var(--color-dc-brand)" : "var(--color-dc-text-normal)",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!r.selfReacted) {
-                      e.currentTarget.style.backgroundColor = "var(--color-dc-background-modifier-hover)";
-                      e.currentTarget.style.border = "1px solid var(--color-dc-text-muted)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!r.selfReacted) {
-                      e.currentTarget.style.backgroundColor = "var(--color-dc-bg-tertiary)";
-                      e.currentTarget.style.border = "1px solid var(--color-dc-bg-floating)";
-                    }
-                  }}
-                >
-                  <span>{r.emoji}</span>
-                  <span className="font-semibold">{r.count}</span>
-                </button>
+                  reaction={r}
+                  onToggle={() => toggleReaction(message.id, message.channelId, r.emoji)}
+                />
               ))}
               <div className="mb-1">
                 <AddReactionButton messageId={message.id} channelId={message.channelId} />
@@ -304,5 +315,42 @@ export function MessageItem({ message, isGrouped }: Props) {
         />
       )}
     </div>
+  );
+}
+
+function ReactionPill({ reaction, onToggle }: { reaction: NonNullable<Message["reactions"]>[number]; onToggle: () => void }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
+  const previous = useRef<typeof reaction | null>(null);
+
+  useEffect(() => {
+    function replay(node: HTMLElement | null, className: string) {
+      if (!node) return;
+      node.classList.remove(className);
+      void node.offsetWidth;
+      node.classList.add(className);
+    }
+    if (previous.current ? previous.current.selfReacted !== reaction.selfReacted : reaction.selfReacted && reaction.count === 1) {
+      replay(buttonRef.current, "dc-reaction-pop");
+    }
+    if (previous.current && previous.current.count !== reaction.count) replay(countRef.current, "dc-reaction-roll");
+    previous.current = reaction;
+  }, [reaction]);
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={onToggle}
+      data-reacted={reaction.selfReacted}
+      onAnimationEnd={(e) => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove("dc-reaction-pop");
+      }}
+      className="dc-reaction dc-press mb-1 flex h-[26px] cursor-pointer items-center gap-[5px] rounded-[8px] border border-dc-border-subtle bg-dc-bg-secondary px-2 text-[13px] text-dc-interactive-normal transition-colors duration-150 hover:border-white/12 hover:bg-dc-bg-composer motion-reduce:transition-none"
+    >
+      <span className="dc-reaction-emoji inline-block">{reaction.emoji}</span>
+      <span className="inline-flex h-4 overflow-hidden font-semibold leading-4 tabular-nums">
+        <span ref={countRef} onAnimationEnd={(e) => e.currentTarget.classList.remove("dc-reaction-roll")}>{reaction.count}</span>
+      </span>
+    </button>
   );
 }

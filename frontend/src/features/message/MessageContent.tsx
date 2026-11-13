@@ -222,7 +222,7 @@ export function MessageContent({ content, attachments, mentionUsernames = [] }: 
     <div>
       {viewerIndex !== null && <ImageLightbox images={images} index={viewerIndex} onChange={setViewerIndex} onClose={() => setViewerIndex(null)} returnFocus={returnFocus} />}
       {/* Text */}
-      {!singleKlipyGif && <p className="m-0 text-sm leading-5 whitespace-pre-wrap break-words" style={{ color: "var(--color-dc-text-normal)" }}>
+      {!singleKlipyGif && <p className="m-0 text-[15px] leading-[22px] whitespace-pre-wrap break-words" style={{ color: "var(--color-dc-text-body)" }}>
         {textParts}
       </p>}
 

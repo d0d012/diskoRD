@@ -14,6 +14,7 @@ import { fitScale } from "../decorationImage";
 import { SharpArtImage } from "../SharpArtImage";
 import { decodeDoc } from "../lib/doc";
 import { MUSEUM as M, carpetTile, floorTile, glassStreaks, glintBand, lampTile, spotlight, wainscotTile, wallTile } from "./museumArt";
+import "./museum.css";
 
 const FONT = "'Silkscreen', ui-monospace, monospace";
 /** Glass case inner sizes in room pixels. */
@@ -135,12 +136,15 @@ function Vitrine({ piece, index, S, box, hero, arranging, dragging, onOpen, onPo
             borderLeft: `${S}px solid ${M.glassEdge}`,
             borderRight: `${S}px solid ${M.glassEdge}`,
             backgroundColor: "rgba(191,230,242,0.07)",
+            backgroundImage: "radial-gradient(circle at 50% 35%, rgba(88,101,242,0.12), rgba(0,0,0,0.16) 75%)",
+            boxShadow: "inset 0 2px 6px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.05)",
           }}
         >
           <SharpArtImage
             doc={piece.doc} width={piece.doc.width * artScale} height={piece.doc.height * artScale}
             alt=""
             draggable={false}
+            style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}
           />
           <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={pixelated(glassStreaks(box, box), box, box, S)} />
           <div
@@ -341,8 +345,8 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
       role="dialog"
       aria-modal="true"
       aria-label={isSelf ? "Your showcase" : `${name}'s showcase`}
-      className="fixed inset-0 z-[10001] overflow-y-auto"
-      style={{ ...pixelated(wallTile(), 8, 8, S), backgroundColor: M.wall, fontFamily: FONT }}
+      className="showcase-museum dc-modal-backdrop-in fixed inset-0 z-[10001] overflow-y-auto"
+      style={{ ...pixelated(wallTile(), 8, 8, S), backgroundColor: M.wall, fontFamily: FONT, "--museum-step": `${S}px`, "--museum-glint-from": `${-(CASE_BOX + 8) * S}px`, "--museum-glint-to": `${HERO_BOX * S}px` } as React.CSSProperties}
     >
       {/* Header: brass name sign and controls */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3" style={{ padding: `${3 * S}px ${6 * S}px`, backgroundColor: "rgba(20,12,24,0.88)", borderBottom: `${S}px solid ${M.brassDark}` }}>
@@ -400,16 +404,6 @@ export function ShowcaseMuseum({ userId, onClose }: { userId: string; onClose: (
           <div style={{ height: 16 * S }} />
         </>
       )}
-
-      <style>{`
-        .museum-glass:hover { transform: translateY(-${S}px); }
-        .museum-case:hover .museum-light { opacity: 0.45; }
-        .museum-glass:hover .museum-glint { animation: museum-glint 900ms steps(14) 1; }
-        @keyframes museum-glint { from { background-position-x: -${(CASE_BOX + 8) * S}px; } to { background-position-x: ${HERO_BOX * S}px; } }
-        .museum-btn:hover { filter: brightness(1.1); }
-        .museum-btn:active { transform: translateY(${S / 2}px); }
-        @media (prefers-reduced-motion: reduce) { .museum-glass:hover .museum-glint { animation: none; } .museum-glass:hover { transform: none; } }
-      `}</style>
 
       {viewer !== null && pieces[viewer] && (
         <ShowcaseViewer
