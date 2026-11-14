@@ -20,6 +20,10 @@ import { micConstraints } from "../../lib/mediaDevices";
 import { normalizeChannelName } from "../../lib/channelName";
 import { UserSettingsModal } from "../../features/settings/UserSettingsModal";
 
+function BoardChannelIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="flex-shrink-0"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21l4-3 4 3M7 9h5M7 13h9" /></svg>;
+}
+
 // ── Inline-editable channel item ────────────────────────────────────────────
 
 interface ChannelItemProps {
@@ -85,7 +89,7 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
           style={{ backgroundColor: "var(--color-dc-bg-modifier-selected)" }}
         >
           <span style={{ color: "var(--color-dc-channel-default)" }}>
-            {channel.type === "text" ? "#" : (
+            {channel.type === "text" ? "#" : channel.type === "whiteboard" ? <BoardChannelIcon /> : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"/>
                 <path d="M9 9a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V9z"/>
@@ -137,7 +141,7 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className={`flex-shrink-0 transition-colors duration-100 motion-reduce:transition-none ${active || unread ? "text-[var(--color-dc-header-primary)]" : "text-[var(--color-dc-channel-default)] group-hover:text-[var(--color-dc-text-body)]"}`}>
             <path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16" />
           </svg>
-        ) : (
+        ) : channel.type === "whiteboard" ? <BoardChannelIcon /> : (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="flex-shrink-0" style={{ color: "var(--color-dc-channel-default)" }}>
             <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"/>
             <path d="M9 9a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V9z"/>
@@ -549,13 +553,14 @@ export function ChannelSidebar() {
   const { activeVoiceChannelId, joinVoice } = useVoiceStore();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
-  const [createChannelType, setCreateChannelType] = useState<"text" | "voice" | null>(null);
+  const [createChannelType, setCreateChannelType] = useState<Channel["type"] | null>(null);
 
   const activeGuild = guilds.find((g) => g.id === activeGuildId);
   const isOwner = !!activeGuild && activeGuild.ownerId === user?.id;
   const guildChannels = activeGuildId ? (channels[activeGuildId] ?? []) : [];
   const textChannels = guildChannels.filter((c) => c.type === "text");
   const voiceChannels = guildChannels.filter((c) => c.type === "voice");
+  const boardChannels = guildChannels.filter((c) => c.type === "whiteboard");
 
   return (
     <>
@@ -654,6 +659,17 @@ export function ChannelSidebar() {
                     }
                   }}
                 />
+              ))}
+            </div>
+          )}
+
+          {(boardChannels.length > 0 || (isOwner && activeGuildId)) && (
+            <div className="mb-1">
+              <CategoryHeader label="Boards" onAdd={() => setCreateChannelType("whiteboard")} />
+              {boardChannels.map((ch) => (
+                <ChannelItem key={ch.id} channel={ch} guildId={activeGuildId!}
+                  active={activeChannelId === ch.id} isOwner={isOwner} unread={false} mentionCount={0}
+                  onClick={() => setActiveChannel(ch.id)} />
               ))}
             </div>
           )}

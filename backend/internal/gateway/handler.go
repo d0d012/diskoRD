@@ -48,15 +48,12 @@ func (h *Handler) ServeWS(c *fiberws.Conn) {
 		guilds = make(map[string]bool)
 	}
 
-	client := &Client{
-		hub:    h.hub,
-		conn:   c,
-		send:   make(chan []byte, 256),
-		userID: userID,
-		guilds: guilds,
-	}
+	client := newClient(h.hub, c, userID, guilds)
 
 	h.hub.register <- client
+	// Room cleanup must be able to find this connection before ReadPump can
+	// accept a subscribe (or an immediate disconnect can unregister it).
+	<-client.registered
 
 	// Send HELLO event with heartbeat interval
 	seq := atomic.LoadInt64(&h.hub.seq)

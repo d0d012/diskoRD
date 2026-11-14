@@ -29,6 +29,62 @@ interface GatewayEvent {
 
 let gatewaySocket: WebSocket | null = null;
 
+// Non-store consumers (board rooms) subscribe here. Listeners outlive the hook
+// and the socket: they are registered by components that mount independently.
+const readyListeners = new Set<() => void>();
+const closeListeners = new Set<() => void>();
+const eventListeners = new Map<string, Set<(d: unknown) => void>>();
+
+function safely(listener: () => void) {
+  try {
+    listener();
+  } catch (err) {
+    console.error("gateway listener failed", err);
+  }
+}
+
+/** Sends one gateway envelope; false when the socket is not open (nothing is queued). */
+export function sendGateway(op: string, d: unknown): boolean {
+  const ws = gatewaySocket;
+  if (ws?.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify({ op, d }));
+  return true;
+}
+
+/** Fires after every READY, i.e. after every (re)connect. Room subscriptions die with the socket. */
+export function onGatewayReady(listener: () => void): () => void {
+  readyListeners.add(listener);
+  return () => { readyListeners.delete(listener); };
+}
+
+/** Fires when the current socket closes or is torn down (not when a replaced one is retired). */
+export function onGatewayClose(listener: () => void): () => void {
+  closeListeners.add(listener);
+  return () => { closeListeners.delete(listener); };
+}
+
+/** Raw payloads for ops that are not Zustand state (BOARD_*). */
+export function onGatewayEvent(op: string, listener: (d: unknown) => void): () => void {
+  let set = eventListeners.get(op);
+  if (!set) eventListeners.set(op, set = new Set());
+  set.add(listener);
+  return () => {
+    const current = eventListeners.get(op);
+    current?.delete(listener);
+    if (current?.size === 0) eventListeners.delete(op);
+  };
+}
+
+function emitGatewayEvent(op: string, d: unknown) {
+  const set = eventListeners.get(op);
+  if (!set) return;
+  for (const listener of [...set]) safely(() => listener(d));
+}
+
+function emitGatewayClose() {
+  for (const listener of [...closeListeners]) safely(listener);
+}
+
 export function sendGatewayTyping(channelId: string, guildId: string) {
   const ws = gatewaySocket;
   if (ws?.readyState === WebSocket.OPEN) {
@@ -105,6 +161,11 @@ export function useGateway() {
         }
 
         if (event.s > seqRef.current) seqRef.current = event.s;
+
+        if (event.op.startsWith("BOARD_")) {
+          emitGatewayEvent(event.op, event.d);
+          return;
+        }
 
         switch (event.op) {
           case "SOUNDBOARD_UPDATE": {
@@ -294,6 +355,7 @@ export function useGateway() {
             for (const vs of d.voiceStates) {
               updateVoiceState(vs.channelId, { userId: vs.userId, username: vs.username }, vs.joined);
             }
+            for (const listener of [...readyListeners]) safely(listener);
             break;
           }
 
@@ -441,6 +503,7 @@ export function useGateway() {
       ws.onclose = (evt) => {
         if (destroyed || gatewaySocket !== ws) return;
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        emitGatewayClose();
         const delay = backoffMs;
         backoffMs = Math.min(backoffMs * 2, 30000);
         const reconnect = () => {
@@ -506,6 +569,7 @@ export function useGateway() {
       gatewaySocket?.close();
       if (pendingReplace && pendingReplace.readyState !== WebSocket.CLOSED) pendingReplace.close();
       gatewaySocket = null;
+      emitGatewayClose();
     };
   }, [isAuthed]);
 

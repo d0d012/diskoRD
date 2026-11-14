@@ -1,0 +1,10 @@
+export { Arrow } from './Arrow';
+export { Ellipse } from './Ellipse';
+export { Frame } from './Frame';
+export { Image } from './Image';
+export { Line } from './Line';
+export { Rect } from './Rect';
+export { Sticky } from './Sticky';
+export { Stroke } from './Stroke';
+export { Text } from './Text';
+export { BoardObjectView } from './BoardObjectView';

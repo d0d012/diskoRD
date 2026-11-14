@@ -1,0 +1,60 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #ececf4;
+  background: #20212a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.spike-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  background-image: radial-gradient(circle at 1px 1px, #585966 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.spike-viewport:active { cursor: grabbing; }
+.spike-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.spike-object { position: absolute; left: 0; top: 0; }
+.spike-object svg, .spike-object img { display: block; }
+.spike-sticky {
+  color: #30282b;
+  border-radius: 3px;
+  padding: 18px;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: pre-line;
+  box-shadow: 2px 5px 12px #0005;
+}
+.spike-text { font-size: 21px; line-height: 1.4; white-space: pre-line; }
+.spike-frame { border: 2px solid #777b90; border-radius: 6px; }
+.spike-frame span {
+  display: inline-block;
+  padding: 5px 9px;
+  background: #454859;
+  border-radius: 0 0 5px 0;
+  font-size: 16px;
+}
+.spike-panel {
+  position: fixed;
+  z-index: 1;
+  top: 10px;
+  left: 10px;
+  width: min(560px, calc(100vw - 20px));
+  max-height: calc(100vh - 20px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #666a7a;
+  border-radius: 6px;
+  background: #282a35;
+  font-size: 12px;
+}
+.spike-panel h1 { margin: 0; font-size: 15px; }
+.spike-panel p { margin: 8px 0; }
+.spike-panel button { padding: 6px 10px; margin-right: 8px; cursor: pointer; }
+.spike-panel button:disabled { cursor: default; }
+.spike-panel pre { max-height: 36vh; overflow: auto; font-size: 11px; user-select: text; }

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { MainLayout } from "../components/layout/MainLayout";
 import { TitleBar } from "../components/layout/TitleBar";
 import { useGuildStore } from "../stores/guildStore";
@@ -17,6 +17,21 @@ import { ShowcaseMuseumHost } from "../features/pixelart/museum/ShowcaseMuseum";
 import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
 import { DMCallPanel } from "../features/call/DMCallPanel";
 import { VoiceCallViewHost } from "../features/voice/VoiceCallViewHost";
+
+const WhiteboardChannel = lazy(() => import("../features/whiteboard/WhiteboardChannel").then(module => ({ default: module.WhiteboardChannel })));
+
+function BoardChannelView({ channelId, name, showMembers, onToggleMembers }: { channelId: string; name: string; showMembers: boolean; onToggleMembers: () => void }) {
+  return <div className="flex flex-col h-full min-h-0" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
+    <div className="relative z-10 h-12 px-4 flex items-center gap-2 flex-shrink-0" style={{ boxShadow: "var(--shadow-dc-header)" }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="text-[var(--color-dc-channel-default)]"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21l4-3 4 3" /></svg>
+      <span className="font-semibold truncate" style={{ color: "var(--color-dc-header-primary)" }}>{name}</span>
+      <button type="button" aria-label="Toggle members" aria-pressed={showMembers} onClick={onToggleMembers} title="Toggle members" className="dc-press ml-auto p-1.5 rounded-md text-[var(--color-dc-interactive-normal)] hover:bg-[var(--color-dc-bg-modifier-hover)]">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3" /></svg>
+      </button>
+    </div>
+    <div className="flex-1 min-h-0 relative"><Suspense fallback={<div role="status" className="p-4 text-dc-text-muted">Opening board…</div>}><WhiteboardChannel channelId={channelId} /></Suspense></div>
+  </div>;
+}
 
 function EmptyState() {
   return (
@@ -85,6 +100,7 @@ export function AppPage() {
   const { activeChannelId, activeGuildId, channels, fetchGuilds } = useGuildStore();
   const { activeDMId } = useFriendStore();
   const { participants, connectionState } = useVoice();
+  const [boardMembersId, setBoardMembersId] = useState<string | null>(null);
 
   // Connect to WS gateway (no-op for mock accounts)
   useGateway();
@@ -112,6 +128,8 @@ export function AppPage() {
   const guildChannels = activeGuildId ? (channels[activeGuildId] ?? []) : [];
   const activeChannel = guildChannels.find((c) => c.id === activeChannelId);
   const isVoiceChannel = activeChannel?.type === "voice";
+  const isBoardChannel = activeChannel?.type === "whiteboard";
+  const showBoardMembers = boardMembersId === activeChannelId;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
@@ -124,7 +142,7 @@ export function AppPage() {
       <VoiceCallViewHost />
       <TitleBar />
       <div className="flex-1 overflow-hidden">
-        <MainLayout>
+        <MainLayout showMembers={!isBoardChannel || showBoardMembers}>
           {isHome
             ? activeDMId
               ? <DMConversation />
@@ -132,7 +150,9 @@ export function AppPage() {
             : activeChannelId
               ? isVoiceChannel
                 ? <VoicePanel participants={participants} connectionState={connectionState} />
-                : <ChannelView channelId={activeChannelId} />
+                : isBoardChannel
+                  ? <BoardChannelView channelId={activeChannelId} name={activeChannel!.name} showMembers={showBoardMembers} onToggleMembers={() => setBoardMembersId(showBoardMembers ? null : activeChannelId)} />
+                  : <ChannelView channelId={activeChannelId} />
               : <EmptyState />
           }
         </MainLayout>

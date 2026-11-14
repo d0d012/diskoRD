@@ -30,6 +30,14 @@ const (
 	OpMemberRoleAdd     = "MEMBER_ROLE_ADD"
 	OpMemberRoleRemove  = "MEMBER_ROLE_REMOVE"
 
+	OpBoardSubscribe   = "BOARD_SUBSCRIBE"
+	OpBoardUnsubscribe = "BOARD_UNSUBSCRIBE"
+	OpBoardSubscribed  = "BOARD_SUBSCRIBED"
+	OpBoardCommit      = "BOARD_COMMIT"
+	OpBoardPresence    = "BOARD_PRESENCE"
+	OpBoardJoin        = "BOARD_JOIN"
+	OpBoardLeave       = "BOARD_LEAVE"
+
 	// DM call signaling
 	OpCallInvite  = "CALL_INVITE"
 	OpCallAccept  = "CALL_ACCEPT"
@@ -51,4 +59,5 @@ type routableEvent struct {
 	D       json.RawMessage `json:"d,omitempty"`
 	S       int64           `json:"s"`
 	GuildID string          `json:"guildId"`
+	RoomID  string          `json:"roomId,omitempty"`
 }

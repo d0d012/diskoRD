@@ -33,6 +33,7 @@ import (
 	"github.com/d0d012/diskord/internal/storage"
 	"github.com/d0d012/diskord/internal/user"
 	"github.com/d0d012/diskord/internal/voice"
+	"github.com/d0d012/diskord/internal/whiteboard"
 	"github.com/d0d012/diskord/pkg/config"
 	"github.com/d0d012/diskord/pkg/db"
 	"github.com/d0d012/diskord/pkg/middleware"
@@ -163,6 +164,12 @@ func main() {
 	msgHandler := message.NewHandler(msgService)
 	msgHandler.SetStorage(storageSvc)
 	message.RegisterRoutes(app, msgHandler, authMw)
+
+	whiteboardService := whiteboard.NewService(whiteboard.NewRepository(pool), guildRepo, whiteboard.NewRedisOpStore(rdb))
+	whiteboardService.SetStorage(storageSvc)
+	whiteboardService.SetPublisher(whiteboard.NewGatewayPublisher(hub))
+	hub.SetBoardReader(whiteboardService)
+	whiteboard.RegisterRoutes(app, whiteboard.NewHandler(whiteboardService), authMw)
 
 	// Serve uploaded files
 	app.Static("/uploads", cfg.Storage.Path)

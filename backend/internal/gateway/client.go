@@ -17,12 +17,23 @@ const (
 
 // Client represents a single WebSocket connection.
 type Client struct {
-	hub     *Hub
-	conn    *fiberws.Conn
-	send    chan []byte
-	userID  string
-	guildMu sync.RWMutex
-	guilds  map[string]bool // guildID → member
+	hub        *Hub
+	conn       *fiberws.Conn
+	send       chan []byte
+	userID     string
+	registered chan struct{}
+	guildMu    sync.RWMutex
+	guilds     map[string]bool // guildID → member
+
+	roomMu         sync.Mutex
+	rooms          map[string]bool
+	boardQueue     []boardMessage
+	boardBytes     int
+	boardWake      chan struct{}
+	boardOverflow  bool
+	boardClosed    bool // guarded by hub.mu
+	boardPresence  map[presenceKey]*pendingPresence
+	presenceBucket presenceBucket // guarded by roomMu
 }
 
 func (c *Client) HasGuild(guildID string) bool {
@@ -86,13 +97,48 @@ func (c *Client) ReadPump() {
 // Runs in its own goroutine per client.
 func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
+	presenceTicker := time.NewTicker(50 * time.Millisecond)
 	defer func() {
 		ticker.Stop()
+		presenceTicker.Stop()
 		c.conn.Close()
 	}()
 
+	// HELLO and READY (queued before ReadPump starts) must precede any board
+	// subscription response. Only prioritise the initial batch, so sustained
+	// guild traffic cannot starve the reliable board FIFO afterwards.
+	initial := len(c.send)
+	for i := 0; i < initial; i++ {
+		msg, ok := <-c.send
+		if !ok || c.writeFrame(msg) != nil {
+			return
+		}
+	}
 	for {
 		select {
+		case <-c.boardWake:
+			msg, overflow := c.nextBoard()
+			if overflow {
+				log.Warn().Str("userID", c.userID).Msg("gateway: board backlog exhausted; closing for resync")
+				return
+			}
+			if msg != nil && c.writeFrame(msg) != nil {
+				return
+			}
+
+		case <-presenceTicker.C:
+			// Dequeue just before each write, not a batch which could go stale
+			// while a slow socket is blocked. Bound work so pings stay timely.
+			for i := 0; i < 32; i++ {
+				msg := c.nextBoardPresence(time.Now())
+				if msg == nil {
+					break
+				}
+				if c.writeFrame(msg) != nil {
+					return
+				}
+			}
+
 		case msg, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {

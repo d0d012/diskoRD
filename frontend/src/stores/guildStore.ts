@@ -21,7 +21,7 @@ interface GuildStore {
   deleteGuild: (guildId: string) => Promise<void>;
   fetchChannels: (guildId: string) => Promise<Channel[]>;
   createInvite: (guildId: string) => Promise<string>;
-  createChannel: (guildId: string, name: string, type: "text" | "voice") => Promise<Channel>;
+  createChannel: (guildId: string, name: string, type: Channel["type"]) => Promise<Channel>;
   deleteChannel: (channelId: string, guildId: string) => Promise<void>;
   renameChannel: (channelId: string, guildId: string, name: string) => Promise<void>;
   // Roles
@@ -79,7 +79,8 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
 
   setActiveChannel: (channelId) => {
     set({ activeChannelId: channelId });
-    useMessageStore.getState().markRead(channelId);
+    const channel = Object.values(get().channels).flat().find((item) => item.id === channelId);
+    if (channel?.type === "text") useMessageStore.getState().markRead(channelId);
   },
 
   fetchGuilds: async () => {
@@ -158,7 +159,7 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
     return data.data.code as string;
   },
 
-  createChannel: async (guildId: string, name: string, type: "text" | "voice") => {
+  createChannel: async (guildId: string, name: string, type: Channel["type"]) => {
     const { data } = await api.post(`/guilds/${guildId}/channels`, { name, type });
     const channel: Channel = data.data;
     // The CHANNEL_CREATE gateway event may already have added it — upsert, don't append.

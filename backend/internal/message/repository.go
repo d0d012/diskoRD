@@ -36,18 +36,19 @@ func (r *Repository) GetChannelGuildID(ctx context.Context, channelID string) (s
 
 // ChannelContext describes whether a channel is a guild channel or a DM channel.
 type ChannelContext struct {
-	GuildID string // empty for DMs
-	IsDM    bool
-	DMUserA string
-	DMUserB string
+	GuildID     string // empty for DMs
+	ChannelType string // "text", "voice" or "whiteboard"; empty for DMs
+	IsDM        bool
+	DMUserA     string
+	DMUserB     string
 }
 
 // GetChannelContext looks up a channel in both the channels and dm_channels tables.
 func (r *Repository) GetChannelContext(ctx context.Context, channelID string) (*ChannelContext, error) {
-	var guildID string
-	err := r.db.QueryRow(ctx, `SELECT guild_id FROM channels WHERE id = $1`, channelID).Scan(&guildID)
+	var guildID, channelType string
+	err := r.db.QueryRow(ctx, `SELECT guild_id, type FROM channels WHERE id = $1`, channelID).Scan(&guildID, &channelType)
 	if err == nil {
-		return &ChannelContext{GuildID: guildID}, nil
+		return &ChannelContext{GuildID: guildID, ChannelType: channelType}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("message.Repository.GetChannelContext: %w", err)

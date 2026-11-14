@@ -12,6 +12,9 @@ import (
 	"github.com/d0d012/diskord/internal/decoration"
 )
 
+// channelTypeText is the only guild channel type that carries messages.
+const channelTypeText = "text"
+
 var mentionRe = regexp.MustCompile(`@(\w+)`)
 
 func parseMentionUsernames(content string) []string {
@@ -114,6 +117,9 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 
 	if err := s.requireMember(ctx, cc.GuildID, userID); err != nil {
 		return nil, err
+	}
+	if cc.ChannelType != channelTypeText {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "messages can only be sent in text channels")
 	}
 	ref, err := s.validateReply(ctx, channelID, req.ReplyTo)
 	if err != nil {

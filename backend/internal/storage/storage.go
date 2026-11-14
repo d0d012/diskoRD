@@ -80,7 +80,7 @@ func (s *Service) messageURL(messageID, filename string) string {
 }
 
 // messageDirRe matches the directories Save creates: one per message UUID.
-// Other top-level directories (avatars/, guild-icons/) never match.
+// Other top-level directories (avatars/, guild-icons/, board-assets/) never match.
 var messageDirRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // MessageImage is a message attachment found on disk.
@@ -268,6 +268,37 @@ func (s *Service) saveImage(kind, ownerID, mimeType string, r io.Reader, cleanup
 	}
 
 	return fmt.Sprintf("%s/uploads/%s/%s/%s", s.baseURL, kind, ownerID, filename), nil
+}
+
+// SaveBoardAsset never uses a top-level UUID directory: those belong to chat
+// messages and are scanned by ListMessageImages / backfill-attachments.
+func (s *Service) SaveBoardAsset(boardID, mimeType string, r io.Reader) (string, error) {
+	if !messageDirRe.MatchString(boardID) {
+		return "", fmt.Errorf("storage.Service.SaveBoardAsset: invalid board id")
+	}
+	url, err := s.saveImage("board-assets", boardID, mimeType, r, false)
+	if err != nil {
+		return "", fmt.Errorf("storage.Service.SaveBoardAsset: %w", err)
+	}
+	return "board-assets/" + boardID + "/" + filepath.Base(url), nil
+}
+
+// PublicURL resolves a server-generated storage key, never a client URL.
+func (s *Service) PublicURL(key string) string {
+	return s.baseURL + "/uploads/" + key
+}
+
+// DeleteBoardAsset is deliberately confined to a single board asset file.
+func (s *Service) DeleteBoardAsset(key string) error {
+	parts := strings.Split(key, "/")
+	if len(parts) != 3 || parts[0] != "board-assets" || !messageDirRe.MatchString(parts[1]) ||
+		parts[2] == "" || parts[2] == "." || parts[2] == ".." || strings.ContainsAny(parts[2], `\`) {
+		return fmt.Errorf("storage.Service.DeleteBoardAsset: invalid storage key")
+	}
+	if err := os.Remove(filepath.Join(s.basePath, filepath.FromSlash(key))); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("storage.Service.DeleteBoardAsset: %w", err)
+	}
+	return nil
 }
 
 func randomHex(n int) (string, error) {

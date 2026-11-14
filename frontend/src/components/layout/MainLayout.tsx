@@ -9,9 +9,10 @@ import { useOSBadge } from "../../hooks/useOSBadge";
 
 interface MainLayoutProps {
   children: ReactNode;
+  showMembers?: boolean;
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, showMembers = true }: MainLayoutProps) {
   useUnreadTitle();
   useOSBadge();
   const activeGuildId = useGuildStore((s) => s.activeGuildId);
@@ -25,7 +26,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         <main className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
           {children}
         </main>
-        {!isHome && <MembersPanel />}
+        {!isHome && showMembers && <MembersPanel />}
       </div>
     </div>
   );

@@ -49,7 +49,7 @@ export interface Channel {
   id: string;
   guildId: string;
   name: string;
-  type: "text" | "voice";
+  type: "text" | "voice" | "whiteboard";
   position: number;
   createdAt: string;
 }

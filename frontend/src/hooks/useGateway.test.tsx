@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refreshSession } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import { useMessageStore } from "../stores/messageStore";
-import { useGateway } from "./useGateway";
+import { onGatewayClose, onGatewayEvent, onGatewayReady, sendGateway, useGateway } from "./useGateway";
 
 vi.mock("../lib/api", async (importOriginal) => ({
   ...await importOriginal<typeof import("../lib/api")>(),
@@ -146,5 +146,64 @@ describe("useGateway liveness", () => {
     act(() => vi.advanceTimersByTime(1));
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(original.close).not.toHaveBeenCalled();
+  });
+  it("sendGateway sends an envelope only while the socket is open", () => {
+    const { unmount } = renderHook(() => useGateway());
+    const ws = MockWebSocket.instances[0];
+    expect(sendGateway("BOARD_SUBSCRIBE", { channelId: "c" })).toBe(false);
+    act(() => ws.open());
+    expect(sendGateway("BOARD_SUBSCRIBE", { channelId: "c" })).toBe(true);
+    expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ op: "BOARD_SUBSCRIBE", d: { channelId: "c" } }));
+    unmount();
+    expect(sendGateway("BOARD_SUBSCRIBE", {})).toBe(false);
+  });
+
+  it("routes BOARD_* events to listeners (not stores) and stops after unsubscribe", () => {
+    renderHook(() => useGateway());
+    const ws = MockWebSocket.instances[0];
+    act(() => ws.open());
+    const commit = vi.fn();
+    const stop = onGatewayEvent("BOARD_COMMIT", commit);
+    act(() => ws.message("BOARD_COMMIT", { seq: 1 }));
+    act(() => ws.message("BOARD_PRESENCE", { cursor: null }));
+    expect(commit).toHaveBeenCalledExactlyOnceWith({ seq: 1 });
+    stop();
+    act(() => ws.message("BOARD_COMMIT", { seq: 2 }));
+    expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it("a throwing listener cannot break the gateway or other listeners", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    renderHook(() => useGateway());
+    const ws = MockWebSocket.instances[0];
+    act(() => ws.open());
+    const second = vi.fn();
+    const stops = [onGatewayEvent("BOARD_JOIN", () => { throw new Error("boom"); }), onGatewayEvent("BOARD_JOIN", second)];
+    act(() => ws.message("BOARD_JOIN", { userId: "u" }));
+    expect(second).toHaveBeenCalledOnce();
+    stops.forEach((stop) => stop());
+    error.mockRestore();
+  });
+
+  it("fires ready on every READY and close when the current socket closes", () => {
+    renderHook(() => useGateway());
+    const ws = MockWebSocket.instances[0];
+    act(() => ws.open());
+    const ready = vi.fn();
+    const closed = vi.fn();
+    const stops = [onGatewayReady(ready), onGatewayClose(closed)];
+    const readyPayload = { presences: {}, voiceStates: [] };
+    act(() => ws.message("READY", readyPayload));
+    expect(ready).toHaveBeenCalledOnce();
+    act(() => ws.serverClose(1006));
+    expect(closed).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(1000));
+    const next = MockWebSocket.instances[1];
+    act(() => next.open());
+    act(() => next.message("READY", readyPayload));
+    expect(ready).toHaveBeenCalledTimes(2);
+    stops.forEach((stop) => stop());
+    act(() => next.message("READY", readyPayload));
+    expect(ready).toHaveBeenCalledTimes(2);
   });
 });

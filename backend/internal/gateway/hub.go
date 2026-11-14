@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
@@ -16,11 +16,28 @@ import (
 
 const redisPubSubChannel = "gateway:events"
 
+// Small database boundary; pgxpool.Pool implements it.
+type gatewayDB interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+type eventPublisher interface {
+	Publish(context.Context, string, interface{}) *redis.IntCmd
+}
+
 // Hub maintains the set of active clients and broadcasts messages.
 type Hub struct {
 	// clients maps userID → set of connections (one user may have multiple tabs)
 	clients map[string]map[*Client]bool
 	mu      sync.RWMutex
+	// rooms and connection lifecycle are guarded by mu. Lock order is hub → client.
+	rooms  map[string]*boardRoom
+	boards BoardReader
+	// Only in-flight lookups are tracked; deletion invalidation needs no
+	// permanent channel tombstones and never holds mu during database IO.
+	boardSubscriptions map[*boardSubscription]bool
+	publisher          eventPublisher
 
 	register   chan *Client
 	unregister chan *Client
@@ -38,7 +55,7 @@ type Hub struct {
 	preferred map[string]string
 
 	rdb      *redis.Client
-	db       *pgxpool.Pool
+	db       gatewayDB
 	presence *presence.Service
 	seq      int64 // monotonically increasing sequence number
 }
@@ -48,9 +65,11 @@ type presenceUpdate struct {
 	status string
 }
 
-func NewHub(rdb *redis.Client, db *pgxpool.Pool, presenceSvc *presence.Service) *Hub {
+func NewHub(rdb *redis.Client, db gatewayDB, presenceSvc *presence.Service) *Hub {
 	return &Hub{
 		clients:    make(map[string]map[*Client]bool),
+		rooms:      make(map[string]*boardRoom),
+		publisher:  rdb,
 		register:   make(chan *Client, 256),
 		unregister: make(chan *Client, 256),
 		touchCh:    make(chan string, 1024),
@@ -81,6 +100,7 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 			h.clients[client.userID][client] = true
 			h.mu.Unlock()
+			close(client.registered)
 			if firstConn {
 				preferred, ok := h.lookupPreferredStatus(context.Background(), client.userID)
 				if !ok {
@@ -95,6 +115,7 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case client := <-h.unregister:
 			h.mu.Lock()
+			h.disconnectBoardsLocked(client)
 			lastConn := false
 			if conns, ok := h.clients[client.userID]; ok {
 				if _, exists := conns[client]; exists {
@@ -141,7 +162,9 @@ func (h *Hub) PublishToGuild(guildID, op string, data interface{}) {
 		return
 	}
 
-	if err := h.rdb.Publish(context.Background(), redisPubSubChannel, payload).Err(); err != nil {
+	// Clear local subscriptions even if Redis is unavailable.
+	h.cleanupBoardEvent(routable)
+	if err := h.publisher.Publish(context.Background(), redisPubSubChannel, payload).Err(); err != nil {
 		log.Error().Err(err).Msg("gateway: redis publish")
 	}
 }
@@ -172,6 +195,11 @@ func (h *Hub) subscribeRedis(ctx context.Context) {
 
 // broadcastToGuild sends an event to all connected clients that are members of guildID.
 func (h *Hub) broadcastToGuild(event routableEvent) {
+	h.cleanupBoardEvent(event)
+	if event.RoomID != "" {
+		h.broadcastToRoom(event)
+		return
+	}
 	// Re-serialise as a plain Event (without routing metadata) for clients
 	clientEvent := Event{Op: event.Op, D: event.D, S: event.S}
 	payload, err := json.Marshal(clientEvent)
@@ -197,15 +225,24 @@ func (h *Hub) broadcastToGuild(event routableEvent) {
 
 // handleClientMessage processes an incoming WebSocket message from a client.
 func (h *Hub) handleClientMessage(c *Client, msg []byte) {
-	// Any client traffic is evidence the user is alive.
-	h.touch(c.userID)
-
 	var event Event
 	if err := json.Unmarshal(msg, &event); err != nil {
 		return
 	}
 
+	// Cursor-rate traffic must not cause a Redis round trip per frame. Pongs
+	// and heartbeats still maintain account presence while drawing.
+	if event.Op != OpBoardPresence {
+		h.touch(c.userID)
+	}
+
 	switch event.Op {
+	case OpBoardSubscribe:
+		h.handleBoardSubscribe(c, event.D)
+	case OpBoardUnsubscribe:
+		h.handleBoardUnsubscribe(c, event.D)
+	case OpBoardPresence:
+		h.handleBoardPresence(c, event.D)
 	case OpHeartbeat:
 		// The presence refresh already happened via touch above; just ack.
 		seq := atomic.LoadInt64(&h.seq)
@@ -228,6 +265,18 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 	}
 	if err := json.Unmarshal(event.D, &d); err != nil || d.ChannelID == "" {
 		return
+	}
+
+	if d.GuildID != "" {
+		if !c.HasGuild(d.GuildID) {
+			return
+		}
+		var guildID, channelType string
+		if err := h.db.QueryRow(context.Background(),
+			`SELECT guild_id, type FROM channels WHERE id = $1`, d.ChannelID,
+		).Scan(&guildID, &channelType); err != nil || guildID != d.GuildID || channelType != "text" {
+			return
+		}
 	}
 
 	var username string
@@ -488,11 +537,9 @@ func (h *Hub) AddClientGuild(userID, guildID string) {
 
 // RemoveClientGuild removes a guild from a connected user's in-memory routing set.
 func (h *Hub) RemoveClientGuild(userID, guildID string) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for client := range h.clients[userID] {
-		client.RemoveGuild(guildID)
-	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.removeClientGuildLocked(userID, guildID)
 }
 
 // NotifyUser sends an event directly to all connections for a given user.

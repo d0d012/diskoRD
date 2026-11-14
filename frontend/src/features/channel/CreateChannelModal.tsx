@@ -1,16 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import { useGuildStore } from "../../stores/guildStore";
+import type { Channel } from "../../types";
 import { normalizeChannelName, normalizeChannelNameInput } from "../../lib/channelName";
 
 interface CreateChannelModalProps {
   guildId: string;
-  defaultType?: "text" | "voice";
+  defaultType?: Channel["type"];
   onClose: () => void;
 }
 
 export function CreateChannelModal({ guildId, defaultType = "text", onClose }: CreateChannelModalProps) {
   const { createChannel } = useGuildStore();
-  const [type, setType] = useState<"text" | "voice">(defaultType);
+  const [type, setType] = useState<Channel["type"]>(defaultType);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -73,7 +74,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
           <p className="text-sm mt-1" style={{ color: "var(--color-dc-text-muted)" }}>
             in{" "}
             <span className="font-semibold" style={{ color: "var(--color-dc-text-normal)" }}>
-              Text Channels
+              {type === "whiteboard" ? "Boards" : type === "voice" ? "Voice Channels" : "Text Channels"}
             </span>
           </p>
         </div>
@@ -84,10 +85,11 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
             Channel Type
           </p>
           <div className="flex flex-col gap-2 mb-5">
-            {(["text", "voice"] as const).map((t) => (
+            {(["text", "voice", "whiteboard"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setType(t)}
+                aria-pressed={type === t}
                 className="dc-press flex items-center gap-3 px-3 py-3 rounded-lg border border-white/5 text-left transition-colors"
                 style={{
                   backgroundColor: type === t ? "var(--color-dc-bg-modifier-selected)" : "transparent",
@@ -101,6 +103,8 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
               >
                 {t === "text" ? (
                   <span className="text-2xl w-6 text-center font-medium" style={{ color: "var(--color-dc-interactive-normal)" }}>#</span>
+                ) : t === "whiteboard" ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ color: "var(--color-dc-interactive-normal)", flexShrink: 0 }}><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21l4-3 4 3M7 9h5M7 13h9" /></svg>
                 ) : (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--color-dc-interactive-normal)", flexShrink: 0 }}>
                     <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"/>
@@ -109,11 +113,12 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
                 )}
                 <div>
                   <p className="text-sm font-medium" style={{ color: "var(--color-dc-header-primary)" }}>
-                    {t === "text" ? "Text Channel" : "Voice Channel"}
+                    {t === "text" ? "Text Channel" : t === "whiteboard" ? "Board" : "Voice Channel"}
                   </p>
                   <p className="text-xs" style={{ color: "var(--color-dc-text-muted)" }}>
                     {t === "text"
                       ? "Send messages, images, GIFs, emoji, opinions, and puns"
+                      : t === "whiteboard" ? "Sketch, write, and arrange ideas on an infinite board"
                       : "Hang out together with voice, video, and screen share"}
                   </p>
                 </div>
@@ -142,6 +147,8 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
           >
             {type === "text" ? (
               <span style={{ color: "var(--color-dc-channel-default)" }}>#</span>
+            ) : type === "whiteboard" ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21l4-3 4 3" /></svg>
             ) : (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--color-dc-channel-default)" }}>
                 <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"/>
@@ -154,7 +161,7 @@ export function CreateChannelModal({ guildId, defaultType = "text", onClose }: C
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !loading && handleCreate()}
-              placeholder={type === "text" ? "new-channel" : "new-voice"}
+              placeholder={type === "text" ? "new-channel" : type === "whiteboard" ? "new-board" : "new-voice"}
               maxLength={100}
               className="dc-no-focus-ring min-w-0 flex-1 bg-transparent text-sm outline-none"
               style={{ color: "var(--color-dc-text-normal)" }}

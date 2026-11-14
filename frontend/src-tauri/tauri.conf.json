@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "diskoRD",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "identifier": "com.diskord.app",
   "build": {
     "frontendDist": "../dist",
@@ -21,7 +21,8 @@
         "fullscreen": false,
         "decorations": false,
         "transparent": false,
-        "backgroundThrottling": "disabled"
+        "backgroundThrottling": "disabled",
+        "dragDropEnabled": false
       }
     ],
     "security": {

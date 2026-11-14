@@ -79,11 +79,11 @@ func TestSendReplyValidation(t *testing.T) {
 		wantCode   int
 		wantCreate bool
 	}{
-		{"guild reply", &ChannelContext{GuildID: "guild"}, true, &MessageResponse{ID: id, ChannelID: "ch"}, 0, true},
+		{"guild reply", &ChannelContext{GuildID: "guild", ChannelType: "text"}, true, &MessageResponse{ID: id, ChannelID: "ch"}, 0, true},
 		{"DM reply", &ChannelContext{IsDM: true, DMUserA: "me", DMUserB: "you"}, false, &MessageResponse{ID: id, ChannelID: "ch"}, 0, true},
-		{"cross-channel", &ChannelContext{GuildID: "guild"}, true, &MessageResponse{ID: id, ChannelID: "other"}, 400, false},
-		{"missing or deleted", &ChannelContext{GuildID: "guild"}, true, nil, 400, false},
-		{"not a member", &ChannelContext{GuildID: "guild"}, false, &MessageResponse{ID: id, ChannelID: "ch"}, 403, false},
+		{"cross-channel", &ChannelContext{GuildID: "guild", ChannelType: "text"}, true, &MessageResponse{ID: id, ChannelID: "other"}, 400, false},
+		{"missing or deleted", &ChannelContext{GuildID: "guild", ChannelType: "text"}, true, nil, 400, false},
+		{"not a member", &ChannelContext{GuildID: "guild", ChannelType: "text"}, false, &MessageResponse{ID: id, ChannelID: "ch"}, 403, false},
 		{"not DM participant", &ChannelContext{IsDM: true, DMUserA: "a", DMUserB: "b"}, false, &MessageResponse{ID: id, ChannelID: "ch"}, 403, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

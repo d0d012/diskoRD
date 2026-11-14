@@ -79,7 +79,7 @@ func TestSendResolvesMentionsInChannelScope(t *testing.T) {
 		name, channel string
 		cc            *ChannelContext
 	}{
-		{"guild members only", "guild-channel", &ChannelContext{GuildID: "guild"}},
+		{"guild members only", "guild-channel", &ChannelContext{GuildID: "guild", ChannelType: "text"}},
 		{"DM participants only", "dm-channel", &ChannelContext{IsDM: true, DMUserA: "sender", DMUserB: "alice-id"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -160,7 +160,7 @@ func TestEditRecomputesScopedMentionsAndKeepsReply(t *testing.T) {
 		t.Run(content, func(t *testing.T) {
 			repo := &mockMessageRepo{}
 			repo.On("GetAuthorChannelAndGuild", mock.Anything, "msg").Return("author", "channel", "guild", nil)
-			repo.On("GetChannelContext", mock.Anything, "channel").Return(&ChannelContext{GuildID: "guild"}, nil)
+			repo.On("GetChannelContext", mock.Anything, "channel").Return(&ChannelContext{GuildID: "guild", ChannelType: "text"}, nil)
 			repo.On("Update", mock.Anything, "msg", content).Return(&MessageResponse{ID: "msg", ChannelID: "channel", Content: content, ReplyTo: &parentID}, nil)
 			repo.On("GetReferences", mock.Anything, []string{parentID}).Return(map[string]*ReferencedMessage{parentID: preview}, nil).Once()
 			repo.On("GetReactionsForMessages", mock.Anything, []string{"msg"}, "author").Return(map[string][]ReactionRef{}, nil)
@@ -197,4 +197,31 @@ func TestNonparticipantCannotSendDM(t *testing.T) {
 	require.ErrorAs(t, err, &httpErr)
 	assert.Equal(t, fiber.StatusForbidden, httpErr.Code)
 	repo.AssertExpectations(t)
+}
+
+func TestSendRejectsNonTextChannels(t *testing.T) {
+	for _, channelType := range []string{"voice", "whiteboard", ""} {
+		t.Run("type "+channelType, func(t *testing.T) {
+			repo := &mockMessageRepo{}
+			members := &mockGuildMembership{}
+			repo.On("GetChannelContext", mock.Anything, "ch").Return(&ChannelContext{GuildID: "guild", ChannelType: channelType}, nil)
+			members.On("IsMember", mock.Anything, "guild", "me").Return(true, nil)
+			// Create is not mocked: reaching it would panic.
+			_, err := NewService(repo, members).Send(context.Background(), "me", "ch", CreateMessageRequest{Content: "hi"})
+			var httpErr *fiber.Error
+			require.ErrorAs(t, err, &httpErr)
+			assert.Equal(t, fiber.StatusBadRequest, httpErr.Code)
+		})
+	}
+}
+
+func TestSendToWhiteboardStillChecksMembershipFirst(t *testing.T) {
+	repo := &mockMessageRepo{}
+	members := &mockGuildMembership{}
+	repo.On("GetChannelContext", mock.Anything, "ch").Return(&ChannelContext{GuildID: "guild", ChannelType: "whiteboard"}, nil)
+	members.On("IsMember", mock.Anything, "guild", "outsider").Return(false, nil)
+	_, err := NewService(repo, members).Send(context.Background(), "outsider", "ch", CreateMessageRequest{Content: "hi"})
+	var httpErr *fiber.Error
+	require.ErrorAs(t, err, &httpErr)
+	assert.Equal(t, fiber.StatusForbidden, httpErr.Code)
 }
