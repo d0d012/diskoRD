@@ -96,7 +96,6 @@ export function useGateway() {
   // Only the presence of a session matters here: token refreshes must not tear
   // down the socket, and each (re)connect reads the freshest token itself.
   const isAuthed = useAuthStore((s) => !!s.accessToken && s.accessToken !== "mock-token");
-  const { addMessage, updateMessage, removeMessage, setTyping } = useMessageStore();
   const activeChannelId = useGuildStore((s) => s.activeChannelId);
   const activeDMId = useFriendStore((s) => s.activeDMId);
   const updatePresence = useFriendStore((s) => s.updatePresence);
@@ -198,7 +197,7 @@ export function useGateway() {
             }
 
             const alreadyReceived = useMessageStore.getState().messages[msg.channelId]?.some((m) => m.id === msg.id);
-            addMessage(msg, currentActive, currentUser?.id);
+            useMessageStore.getState().addMessage(msg, currentActive, currentUser?.id);
             if (!msg.guildId && msg.author?.id !== currentUser?.id && !alreadyReceived) {
               emitDMMessage(msg);
             }
@@ -248,12 +247,12 @@ export function useGateway() {
           }
 
           case "MESSAGE_UPDATE":
-            updateMessage(event.d as Message);
+            useMessageStore.getState().updateMessage(event.d as Message);
             break;
 
           case "MESSAGE_DELETE": {
             const d = event.d as { id: string; channelId: string };
-            removeMessage(d.id, d.channelId);
+            useMessageStore.getState().removeMessage(d.id, d.channelId);
             break;
           }
 
@@ -283,7 +282,7 @@ export function useGateway() {
 
           case "TYPING_START": {
             const d = event.d as { channelId: string; userId: string; username: string };
-            setTyping(d.channelId, { userId: d.userId, username: d.username, at: Date.now() });
+            useMessageStore.getState().setTyping(d.channelId, { userId: d.userId, username: d.username, at: Date.now() });
             break;
           }
 

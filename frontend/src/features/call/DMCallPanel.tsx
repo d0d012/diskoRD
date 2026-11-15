@@ -84,6 +84,13 @@ export function DMCallPanel() {
 
   const roomRef = useRef<Room | null>(null);
   const ncCleanupRef = useRef<(() => void) | null>(null);
+  // The connect effect reads processStream through a ref so toggling noise
+  // cancellation (which changes processStream) does not tear down and reconnect
+  // the whole call; the NC rewire effect below remains the only NC reaction.
+  const processStreamRef = useRef(processStream);
+  useEffect(() => {
+    processStreamRef.current = processStream;
+  }, [processStream]);
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [connState, setConnState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [fullscreenTile, setFullscreenTile] = useState<VoiceTile | null>(null);
@@ -168,7 +175,7 @@ export function DMCallPanel() {
     let aloneTimer: ReturnType<typeof setTimeout> | null = null;
     const callChannelId = call.channelId;
 
-    const room = new Room();
+    const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
     const cleanupSoundboard = attachSoundboard(room);
 
@@ -214,7 +221,7 @@ export function DMCallPanel() {
       try {
         const rawStream = await navigator.mediaDevices.getUserMedia(micConstraints());
         if (cancelled) { rawStream.getTracks().forEach((t) => t.stop()); return; }
-        const { stream: processedStream, cleanup } = await processStream(rawStream);
+        const { stream: processedStream, cleanup } = await processStreamRef.current(rawStream);
         if (cancelled) { cleanup(); rawStream.getTracks().forEach((t) => t.stop()); return; }
         ncCleanupRef.current = cleanup;
         const processedTrack = processedStream.getAudioTracks()[0];
@@ -244,7 +251,7 @@ export function DMCallPanel() {
       roomRef.current = null;
       setParticipants([]);
     };
-  }, [state, call?.token, call?.url, refresh, processStream]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, call?.token, call?.url, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // WebKit suspends the audio context until a user gesture; resume LiveKit's playback on the next one.
   useEffect(() => {

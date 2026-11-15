@@ -27,10 +27,12 @@ function isSameAuthorAndClose(a: Message, b: Message): boolean {
 /** Distance from the bottom (px) after which the jump-to-latest button shows. */
 const JUMP_BUTTON_THRESHOLD = 300;
 
+const EMPTY_MESSAGES: Message[] = [];
+
 export function MessageList({ channelId, channelName, intro }: Props) {
-  const { messages, hasMore, fetchMessages } = useMessageStore();
-  const msgs = messages[channelId] ?? [];
-  const more = hasMore[channelId] ?? false;
+  const msgs = useMessageStore((s) => s.messages[channelId] ?? EMPTY_MESSAGES);
+  const more = useMessageStore((s) => s.hasMore[channelId] ?? false);
+  const fetchMessages = useMessageStore((s) => s.fetchMessages);
   const selfId = useAuthStore((s) => s.user?.id);
   const placeDecoration = useMessageStore((s) => s.placeDecoration);
   const placingArt = useDecorationPlacementStore((s) => (s.channelId === channelId ? s.art : null));
