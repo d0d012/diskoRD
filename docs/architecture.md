@@ -86,6 +86,10 @@ Runtime behavior that isn't obvious from a single file. For the stack and featur
 
 Manual smoke test: use two clients in a guild voice channel; open from sidebar and full voice controls, search and rapidly retrigger a sound, toggle local preview, and keep talking/navigating. Upload as an ordinary member; verify another client sees and hears it without reopening. Exercise invalid/overlong files, quota/network errors, deletion by uploader/moderator vs another member, mute/deafen/volume-zero, simultaneous senders, reconnect, switching guilds, and hangup during download/playback. Repeat built-ins in DM calls. Check WebKit/Tauri autoplay before/after a gesture, and popover positioning at viewport edges.
 
+## Message mentions (`backend/internal/message`)
+
+- Apply migration **000031** manually to index `lower(users.username)` for case-insensitive mention resolution; migrations do not run on server startup.
+
 ## Image attachments (`backend/internal/message`, `backend/internal/storage`)
 
 - `POST /channels/:id/upload` creates the message, writes the file to `{STORAGE_PATH}/{messageId}/image.{ext}` (`storage.Service.Save`), stores the public URL in `messages.attachments` (`TEXT[]`, migration **000021**), then publishes `MESSAGE_CREATE` with it. Pasted images and pixel art "Send to chat" use the same endpoint.
