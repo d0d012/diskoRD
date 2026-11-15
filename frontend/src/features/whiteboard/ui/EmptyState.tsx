@@ -46,7 +46,7 @@ export function EmptyState({ store, session, runtime, userId, notify, getViewpor
       </div>
       <strong>This board is ready for ideas.</strong>
       <span>Start from a template, pick a tool, or double-click to write.</span>
-      <div className="wb-empty-templates">
+      <div className="wb-empty-templates" data-wb-ui="">
         {TEMPLATES.map(template => (
           <button type="button" key={template.id} title={template.description}
             onClick={() => applyTemplate(template.id, { store, session, runtime, userId, notify, getViewportSize })}>

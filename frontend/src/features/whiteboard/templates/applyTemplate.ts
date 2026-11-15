@@ -1,4 +1,5 @@
 import type { BoardObject, BoardStore, ObjectId, Rank, Runtime, UserId } from '../contract';
+import { fitToBounds, getBounds, unionBounds } from '../core';
 import { createChange, safeDispatch, topRanks } from '../input/objects';
 import type { BoardNotify, SessionStore } from '../state';
 import { templateById } from './templates';
@@ -67,5 +68,8 @@ export function applyTemplate(templateId: string, options: ApplyTemplateOptions)
   if (opId === null) return null;
   const ids = objects.map(object => object.id);
   session.setSelectedIds([]);
+  // Templates are larger than a typical viewport at 100%: show all of it, never zooming in.
+  const fitted = fitToBounds(unionBounds(objects.map(getBounds)), { x: 0, y: 0, w: width, h: height }, 64);
+  if (fitted.zoom < runtime.getCamera().zoom) runtime.setCamera(fitted);
   return ids;
 }
