@@ -21,12 +21,18 @@ CREATE TABLE dm_read_states (
 );
 CREATE INDEX idx_dm_read_states_channel_id ON dm_read_states(channel_id);
 
--- Existing DMs use the same creation-time baseline as READY. Seed their
--- counters so the first post-migration message does not hide older unread DMs.
-INSERT INTO dm_read_states (user_id, channel_id, last_read_at, mention_count)
-SELECT participant.user_id, d.id, d.created_at, count(m.id)::integer
+-- Treat everything that existed before this migration as read, so the first
+-- launch after deploy does not flag every historical guild message and DM as
+-- unread. Channels/DMs created later fall back to joined_at / DM creation.
+INSERT INTO channel_read_states (user_id, channel_id, last_read_at)
+SELECT gm.user_id, c.id, now()
+FROM channels c
+JOIN guild_members gm ON gm.guild_id = c.guild_id
+WHERE c.type = 'text'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO dm_read_states (user_id, channel_id, last_read_at)
+SELECT participant.user_id, d.id, now()
 FROM dm_channels d
 CROSS JOIN LATERAL (VALUES (d.user_a_id), (d.user_b_id)) participant(user_id)
-LEFT JOIN messages m ON m.channel_id = d.id AND m.created_at > d.created_at
-    AND m.author_id IS DISTINCT FROM participant.user_id AND m.deleted_at IS NULL
-GROUP BY participant.user_id, d.id, d.created_at;
+ON CONFLICT DO NOTHING;
