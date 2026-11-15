@@ -168,6 +168,9 @@ func main() {
 	whiteboardService := whiteboard.NewService(whiteboard.NewRepository(pool), guildRepo, whiteboard.NewRedisOpStore(rdb))
 	whiteboardService.SetStorage(storageSvc)
 	whiteboardService.SetPublisher(whiteboard.NewGatewayPublisher(hub))
+	gcCtx, stopGC := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopGC()
+	go whiteboardService.RunAssetGC(gcCtx)
 	hub.SetBoardReader(whiteboardService)
 	whiteboard.RegisterRoutes(app, whiteboard.NewHandler(whiteboardService), authMw)
 

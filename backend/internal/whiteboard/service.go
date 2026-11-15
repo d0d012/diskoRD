@@ -289,7 +289,7 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 		body   storedBody
 	}
 	writes := make([]write, len(changes))
-	var assetIDs []string
+	var assetIDs, oldAssetIDs []string
 	var creates int
 	deletedIDs := []string{}
 	var placed *bounds
@@ -302,6 +302,16 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 				return nil, nil, fmt.Errorf("whiteboard.Service.apply: size stored body: %w", err)
 			}
 			previousBytes = int64(len(raw))
+			var old struct {
+				Kind    string
+				AssetID string
+			}
+			if err := json.Unmarshal(raw, &old); err != nil {
+				return nil, nil, fmt.Errorf("whiteboard.Service.apply: old asset: %w", err)
+			}
+			if old.Kind == "image" {
+				oldAssetIDs = append(oldAssetIDs, old.AssetID)
+			}
 		}
 		switch c.req.Action {
 		case ActionCreate:
@@ -428,7 +438,13 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 		}
 	}
 
-	// Phase 3: write.
+	// Phase 3: write. Touch both sides of image replacements/deletes so undo
+	// receives the same grace period as a new reference or upload.
+	if touched := dedupe(append(oldAssetIDs, assetIDs...)); len(touched) > 0 {
+		if err := tx.TouchAssets(ctx, touched); err != nil {
+			return nil, nil, fmt.Errorf("whiteboard.Service.apply: touch assets: %w", err)
+		}
+	}
 	result := &CommandResult{Seq: seq, Changes: make([]ChangeResult, len(writes))}
 	payload := &CommitPayload{
 		ChannelID: channelID, OpID: opID, Seq: seq, UserID: userID,
