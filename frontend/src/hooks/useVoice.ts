@@ -146,8 +146,10 @@ export function useVoice() {
       ncCleanupRef.current = null;
       onRoomDisconnected();
     });
-    room.on(RoomEvent.Reconnecting, () =>
-      setConnectionState(ConnectionState.Reconnecting)
+    // ConnectionStateChanged covers Reconnecting, Reconnected and SignalReconnecting,
+    // so the UI returns to Connected after a brief blip instead of staying stuck.
+    room.on(RoomEvent.ConnectionStateChanged, (s: ConnectionState) =>
+      setConnectionState(s)
     );
     room.on(RoomEvent.ParticipantConnected, refreshParticipants);
     room.on(RoomEvent.ParticipantDisconnected, refreshParticipants);
