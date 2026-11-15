@@ -10,7 +10,22 @@ vi.mock("./storage", () => ({
   },
 }));
 
-import { refreshSession, setSessionHandlers, SessionExpiredError } from "./api";
+import { refreshSession, resolveMediaUrlAgainst, setSessionHandlers, SessionExpiredError } from "./api";
+
+describe("resolveMediaUrlAgainst", () => {
+  it("prefixes relative /uploads URLs with the origin of an absolute API base (desktop)", () => {
+    expect(resolveMediaUrlAgainst("/uploads/board-assets/b/x.png", "https://diskord.example.com/api"))
+      .toBe("https://diskord.example.com/uploads/board-assets/b/x.png");
+  });
+  it("leaves relative URLs alone for a same-origin API base (web)", () => {
+    expect(resolveMediaUrlAgainst("/uploads/a/image.png", "/api")).toBe("/uploads/a/image.png");
+  });
+  it("passes absolute, blob and empty values through", () => {
+    expect(resolveMediaUrlAgainst("http://localhost:8080/uploads/a.png", "https://x.example/api")).toBe("http://localhost:8080/uploads/a.png");
+    expect(resolveMediaUrlAgainst("blob:http://tauri.localhost/1", "https://x.example/api")).toBe("blob:http://tauri.localhost/1");
+    expect(resolveMediaUrlAgainst(null, "https://x.example/api")).toBeUndefined();
+  });
+});
 
 const onRefreshed = vi.fn();
 const onExpired = vi.fn();

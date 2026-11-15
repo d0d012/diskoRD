@@ -4,6 +4,7 @@ import type { BoardStore, ImageObject, Point, ResizeHandleId, Runtime } from '..
 import type { SessionStore } from '../state/sessionStore';
 import { panCropDraft, resetCropDraft, resizeCropDraft, sourceWorldRect } from './cropDraft';
 import type { CropDraft } from './cropDraft';
+import { assetDisplayUrl } from '../assets/displayUrl';
 
 export interface CropEditorProps {
   readonly store: BoardStore;
@@ -213,10 +214,11 @@ function CropSurface({ store, session, runtime, initial }: CropSurfaceProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const src = assetDisplayUrl(initial.url);
   return <div ref={rootRef} className="wb-crop-editor" data-wb-ui="" tabIndex={-1} role="dialog" aria-label="Crop image" aria-describedby="wb-crop-help">
-    <img ref={sourceRef} className="wb-crop-source" src={initial.url} alt="" draggable={false} />
+    <img ref={sourceRef} className="wb-crop-source" src={src} alt="" draggable={false} />
     <div ref={windowRef} className="wb-crop-window" data-crop-window="">
-      <div className="wb-crop-clip"><img ref={brightRef} src={initial.url} alt="Image being cropped" draggable={false} /></div>
+      <div className="wb-crop-clip"><img ref={brightRef} src={src} alt="Image being cropped" draggable={false} /></div>
       {HANDLES.map(handle => <span key={handle} className={`wb-crop-handle wb-crop-handle--${handle}`} data-crop-handle={handle} aria-hidden="true" />)}
     </div>
     <div ref={barRef} className="wb-crop-bar">

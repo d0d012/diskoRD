@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fakeMeasurer } from '../../editing/fakeMeasurer';
 import { setTextMeasurerForTests } from '../objects/textFit';
 import { allObjects, image, sticky, text } from '../testObjects';
+import { assetDisplayUrl } from '../../assets/displayUrl';
 import { createGhostObject } from './ghostObject';
 
 beforeEach(() => setTextMeasurerForTests(fakeMeasurer));
@@ -22,7 +23,7 @@ describe('detached drag ghost renderer', () => {
 
   it('preserves image crop/pixel style and text/physical sticky presentation', () => {
     const imageNode = createGhostObject(document, image).querySelector('img')!;
-    expect(imageNode.getAttribute('src')).toBe(image.url);
+    expect(imageNode.getAttribute('src')).toBe(assetDisplayUrl(image.url));
     expect(imageNode.style.imageRendering).toBe('pixelated');
     expect(createGhostObject(document, text).querySelector('[data-wb-text]')).toHaveTextContent(text.text);
     const stickyNode = createGhostObject(document, sticky);
