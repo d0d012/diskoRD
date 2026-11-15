@@ -356,3 +356,36 @@ func TestUploadBoundedReader(t *testing.T) {
 	assert.Len(t, remaining, 99)
 	assert.Empty(t, filesUnder(t, dir))
 }
+
+// Production runs with an empty storage baseURL, so the client receives a
+// relative "/uploads/..." URL. Creating the image object with exactly that URL
+// must succeed; the desktop client resolves it against the API origin for
+// display only, and storing the resolved absolute URL would be rejected.
+func TestUploadedAssetURLRoundTripsIntoImageCreate(t *testing.T) {
+	for _, base := range []string{"", "http://localhost:3000"} {
+		t.Run("base="+base, func(t *testing.T) {
+			h, _ := assetHarness(t, base)
+			status, body := postAsset(t, testApp(h, true), chID, encodedImage(t, "png"), "file")
+			require.Equal(t, 201, status, body)
+			data := body["data"].(map[string]any)
+			url := data["url"].(string)
+			if base == "" {
+				assert.True(t, strings.HasPrefix(url, "/uploads/board-assets/"+chID+"/"), url)
+			}
+			id := h.uuid()
+			image := m{"id": id, "kind": "image", "rank": "1:a0", "version": 0, "createdBy": userID,
+				"x": 0, "y": 0, "w": 64, "h": 64, "assetId": data["id"], "url": url,
+				"width": data["width"], "height": data["height"], "crop": m{"x": 0, "y": 0, "w": 1, "h": 1}, "pixelated": false}
+			_, err := h.run(createChange(id, image))
+			require.NoError(t, err)
+
+			if base == "" {
+				resolved := h.uuid()
+				image["id"] = resolved
+				image["url"] = "https://diskord.example.com" + url
+				_, err = h.run(createChange(resolved, image))
+				assert.Equal(t, 400, httpCode(t, err), "a display-resolved URL must not be accepted as the stored url")
+			}
+		})
+	}
+}

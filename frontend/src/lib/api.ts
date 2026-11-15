@@ -11,11 +11,16 @@ export const apiBaseURL = baseURL;
  * prefix. Absolute URLs are returned unchanged.
  */
 export function resolveMediaUrl(url: string | null | undefined): string | undefined {
+  return resolveMediaUrlAgainst(url, baseURL);
+}
+
+/** `resolveMediaUrl` against an explicit API base (exported for tests). */
+export function resolveMediaUrlAgainst(url: string | null | undefined, apiBase: string): string | undefined {
   if (!url) return undefined;
   if (!url.startsWith("/")) return url;
-  if (/^https?:\/\//i.test(baseURL)) {
+  if (/^https?:\/\//i.test(apiBase)) {
     try {
-      return new URL(url, baseURL).toString();
+      return new URL(url, apiBase).toString();
     } catch {
       return url;
     }

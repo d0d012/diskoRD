@@ -6,6 +6,7 @@ import { frameLabelBounds } from '../../core';
 import { fitSticky } from '../../editing';
 import { fakeMeasurer } from '../../editing/fakeMeasurer';
 import { allObjects, arrow, frame, image, rect, sticky, stroke, text } from '../testObjects';
+import { assetDisplayUrl } from '../../assets/displayUrl';
 import { BoardObjectView } from './BoardObjectView';
 import { arrowHead, stickyTilt, strokePath } from './presentation';
 import { setTextMeasurerForTests } from './textFit';
@@ -88,7 +89,7 @@ describe('object components', () => {
 
   it('renders an image as a cropped <img> honouring the pixelated flag', () => {
     const img = mount(image).querySelector('img')!;
-    expect(img.getAttribute('src')).toBe(image.url);
+    expect(img.getAttribute('src')).toBe(assetDisplayUrl(image.url));
     // Half the source width is visible in 100 world units, so the full image is 200 wide, shifted left by 50.
     expect(img.style.left).toBe('-50px');
     expect(img.style.width).toBe('200px');

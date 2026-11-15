@@ -9,6 +9,7 @@ import {
   resolveInkCss, resolveStickyToneCss,
 } from '../../core';
 import { STICKY_LINE_HEIGHT, STICKY_PADDING, TEXT_LINE_HEIGHT } from '../../editing';
+import { assetDisplayUrl } from '../../assets/displayUrl';
 import { stickyFontSize, textFontSize } from './textFit';
 
 const strokeCache = new WeakMap<readonly StrokePoint[], Map<string, string>>();
@@ -222,7 +223,8 @@ export function paintObject(node: HTMLDivElement, object: BoardObject, editing =
     }
     case 'image': {
       const image = node.querySelector('img')!;
-      if (image.getAttribute('src') !== object.url) image.setAttribute('src', object.url);
+      const src = assetDisplayUrl(object.url);
+      if (image.getAttribute('src') !== src) image.setAttribute('src', src);
       const source = displayedSourceRect(object.crop, object, object);
       Object.assign(image.style, { left: `${source.x}px`, top: `${source.y}px`, width: `${source.w}px`, height: `${source.h}px`, imageRendering: object.pixelated ? 'pixelated' : 'auto' });
       break;
