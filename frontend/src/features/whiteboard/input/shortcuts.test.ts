@@ -22,8 +22,10 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('O'))).toEqual({ type: 'tool', tool: 'ellipse' });
     expect(matchShortcut(key('f'))).toEqual({ type: 'tool', tool: 'frame' });
     expect(matchShortcut(key('i'))).toEqual({ type: 'image' });
+    expect(matchShortcut(key('q'))).toEqual({ type: 'tool', tool: 'laser' });
+    expect(matchShortcut(key('k'))).toEqual({ type: 'stamp' });
     expect(matchShortcut(key('v', { altKey: true }))).toBeNull();
-    expect(matchShortcut(key('q'))).toBeNull();
+    expect(matchShortcut(key('j'))).toBeNull();
   });
 
   it('maps edit commands with Ctrl or Cmd', () => {

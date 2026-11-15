@@ -28,7 +28,7 @@ vi.mock('./sync/networkAdapter', async () => {
 // Real ids are lowercase UUIDs (Go uuid.String()); the local authority validates them.
 const USER_ID = '7d2f7c1e-1c1a-4f0e-9a51-2b6c3c1d0e11';
 const CHANNEL_ID = '0b9e3a52-5d0c-4f43-8f7d-9c2b1a6e5f22';
-const HINT = /A little space for big ideas/;
+const HINT = /This board is ready for ideas/;
 
 let warn: MockInstance<typeof console.warn>;
 
@@ -99,7 +99,7 @@ describe('WhiteboardChannel', () => {
     const { resolveName } = vi.mocked(createNetworkAdapter).mock.calls.at(-1)![0];
     expect(resolveName?.('u-2')).toBe('Bobby');
     expect(resolveName?.('nobody')).toBeUndefined();
-    expect(screen.getByText(/saved automatically/)).toBeInTheDocument();
+    expect(screen.getByText(HINT)).toBeInTheDocument();
     expect(screen.queryByText(/until you leave/)).toBeNull();
     unmount();
   });

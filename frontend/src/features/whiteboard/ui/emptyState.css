@@ -1,0 +1,60 @@
+/* Buddy empty state (append-only; tokens come from whiteboard.css). */
+.wb-root .wb-ui-empty[data-wb-ui-empty] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  top: 50%;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.wb-root .wb-ui-empty strong {
+  font-weight: 600;
+}
+.wb-root .wb-ui-empty[data-wb-ui-empty] span {
+  margin-top: 0;
+}
+.wb-root .wb-empty-buddy {
+  display: grid;
+  place-items: center;
+  min-height: 84px;
+  margin-bottom: 4px;
+}
+.wb-root .wb-empty-buddy img,
+.wb-root .wb-empty-buddy svg {
+  display: block;
+}
+.wb-root .wb-empty-fallback {
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+.wb-root .wb-empty-templates {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  pointer-events: auto;
+}
+.wb-root .wb-empty-templates button {
+  border: var(--wb-dock-border);
+  border-radius: var(--wb-radius-chip);
+  padding: 6px 12px;
+  background: var(--wb-dock-bg);
+  color: var(--wb-tool-hover-color);
+  font-family: var(--wb-font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform var(--wb-motion-press) var(--wb-ease-spring), background var(--wb-motion-enter) var(--wb-ease-enter);
+}
+.wb-root .wb-empty-templates button:hover {
+  background: var(--wb-tool-hover-bg);
+  color: var(--wb-primary);
+}
+.wb-root .wb-empty-templates button:active {
+  transform: scale(0.97) translateY(0.5px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-root .wb-empty-templates button { transition: none; }
+  .wb-root .wb-empty-templates button:active { transform: none; }
+}

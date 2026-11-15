@@ -226,6 +226,6 @@ export type HandleId = ResizeHandleId | EndpointHandleId;
 /** Text: e/w reflow, corners step size. Images: aspect-locked corners. */
 export type ToolId =
   | 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse'
-  | 'line' | 'arrow' | 'text' | 'frame' | 'image';
+  | 'line' | 'arrow' | 'text' | 'frame' | 'image' | 'stamp';
 /** Pen and arrow stay active; other creation tools return to select. */
 export type Unsubscribe = () => void;

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { useStore } from 'zustand';
 import { useAuthStore } from '../../stores/authStore';
 import { useUserStore } from '../../stores/userStore';
-import type { UserId } from './contract';
+import type { Point, UserId } from './contract';
 import type { ImageIngest } from './assets';
+import { StampPicker, armStamp, stampSession, useArmedStamp, type StampPlacer } from './stamps';
 import { Viewport } from './render/Viewport';
 import { TextEditor } from './editing/TextEditor';
 import { CropEditor } from './editing/CropEditor';
@@ -13,6 +14,7 @@ import { PresenceLayer } from './render/overlays/PresenceLayer';
 import { Participants } from './ui/Participants';
 import { PeoplePanel } from './ui/PeoplePanel';
 import { ImagePicker } from './ui/ImagePicker';
+import { EmptyState } from './ui/EmptyState';
 import { SyncStatusChip } from './ui/SyncStatus';
 import { Toolbar, StyleBar, ZoomControl, UndoRedo, BoardNotice } from './ui';
 import './ui/whiteboard.css';
@@ -40,17 +42,34 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
   const { store, session, runtime, notices } = resources;
   const viewport = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
-  const [connection, setConnection] = useState<{ adapter: BoardConnection['adapter']; ingest: ImageIngest } | null>(null);
+  const [connection, setConnection] = useState<{ adapter: BoardConnection['adapter']; ingest: ImageIngest; stamps: StampPlacer } | null>(null);
   const adapter = connection?.adapter ?? null;
-  // 'image' is the Image tool's whole meaning: the picker is open. Toolbar, the I shortcut and the
-  // picker's own close all just move the tool, so there is no second piece of state to disagree.
-  const pickerOpen = useStore(session, state => state.tool === 'image');
+  // 'image'/'stamp' tools mean "the picker is open"; the picker's own close and the toolbar just move the tool.
+  const tool = useStore(session, state => state.tool);
+  const pickerOpen = tool === 'image';
+  const armedStamp = useArmedStamp();
+  const stampOpen = tool === 'stamp' && armedStamp === null;
   const requestImage = useCallback(() => {
     session.setTool(session.getState().tool === 'image' ? 'select' : 'image');
+  }, [session]);
+  const requestStamp = useCallback(() => {
+    session.setTool(session.getState().tool === 'stamp' ? 'select' : 'stamp');
   }, [session]);
   const closePicker = useCallback(() => {
     if (session.getState().tool === 'image') session.setTool('select');
   }, [session]);
+  const closeStampPicker = useCallback(() => {
+    if (session.getState().tool === 'stamp') session.setTool('select');
+  }, [session]);
+  // The armed sticker lives outside React state so the controller's click hook stays stable.
+  const stampsRef = useRef<StampPlacer | null>(null);
+  useEffect(() => { stampsRef.current = connection?.stamps ?? null; }, [connection]);
+  const placeStamp = useCallback((world: Point) => {
+    const armed = stampSession.getState().armedId;
+    if (!armed) { session.setTool('select'); return; }
+    void stampsRef.current?.place(armed, world);
+  }, [session]);
+  useEffect(() => { if (tool !== 'stamp') armStamp(null); }, [tool]);
   const ids = useSyncExternalStore(store.subscribeIds, store.getObjectIds);
   useEffect(() => {
     const element = viewport.current;
@@ -59,9 +78,9 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
     let started: Promise<void>;
     try {
       // Identities come from `resources` (the store's own), never from props again.
-      live = connectBoard(resources, { element, resolveName, onRequestImage: requestImage });
+      live = connectBoard(resources, { element, resolveName, onRequestImage: requestImage, onRequestStamp: requestStamp, onStampPlace: placeStamp });
       started = live.started;
-      setConnection({ adapter: live.adapter, ingest: live.ingest });
+      setConnection({ adapter: live.adapter, ingest: live.ingest, stamps: live.stamps });
     } catch (cause) {
       started = Promise.reject(cause); // e.g. non-UUID identities: report, never crash
     }
@@ -76,13 +95,13 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
       live?.dispose();
       setConnection(null);
     };
-  }, [resources, requestImage]);
+  }, [resources, requestImage, requestStamp, placeStamp]);
   const ui = { store, session, runtime };
   return <Viewport ref={viewport} store={store} session={session} runtime={runtime}>
     {adapter && <PresenceLayer adapter={adapter} runtime={runtime} store={store} selfUserId={userId} />}
     <TextEditor store={store} session={session} runtime={runtime} onNotice={notices.notify} />
     <CropEditor store={store} session={session} runtime={runtime} />
-    {!ids.length && <div className="wb-ui-empty" aria-live="polite">A little space for big ideas.<span>Pick a tool below, or double-click to start writing.</span><small>Changes are saved automatically and shared live</small></div>}
+    {!ids.length && <EmptyState store={store} session={session} runtime={runtime} userId={userId} notify={notices.notify} getViewportSize={() => viewport.current?.getBoundingClientRect() ?? null} />}
     {error && <div data-wb-ui className="wb-ui-start-error" role="alert">{error}</div>}
     <BoardNotice notices={notices} />
     {adapter && <><Participants adapter={adapter} selfUserId={userId} /><SyncStatusChip adapter={adapter} /></>}
@@ -92,6 +111,9 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
         closePicker();
         void connection.ingest.addFiles(files, { pixelated });
       }} />
+    </div>}
+    {stampOpen && connection && <div data-wb-ui className="wb-assets-anchor">
+      <StampPicker onClose={closeStampPicker} onPick={armStamp} />
     </div>}
     <Toolbar {...ui} /><StyleBar {...ui} /><ZoomControl {...ui} /><UndoRedo {...ui} />
   </Viewport>;

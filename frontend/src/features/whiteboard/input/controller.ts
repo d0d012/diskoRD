@@ -24,6 +24,10 @@ export interface InputControllerOptions {
   readonly userId: UserId;
   /** The Image shortcut (I) was pressed; the host opens its picker. */
   readonly onRequestImage?: () => void;
+  /** The Stamp shortcut (K) was pressed; the host toggles the stamp picker. */
+  readonly onRequestStamp?: () => void;
+  /** A left click while the Stamp tool is armed places the armed sticker here. */
+  readonly onStampPlace?: (world: Point) => void;
   /**
    * Image files pasted (`at` = pointer, or null with no pointer over the board)
    * or dropped (`at` = drop point), in world space. Without this, paste/drop of
@@ -80,7 +84,7 @@ function cursorFor(tool: string, spaceHeld: boolean, panning: boolean): string {
  * finished gesture performs at most one store dispatch.
  */
 export function createInputController(options: InputControllerOptions): InputController {
-  const { element, store, session, runtime, userId, onRequestImage, onImageFiles, onNotice } = options;
+  const { element, store, session, runtime, userId, onRequestImage, onRequestStamp, onStampPlace, onImageFiles, onNotice } = options;
   const doc = element.ownerDocument;
   const win = doc.defaultView ?? window;
   const presence = options.presence ? {
@@ -272,6 +276,11 @@ export function createInputController(options: InputControllerOptions): InputCon
     lastPointer = sample.screen;
     // Take keyboard focus (this also blurs, and so commits, an open text editor).
     if (doc.activeElement !== element) element.focus({ preventScroll: true });
+    if (event.button === 0 && !spaceHeld && session.getState().tool === 'stamp' && onStampPlace) {
+      onStampPlace(sample.world);
+      event.preventDefault();
+      return;
+    }
     if (event.button === 1) event.preventDefault(); // no autoscroll
     const gesture = beginGesture(ctx, {
       sample,
@@ -385,6 +394,9 @@ export function createInputController(options: InputControllerOptions): InputCon
         return true;
       case 'image':
         onRequestImage?.();
+        return true;
+      case 'stamp':
+        onRequestStamp?.();
         return true;
       case 'delete':
         deleteSelection(ctx);

@@ -14,9 +14,10 @@ export interface BoardUIProps {
 }
 
 const tools = [
-  ['select', 'Select', 'V'], ['hand', 'Hand', 'H'], ['pen', 'Pen', 'P'], ['laser', 'Laser', 'K'],
+  ['select', 'Select', 'V'], ['hand', 'Hand', 'H'], ['pen', 'Pen', 'P'], ['laser', 'Laser', 'Q'],
   ['sticky', 'Sticky', 'S'], ['rect', 'Rectangle', 'R'], ['ellipse', 'Ellipse', 'O'],
   ['line', 'Line', 'L'], ['arrow', 'Arrow', 'A'], ['text', 'Text', 'T'], ['image', 'Image', 'I'], ['frame', 'Frame', 'F'],
+  ['stamp', 'Stamp', 'K'],
 ] as const;
 
 /** Same stroke style as BoardIcon; kept here because icons.tsx is not part of the image work. */
@@ -110,7 +111,8 @@ export function Toolbar({ session }: BoardUIProps) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = session.subscribe((state, previous) => {
-      if (previous.tool !== 'image' || state.tool === 'image') return;
+      const wasPicker = previous.tool === 'image' || previous.tool === 'stamp';
+      if (!wasPicker || state.tool === previous.tool) return;
       justDismissed.current = true;
       clearTimeout(timer);
       timer = setTimeout(() => { justDismissed.current = false; }, DISMISS_CLICK_MS);
@@ -119,9 +121,9 @@ export function Toolbar({ session }: BoardUIProps) {
   }, [session]);
   function selectTool(next: ToolId) {
     session.setEditingId(null);
-    if (next === 'image') {
-      // The Image tool is not a drawing mode: it means "the picker is open" and ends with it.
-      if (session.getState().tool !== 'image' && !justDismissed.current) session.setTool('image');
+    if (next === 'image' || next === 'stamp') {
+      // These tools are not drawing modes: they mean "the picker is open" and end with it.
+      if (session.getState().tool !== next && !justDismissed.current) session.setTool(next);
       else session.setTool('select');
       return;
     }
