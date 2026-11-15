@@ -2,10 +2,16 @@ import { useEffect, useRef } from 'react';
 import { MAX_ZOOM, MIN_ZOOM } from '../contract';
 import { fitToBounds, getBounds, unionBounds, zoomAt } from '../core';
 import { filterVisibleObjects } from '../state';
+import type { BoardNotify } from '../state';
+import { exportBoardPng } from '../export';
 import { BoardIcon } from './icons';
 import type { BoardUIProps } from './Toolbar';
 
-export function ZoomControl({ store, session, runtime }: BoardUIProps) {
+interface ZoomControlProps extends BoardUIProps {
+  readonly notify?: BoardNotify;
+}
+
+export function ZoomControl({ store, session, runtime, notify }: ZoomControlProps) {
   const root = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLButtonElement>(null);
   const minus = useRef<HTMLButtonElement>(null);
@@ -38,9 +44,13 @@ export function ZoomControl({ store, session, runtime }: BoardUIProps) {
     if (!element) return;
     runtime.setCamera(objects.length ? fitToBounds(unionBounds(objects.map(getBounds)), { x: 0, y: 0, w: element.clientWidth, h: element.clientHeight }, 64) : { x: 0, y: 0, zoom: 1 });
   }
+  function exportBoard() {
+    void exportBoardPng(store, session, notify ?? (() => {}), 'board');
+  }
   return <div data-wb-ui ref={root} className="wb-root__zoom" role="group" aria-label="Board zoom">
     <button type="button" ref={minus} className="wb-root__zoom-button" aria-label="Zoom out" title="Zoom out" onClick={() => zoom(1 / 1.2)}><BoardIcon name="minus" /></button>
     <button type="button" ref={readout} className="wb-root__readout wb-ui-fit" aria-label="Zoom to fit all (Shift+1)" title="Zoom to fit all · Shift+1" onClick={fit}>100%</button>
     <button type="button" ref={plus} className="wb-root__zoom-button" aria-label="Zoom in" title="Zoom in" onClick={() => zoom(1.2)}><BoardIcon name="plus" /></button>
+    <button type="button" className="wb-root__zoom-button" aria-label="Export board as PNG" title="Export board as PNG · Ctrl+Shift+E" onClick={exportBoard}><BoardIcon name="download" /></button>
   </div>;
 }
