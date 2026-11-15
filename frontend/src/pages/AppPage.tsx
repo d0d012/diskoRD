@@ -17,6 +17,7 @@ import { ShowcaseMuseumHost } from "../features/pixelart/museum/ShowcaseMuseum";
 import { OutgoingCallOverlay } from "../features/call/OutgoingCallOverlay";
 import { DMCallPanel } from "../features/call/DMCallPanel";
 import { VoiceCallViewHost } from "../features/voice/VoiceCallViewHost";
+import type { Channel } from "../types";
 
 const WhiteboardChannel = lazy(() => import("../features/whiteboard/WhiteboardChannel").then(module => ({ default: module.WhiteboardChannel })));
 
@@ -61,10 +62,11 @@ function EmptyState() {
 }
 
 function ChannelView({ channelId }: { channelId: string }) {
-  const { channels, activeGuildId } = useGuildStore();
-  const guildChannels = activeGuildId ? (channels[activeGuildId] ?? []) : [];
-  const channel = guildChannels.find((c) => c.id === channelId);
-  const channelName = channel?.name ?? channelId;
+  const activeGuildId = useGuildStore((s) => s.activeGuildId);
+  const channelName = useGuildStore((s) => {
+    const guildChannels = s.activeGuildId ? s.channels[s.activeGuildId] : undefined;
+    return guildChannels?.find((c) => c.id === channelId)?.name ?? channelId;
+  });
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: "var(--color-dc-bg-primary)" }}>
@@ -96,9 +98,14 @@ function ChannelView({ channelId }: { channelId: string }) {
   );
 }
 
+const EMPTY_CHANNELS: Channel[] = [];
+
 export function AppPage() {
-  const { activeChannelId, activeGuildId, channels, fetchGuilds } = useGuildStore();
-  const { activeDMId } = useFriendStore();
+  const activeChannelId = useGuildStore((s) => s.activeChannelId);
+  const activeGuildId = useGuildStore((s) => s.activeGuildId);
+  const guildChannels = useGuildStore((s) => (s.activeGuildId ? (s.channels[s.activeGuildId] ?? EMPTY_CHANNELS) : EMPTY_CHANNELS));
+  const fetchGuilds = useGuildStore((s) => s.fetchGuilds);
+  const activeDMId = useFriendStore((s) => s.activeDMId);
   const { participants, connectionState } = useVoice();
   const [boardMembersId, setBoardMembersId] = useState<string | null>(null);
 
@@ -125,7 +132,6 @@ export function AppPage() {
   const isHome = activeGuildId === null;
 
   // Determine if active channel is a voice channel
-  const guildChannels = activeGuildId ? (channels[activeGuildId] ?? []) : [];
   const activeChannel = guildChannels.find((c) => c.id === activeChannelId);
   const isVoiceChannel = activeChannel?.type === "voice";
   const isBoardChannel = activeChannel?.type === "whiteboard";
