@@ -1,0 +1,31 @@
+import { act, cleanup, render } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createRuntime } from '../runtime';
+import { SnapGuides } from './SnapGuides';
+import { setSnapGuides, snapState } from './snapState';
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it('paints one-screen-pixel blurple guides in rAF, follows camera and clears on gesture end', () => {
+  let pending: FrameRequestCallback | undefined;
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { pending = cb; return 1; });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  const runtime = createRuntime({ x: 10, y: 20, zoom: 2 });
+  const view = render(<div data-wb-viewport=""><SnapGuides runtime={runtime} /></div>);
+  const svg = view.container.querySelector('svg')!;
+  expect(svg.style.stroke).toBe('var(--wb-selection-color)');
+  expect(svg.style.strokeWidth).toBe('1');
+  act(() => { setSnapGuides(runtime, [{ axis: 'x', value: 100, from: 0, to: 200 }]); });
+  expect(svg.children).toHaveLength(0);
+  act(() => { pending!(0); });
+  const line = svg.querySelector('line')!;
+  expect(line.getAttribute('x1')).toBe('210');
+  expect(line.getAttribute('y1')).toBe('20');
+  expect(line.getAttribute('y2')).toBe('420');
+  act(() => { runtime.setCamera({ x: 0, y: 0, zoom: .5 }); pending!(1); });
+  expect(svg.querySelector('line')!.getAttribute('x1')).toBe('50');
+  act(() => { runtime.setPreview({ objects: [], hiddenIds: [], marquee: null }); pending!(2); });
+  expect(svg.children).toHaveLength(0);
+  expect(snapState(runtime).guides).toEqual([]);
+  view.unmount();
+  expect(snapState(runtime).listeners.size).toBe(0);
+});

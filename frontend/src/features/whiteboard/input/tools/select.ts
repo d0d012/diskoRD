@@ -10,6 +10,7 @@ import {
 } from '../objects';
 import type { Gesture, PointerDownInfo, PointerSample, ToolContext } from '../types';
 import { isSoftLocked } from '../presence';
+import { createToolSnapper, snapTranslation } from '../snapping';
 
 function refusedGesture(kind: Gesture['kind']): Gesture {
   return { kind, move() {}, end() {}, cancel() {} };
@@ -143,10 +144,13 @@ export function createTranslateGesture(
   let done = false;
   let dx = 0;
   let dy = 0;
+  const snapper = createToolSnapper(ctx, originals.map(o => o.id), start.world);
 
   function update(sample: PointerSample): void {
     dx = sample.world.x - start.world.x;
     dy = sample.world.y - start.world.y;
+    const correction = snapTranslation(originals, dx, dy, sample, snapper);
+    dx += correction.x; dy += correction.y;
   }
 
   return {
@@ -232,13 +236,16 @@ export function createResizeGesture(
   if (isSoftLocked(ctx, [object.id], 'moving')) return refusedGesture(endpoint ? 'endpoint-dragging' : 'resizing');
   // Offset between the grabbed point and the handle's exact position is ignored:
   // handles are small, and core/resize works from the pointer position.
+  const snapper = createToolSnapper(ctx, [object.id], start.world);
   let patch: ObjectPatch | null = null;
   let dragging = false;
   let done = false;
 
   function compute(sample: PointerSample): ObjectPatch | null {
     try {
-      const result = resizeObject(object, handle, sample.world as Point, {
+      const point = snapper.resize(object.kind === 'line' || object.kind === 'arrow' ? object : resizeObject(object, handle, sample.world, { minSize: MIN_RESIZE_SIZE, keepAspect: sample.shiftKey, snap: sample.shiftKey }).bounds, handle, sample,
+        p => resizeObject(object, handle, p, { minSize: MIN_RESIZE_SIZE, keepAspect: sample.shiftKey, snap: sample.shiftKey }).bounds);
+      const result = resizeObject(object, handle, point as Point, {
         minSize: MIN_RESIZE_SIZE,
         keepAspect: sample.shiftKey,
         snap: sample.shiftKey,

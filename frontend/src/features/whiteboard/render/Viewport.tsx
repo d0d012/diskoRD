@@ -5,6 +5,7 @@ import type { SessionStore } from '../state';
 import { BoardObjectView } from './objects/BoardObjectView';
 import { Grid } from './overlays/Grid';
 import { Marquee } from './overlays/Marquee';
+import { SnapGuides } from './overlays/SnapGuides';
 import { Selection } from './overlays/Selection';
 import { createRenderScene } from './scene';
 import type { RenderScene } from './scene';
@@ -56,7 +57,7 @@ export const Viewport = forwardRef<HTMLDivElement, ViewportProps>(function Viewp
   return <div ref={viewport} className={`wb-root wb-render-viewport${className ? ` ${className}` : ''}`} data-wb-viewport="" tabIndex={0} aria-label="Board">
     <Grid />
     <div ref={world} className="wb-render-world" data-wb-world=""><ObjectStack store={store} scene={scene} /></div>
-    <div className="wb-render-overlays"><Marquee /><Selection /></div>
+    <div className="wb-render-overlays"><Marquee /><Selection /><SnapGuides runtime={runtime} /></div>
     <div className="wb-render-screen-overlay">{children}</div>
   </div>;
 });
