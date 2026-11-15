@@ -37,6 +37,9 @@ type fakeRepo struct {
 	failCommit    error
 	authorQueries int
 	boundsQueries int
+	touched       []string
+	orphanKeys    []string
+	beforeCommit  func()
 }
 
 func newFakeRepo() *fakeRepo {
@@ -83,6 +86,9 @@ func (r *fakeRepo) Commit(ctx context.Context, boardID string, fn func(context.C
 	}
 	if err := fn(ctx, tx); err != nil {
 		return err
+	}
+	if r.beforeCommit != nil {
+		r.beforeCommit()
 	}
 	if r.failCommit != nil {
 		return r.failCommit

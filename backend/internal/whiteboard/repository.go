@@ -13,6 +13,8 @@ import (
 
 // Repository is the service's persistence boundary.
 type Repository interface {
+	OrphanAssetBoards(ctx context.Context) ([]string, error)
+	ExistingAssetKeys(ctx context.Context, keys []string) ([]string, error)
 	// GetChannel returns a 404 fiber error when the channel does not exist.
 	GetChannel(ctx context.Context, channelID string) (*ChannelInfo, error)
 	// CurrentSeq reads just the sequence; an unmaterialised board is seq 0.
@@ -45,6 +47,8 @@ type BoardTx interface {
 	// being replaced/deleted by a command. Unused uploads (including >24h old)
 	// never consume the referenced-asset quota.
 	ReferencedAssets(ctx context.Context, excludeObjectIDs []string) ([]string, error)
+	TouchAssets(ctx context.Context, ids []string) error
+	DeleteOrphanAssets(ctx context.Context) ([]string, error)
 	InsertAsset(ctx context.Context, asset Asset) error
 	Insert(ctx context.Context, o Object) error
 	Update(ctx context.Context, o Object) error
