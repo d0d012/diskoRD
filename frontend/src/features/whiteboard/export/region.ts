@@ -1,4 +1,5 @@
 import type { BoardObject, ObjectId, Rect } from '../contract';
+import { FRAME_LABEL_HEIGHT } from '../contract';
 import { getBounds, objectsInsideFrame, unionBounds } from '../core';
 
 /**
@@ -28,6 +29,9 @@ export interface ExportRegionInput {
   readonly channelName: string;
 }
 
+/** Room for the frame's 1.5px border to render un-clipped. */
+const FRAME_EXPORT_MARGIN = 2;
+
 function finiteBounds(bounds: Rect): boolean {
   return Number.isFinite(bounds.x) && Number.isFinite(bounds.y)
     && Number.isFinite(bounds.w) && Number.isFinite(bounds.h);
@@ -45,9 +49,18 @@ export function exportRegion(input: ExportRegionInput): ExportRegion | null {
     const frame = selected[0];
     const ids = new Set(objectsInsideFrame(frame, objects));
     const contents = objects.filter(object => ids.has(object.id));
-    const bounds = { x: frame.x, y: frame.y, w: frame.w, h: frame.h };
-    if (contents.length === 0 || !finiteBounds(bounds)) return null;
-    return { mode: 'frame', bounds, clip: bounds, objects: contents, name: frame.label.trim() || channelName };
+    const frameRect = { x: frame.x, y: frame.y, w: frame.w, h: frame.h };
+    if (contents.length === 0 || !finiteBounds(frameRect)) return null;
+    // The frame itself (border + outside label chip) is part of its export, so
+    // grow the bounds/clip past the frame rect to keep them from being cut off.
+    const bounds = {
+      x: frame.x - FRAME_EXPORT_MARGIN,
+      y: frame.y - FRAME_LABEL_HEIGHT - FRAME_EXPORT_MARGIN,
+      w: frame.w + FRAME_EXPORT_MARGIN * 2,
+      h: frame.h + FRAME_LABEL_HEIGHT + FRAME_EXPORT_MARGIN * 2,
+    };
+    const exported = objects.filter(object => object.id === frame.id || ids.has(object.id));
+    return { mode: 'frame', bounds, clip: bounds, objects: exported, name: frame.label.trim() || channelName };
   }
 
   if (selected.length > 0) {

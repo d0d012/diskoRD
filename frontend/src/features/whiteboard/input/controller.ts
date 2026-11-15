@@ -1,4 +1,5 @@
 import { ERASER_RADIUS_PX } from '../contract';
+import { setSnapGuides } from '../render/overlays/snapState';
 import type { BoardStore, HandleId, ObjectId, Point, Runtime, UserId } from '../contract';
 import type { BoardNotify, SessionStore } from '../state';
 import { carriesFiles, copySelection, filesOf, pasteObjects, pasteText } from './clipboard';
@@ -162,6 +163,7 @@ export function createInputController(options: InputControllerOptions): InputCon
     if (!current) return;
     active = null;
     current.gesture.cancel();
+    setSnapGuides(runtime, []);
     if (current.gesture.kind === 'translating') presence?.send({ drag: null });
     releaseCapture(current.pointerId);
     updateCursor();
@@ -178,6 +180,7 @@ export function createInputController(options: InputControllerOptions): InputCon
       clearPreview(runtime);
       console.error('whiteboard: gesture failed', error);
     } finally {
+      setSnapGuides(runtime, []);
       if (current.gesture.kind === 'translating') presence?.send({ drag: null });
       releaseCapture(current.pointerId);
       updateCursor();

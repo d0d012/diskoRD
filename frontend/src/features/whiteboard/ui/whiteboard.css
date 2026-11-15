@@ -323,6 +323,12 @@
   background: var(--wb-dock-bg);
   box-shadow: var(--wb-dock-shadow);
   backdrop-filter: none;
+  max-width: calc(100% - 32px);
+}
+/* The dock is wider than the space between the undo/redo and zoom groups on
+   narrower boards, so lift it above them instead of letting it slide under. */
+@media (max-width: 1500px) {
+  .wb-root .wb-root__dock { bottom: calc(var(--wb-dock-bottom) + 52px); flex-wrap: wrap; justify-content: center; }
 }
 
 .wb-root .wb-root__tool-button {
@@ -825,7 +831,7 @@
 .wb-root .wb-presence-ghost { position: absolute; top: 0; left: 0; animation: none; }
 .wb-root .wb-presence-selection { position: absolute; top: 0; left: 0; box-sizing: border-box; outline: 1.5px solid var(--wb-cursor-color); }
 .wb-root .wb-presence-selection-name { position: absolute; bottom: calc(100% + 3px); left: -1px; padding: 1px 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: var(--wb-radius-chip); background: var(--wb-cursor-color); color: var(--wb-canvas); font-size: var(--wb-cursor-pill-size); font-family: var(--wb-font-ui); }
-.wb-root .wb-presence-participants { position: absolute; top: 16px; right: var(--wb-zoom-inset); display: flex; align-items: center; padding-inline: 4px; }
+.wb-root .wb-presence-participants { position: absolute; z-index: 26; top: 16px; right: var(--wb-zoom-inset); display: flex; align-items: center; padding-inline: 4px; }
 .wb-root .wb-presence-avatar,
 .wb-root .wb-presence-overflow { position: relative; display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 28px; margin-left: -4px; border: 2px solid var(--wb-canvas); border-radius: var(--wb-radius-pill); background: var(--wb-cursor-color, var(--wb-dock-bg)); color: var(--wb-canvas); box-shadow: 0 0 0 1px var(--wb-cursor-color, var(--color-dc-border-subtle)); font-family: var(--wb-font-ui); font-size: 12px; font-weight: 700; }
 .wb-root .wb-presence-avatar:focus-visible,

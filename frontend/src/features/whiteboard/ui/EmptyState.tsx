@@ -49,7 +49,12 @@ export function EmptyState({ store, session, runtime, userId, notify, getViewpor
       <div className="wb-empty-templates" data-wb-ui="">
         {TEMPLATES.map(template => (
           <button type="button" key={template.id} title={template.description}
-            onClick={() => applyTemplate(template.id, { store, session, runtime, userId, notify, getViewportSize })}>
+            onClick={event => {
+              const board = event.currentTarget.closest<HTMLElement>('[data-wb-viewport]');
+              applyTemplate(template.id, { store, session, runtime, userId, notify, getViewportSize });
+              // The button unmounts with the empty state; hand focus back so shortcuts keep working.
+              board?.focus({ preventScroll: true });
+            }}>
             {template.name}
           </button>
         ))}

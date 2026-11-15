@@ -41,14 +41,15 @@ describe('buildBoardSvg', () => {
     expect(svg).toContain('Plan the boss fight');
   });
 
-  it('clips a frame export to the frame bounds (contents only, no frame border)', () => {
+  it('clips a frame export and includes the frame border and label', () => {
     const region = exportRegion({ objects: [frame, rect], selectedIds: [frame.id], channelName: 'design' });
     expect(region).not.toBeNull();
     const plan = planExport(region!.bounds);
     const svg = buildBoardSvg(region!, plan, { measureAt: () => run => run.length });
     expect(svg).toContain('<clipPath id="wb-export-clip">');
     expect(svg).toContain('clip-path="url(#wb-export-clip)"');
-    expect(svg).not.toContain('rgba(88, 101, 242, 0.35)');
+    expect(svg).toContain('rgba(88, 101, 242, 0.35)');
+    expect(svg).toContain('Sprint');
   });
 
   it('emits the frame border and chip label for a whole-board export', () => {

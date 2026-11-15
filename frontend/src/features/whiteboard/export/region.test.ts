@@ -37,9 +37,14 @@ describe('exportRegion', () => {
     const objects = [f, inside, outside, frame('other', -500, -500, 10, 10, 'Other')];
     const region = exportRegion({ objects, selectedIds: ['f'], channelName: 'design' });
     expect(region!.mode).toBe('frame');
-    expect(region!.clip).toEqual({ x: 0, y: 0, w: 100, h: 100 });
-    expect(region!.bounds).toEqual({ x: 0, y: 0, w: 100, h: 100 });
-    expect(region!.objects.map(o => o.id)).toEqual(['inside']);
+    expect(region!.clip).toEqual(region!.bounds);
+    // Bounds cover the frame rect plus its border margin and outside label chip.
+    expect(region!.bounds.x).toBeLessThanOrEqual(0);
+    expect(region!.bounds.y).toBeLessThan(0);
+    expect(region!.bounds.x + region!.bounds.w).toBeGreaterThanOrEqual(100);
+    expect(region!.bounds.y + region!.bounds.h).toBeGreaterThanOrEqual(100);
+    // The frame itself is drawn too, beneath its contents.
+    expect(region!.objects.map(o => o.id)).toEqual(['f', 'inside']);
     expect(region!.name).toBe('Sprint');
   });
 

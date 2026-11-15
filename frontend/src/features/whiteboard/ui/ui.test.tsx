@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Camera, RectObject, StickyObject, Runtime } from '../contract';
 import { createBoardNotices, createBoardStore, createSessionStore } from '../state';
+import { exportBoardPng } from '../export';
 import { BOARD_NOTICE_DURATION_MS, BoardNotice, Toolbar, StyleBar, UndoRedo, ZoomControl } from './index';
 
 function makeRuntime(): Runtime {
@@ -214,6 +215,8 @@ function inViewport(node: ReactElement) {
   return <div data-wb-viewport>{node}</div>;
 }
 
+vi.mock('../export', () => ({ exportBoardPng: vi.fn() }));
+
 describe('ZoomControl and UndoRedo', () => {
   beforeEach(() => {
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 800 });
@@ -228,6 +231,14 @@ describe('ZoomControl and UndoRedo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(props.runtime.getCamera().zoom).toBeLessThan(1);
+  });
+
+  it('always exports the whole board from the zoom control, even with a selection', () => {
+    const props = setup();
+    props.session.setSelectedIds(['r1']);
+    render(inViewport(<ZoomControl {...props} />));
+    fireEvent.click(screen.getByRole('button', { name: 'Export board as PNG' }));
+    expect(vi.mocked(exportBoardPng)).toHaveBeenCalledWith(props.store, props.session, expect.any(Function), 'board');
   });
 
   it('fits all objects when the percentage is clicked', () => {

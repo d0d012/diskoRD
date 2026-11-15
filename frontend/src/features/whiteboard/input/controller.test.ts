@@ -3,6 +3,7 @@ import type { Mock } from 'vitest';
 import { createInputController } from './controller';
 import type { InputController } from './controller';
 import { EMPTY_PREVIEW } from './objects';
+import { setSnapGuides, snapState } from '../render/overlays/snapState';
 import { USER, createHarness, imageObject, rectObject, textObject } from './testUtils';
 import type { Harness } from './testUtils';
 
@@ -41,6 +42,29 @@ beforeEach(() => {
 
 afterEach(() => {
   controller?.dispose();
+});
+
+describe('input controller: snap guides', () => {
+  const guide = { axis: 'x' as const, value: 10, from: 0, to: 50 };
+
+  it('clears snap guides when a click-created sticky gesture ends', () => {
+    setup([rectObject()]);
+    h.session.setTool('sticky');
+    pointer('pointerdown', 20, 20);
+    setSnapGuides(h.runtime, [guide]);
+    pointer('pointerup', 20, 20);
+    expect(snapState(h.runtime).guides).toEqual([]);
+  });
+
+  it('clears snap guides when the gesture is cancelled', () => {
+    setup([rectObject()]);
+    h.session.setTool('rect');
+    pointer('pointerdown', 20, 20);
+    pointer('pointermove', 60, 60);
+    setSnapGuides(h.runtime, [guide]);
+    pointer('pointercancel', 60, 60);
+    expect(snapState(h.runtime).guides).toEqual([]);
+  });
 });
 
 describe('input controller: pointer gestures', () => {

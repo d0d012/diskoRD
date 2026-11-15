@@ -62,6 +62,19 @@ describe('EmptyState', () => {
     expect(applyTemplate).toHaveBeenCalledExactlyOnceWith('sprint', expect.objectContaining({ store: h.store, userId: USER }));
   });
 
+  it('returns focus to the board root after applying a template', () => {
+    setBuddy(false);
+    const h = createHarness();
+    const { container } = render(<div data-wb-viewport="" tabIndex={0}>
+      <EmptyState store={h.store} session={h.session} runtime={h.runtime} userId={USER}
+        notify={vi.fn()} getViewportSize={() => ({ width: 1000, height: 800 })} />
+    </div>);
+    const button = screen.getByRole('button', { name: 'Retro' });
+    button.focus();
+    fireEvent.click(button);
+    expect(document.activeElement).toBe(container.querySelector('[data-wb-viewport]'));
+  });
+
   it('renders the user pixel buddy when they have one', () => {
     setBuddy(true);
     const { view } = renderEmpty();
