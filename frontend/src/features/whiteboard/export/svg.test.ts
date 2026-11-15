@@ -4,6 +4,7 @@ import { frame, image, rect, sticky, stroke } from '../render/testObjects';
 import { exportRegion } from './region';
 import { planExport } from './scale';
 import { buildBoardSvg } from './svg';
+import { assetDisplayUrl } from '../assets/displayUrl';
 
 function svgFor(objects: readonly BoardObject[], selectedIds: string[] = []) {
   const region = exportRegion({ objects, selectedIds, channelName: 'design' });
@@ -28,7 +29,8 @@ describe('buildBoardSvg', () => {
 
   it('emits cropped images pointing at the display URL', () => {
     const svg = svgFor([image]);
-    expect(svg).toContain('href="/uploads/a.png"');
+    // Resolved against VITE_API_URL when one is configured (e.g. a local .env).
+    expect(svg).toContain(`href="${assetDisplayUrl('/uploads/a.png')}"`);
     expect(svg).toContain('viewBox="100 0 200 100"');
     expect(svg).toContain('crossorigin="anonymous"');
   });
