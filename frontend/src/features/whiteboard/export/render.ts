@@ -208,15 +208,36 @@ function drawObject(
   ctx.restore();
 }
 
-/** Loads a board asset; cross-origin images use CORS so the canvas stays clean. */
-function loadImage(url: string): Promise<HTMLImageElement> {
+function imageFrom(src: string, crossOrigin: boolean): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    if (/^https?:\/\//i.test(url)) image.crossOrigin = 'anonymous';
+    if (crossOrigin) image.crossOrigin = 'anonymous';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error('image failed to load'));
-    image.src = url;
+    image.src = src;
   });
+}
+
+/**
+ * Loads a board asset without tainting the export canvas. The board already
+ * showed cross-origin assets through plain <img> tags, and that cached response
+ * (no Vary: Origin) fails a later crossOrigin load, so fetch a fresh CORS copy
+ * and draw it from a same-origin blob URL.
+ */
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  if (!/^https?:\/\//i.test(url)) return imageFrom(url, false);
+  try {
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+    if (!response.ok) throw new Error(`image fetch ${response.status}`);
+    const blobUrl = URL.createObjectURL(await response.blob());
+    try {
+      return await imageFrom(blobUrl, false);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } catch {
+    return imageFrom(url, true);
+  }
 }
 
 /** True when drawing the image would taint the export canvas. */
