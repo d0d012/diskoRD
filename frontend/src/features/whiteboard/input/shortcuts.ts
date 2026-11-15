@@ -35,10 +35,11 @@ export type ShortcutAction =
   | { readonly type: 'zoom-to-fit' }
   | { readonly type: 'escape' }
   | { readonly type: 'edit' }
-  | { readonly type: 'export' };
+  | { readonly type: 'export' }
+  | { readonly type: 'stamp' };
 
-export const TOOL_KEYS: Readonly<Record<string, Exclude<ToolId, 'image'>>> = {
-  v: 'select', h: 'hand', p: 'pen', e: 'eraser', k: 'laser', s: 'sticky', r: 'rect', o: 'ellipse',
+export const TOOL_KEYS: Readonly<Record<string, Exclude<ToolId, 'image' | 'stamp'>>> = {
+  v: 'select', h: 'hand', p: 'pen', e: 'eraser', q: 'laser', s: 'sticky', r: 'rect', o: 'ellipse',
   l: 'line', a: 'arrow', t: 'text', f: 'frame',
 };
 
@@ -98,6 +99,7 @@ export function matchShortcut(event: KeyInput): ShortcutAction | null {
   }
   if (event.shiftKey) return null;
   if (key === 'i') return { type: 'image' };
+  if (key === 'k') return { type: 'stamp' };
   const tool = TOOL_KEYS[key];
   return tool ? { type: 'tool', tool } : null;
 }

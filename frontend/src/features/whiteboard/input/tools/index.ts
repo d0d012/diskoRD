@@ -34,6 +34,10 @@ export function beginGesture(ctx: ToolContext, down: PointerDownInfo): Gesture |
     ctx.session.setTool('select');
     return null;
   }
+  if (tool === 'stamp') {
+    // Placement is handled by the controller's onStampPlace hook; no gesture.
+    return null;
+  }
   if (isCreationTool(tool)) return createCreationGesture(ctx, tool, down.sample);
   return beginSelect(ctx, down);
 }

@@ -1,0 +1,76 @@
+/* Stamp picker popover (append-only; tokens come from whiteboard.css). */
+.wb-root .wb-stamp-picker {
+  position: relative;
+  z-index: 40;
+  width: 336px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding: 16px;
+  border: var(--wb-dock-border);
+  border-radius: var(--wb-radius-popover);
+  background: var(--wb-dock-bg);
+  color: var(--color-dc-text-normal);
+  box-shadow: inset 0 1px 0 var(--color-dc-border-subtle), var(--shadow-dc-elevated);
+  outline: none;
+  pointer-events: auto;
+  animation: wb-object-in var(--wb-motion-enter) var(--wb-ease-enter) backwards;
+}
+.wb-root .wb-stamp-picker header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wb-root .wb-stamp-picker h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.wb-root .wb-stamp-picker button {
+  border: 0;
+  border-radius: var(--wb-radius-chip);
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--wb-tool-color);
+  cursor: pointer;
+  transition: transform var(--wb-motion-press) var(--wb-ease-spring), background var(--wb-motion-enter) var(--wb-ease-enter);
+}
+.wb-root .wb-stamp-picker button:hover:not(:disabled) {
+  background: var(--wb-tool-hover-bg);
+  color: var(--wb-tool-hover-color);
+}
+.wb-root .wb-stamp-picker button:active:not(:disabled) {
+  transform: scale(0.97) translateY(0.5px);
+}
+.wb-root .wb-stamp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding-block: 12px;
+}
+.wb-root .wb-stamp-grid button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 8px;
+  background: var(--color-dc-bg-secondary);
+  border-radius: var(--wb-radius-object);
+}
+.wb-root .wb-stamp-grid svg {
+  display: block;
+}
+.wb-root .wb-stamp-hint {
+  color: var(--color-dc-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+@media (max-width: 1100px) {
+  .wb-root .wb-stamp-picker { max-height: calc(100vh - 220px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-root .wb-stamp-picker { animation: none; }
+  .wb-root .wb-stamp-picker button { transition: none; }
+  .wb-root .wb-stamp-picker button:active:not(:disabled) { transform: none; }
+}

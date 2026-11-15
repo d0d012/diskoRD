@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-export type BoardIconName = 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | 'frame' | 'minus' | 'plus' | 'undo' | 'redo' | 'front' | 'back' | 'delete' | 'people' | 'download';
+export type BoardIconName = 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | 'frame' | 'stamp' | 'minus' | 'plus' | 'undo' | 'redo' | 'front' | 'back' | 'delete' | 'people' | 'download';
 
 const paths: Record<BoardIconName, string> = {
   select: 'M5 3 20 13l-7 1-3 7Z',
@@ -15,6 +15,7 @@ const paths: Record<BoardIconName, string> = {
   arrow: 'M4 20 20 4M9 4h11v11',
   text: 'M4 6V4h16v2M12 4v16M8 20h8',
   frame: 'M7 3v18M17 3v18M3 7h18M3 17h18',
+  stamp: 'M8 3v3M16 3v3M6 6h12M6 9h12v2H6zM5 11h14v10H5z',
   minus: 'M5 12h14', plus: 'M5 12h14M12 5v14',
   undo: 'M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12',
   redo: 'm15 5 5 5-5 5M20 10H10a6 6 0 0 0 0 12',

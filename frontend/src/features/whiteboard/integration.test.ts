@@ -425,9 +425,9 @@ describe('local board integration: checkboxes, laser, sticky reactions, and cust
     expectSettled();
   });
 
-  it('laser tool (K) emits ephemeral preview without creating persistent board objects', async () => {
+  it('laser tool (Q) emits ephemeral preview without creating persistent board objects', async () => {
     await setup();
-    key('k');
+    key('q');
     expect(board.session.getState().tool).toBe('laser');
     pointer('pointerdown', 10, 10);
     pointer('pointermove', 50, 60);
