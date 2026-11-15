@@ -30,8 +30,14 @@ function createMembershipSource(adapter: SyncAdapter) {
   };
 }
 
+const EMPTY_MEMBERS: readonly Participant[] = Object.freeze([]);
+const EMPTY_MEMBERSHIP = {
+  read: () => EMPTY_MEMBERS,
+  subscribe: () => () => {},
+};
+
 /** Presence samples never invalidate React's membership snapshot. */
-export function useRoomParticipants(adapter: SyncAdapter): readonly Participant[] {
-  const source = useMemo(() => createMembershipSource(adapter), [adapter]);
+export function useRoomParticipants(adapter?: SyncAdapter | null): readonly Participant[] {
+  const source = useMemo(() => adapter ? createMembershipSource(adapter) : EMPTY_MEMBERSHIP, [adapter]);
   return useSyncExternalStore(source.subscribe, source.read, source.read);
 }

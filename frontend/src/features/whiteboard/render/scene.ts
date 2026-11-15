@@ -1,4 +1,5 @@
 import type { BoardObject, BoardStore, ObjectId, Runtime, Unsubscribe } from '../contract';
+import { isObjectVisible } from '../state';
 import type { SessionStore } from '../state';
 import { compareRanked, getBounds } from '../core';
 import { computeVisibleSet, cullingBounds, SpatialGrid } from './culling';
@@ -81,7 +82,17 @@ export function createRenderScene(store: BoardStore, session: SessionStore, runt
     // that reveals hundreds of objects never blocks a frame. Selected, edited,
     // preview and freshly-created objects bypass the budget and mount now.
     const desired = new Set<ObjectId>();
-    for (const id of visible) if (overrides.has(id) || objects.has(id)) desired.add(id);
+    const hasHiddenAuthors = session.hasHiddenAuthors();
+    if (!hasHiddenAuthors) {
+      // Preserve the original fast path: no copies or author checks on pan/zoom.
+      for (const id of visible) if (overrides.has(id) || objects.has(id)) desired.add(id);
+    } else {
+      for (const id of visible) {
+        const object = overrides.get(id) ?? objects.get(id);
+        if (object && isObjectVisible(object, session)) desired.add(id);
+        else visible.delete(id);
+      }
+    }
     for (const id of rendered) if (!desired.has(id)) rendered.delete(id);
     const priority = new Set<ObjectId>();
     for (const id of session.getState().selectedIds) if (desired.has(id)) priority.add(id);
@@ -142,7 +153,7 @@ export function createRenderScene(store: BoardStore, session: SessionStore, runt
     const selected = session.getState().selectedIds.flatMap(id => {
       if (retired.has(id) || (preview.hiddenIds.includes(id) && !overrides.has(id))) return [];
       const object = overrides.get(id) ?? store.getObject(id);
-      return object ? [object] : [];
+      return object && (!hasHiddenAuthors || isObjectVisible(object, session)) ? [object] : [];
     });
     paintSelection(selection, selected, camera);
     paintMarquee(marquee, preview.marquee, camera);

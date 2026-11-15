@@ -7,9 +7,12 @@
  */
 export const CONTRACT_REVISION = 2;
 export const MAX_OBJECTS_PER_BOARD = 5_000;
+export const MAX_OBJECTS_PER_USER = 1_500;
+export const MAX_PLACEMENT_MARGIN = 50_000;
 export const MAX_BOARD_BODY_BYTES = 10_000_000;
 export const MAX_OBJECT_BODY_BYTES = 32 * 1024;
 export const MAX_CHANGES_PER_COMMAND = 500;
+export const MAX_COMMAND_BYTES = 1_048_576;
 export const MAX_STROKE_POINTS = 2_048;
 export const MAX_COMMANDS_PER_SECOND = 10;
 export const COMMAND_BURST = 20;
@@ -82,7 +85,11 @@ export const FRAME_LABEL_FONT_SIZE = 14;
 export const FRAME_LABEL_CHAR_WIDTH = FRAME_LABEL_FONT_SIZE * 0.55;
 export const STICKY_PREFERRED_FONT_SIZE = 24;
 export const TEXT_SIZE_WORLD_UNITS = { S: 16, M: 24, L: 32, XL: 48 } as const;
-export const STROKE_WEIGHT_WORLD_UNITS = { thin: 2, thick: 4 } as const;
+export const STROKE_WEIGHT_WORLD_UNITS = { thin: 2, thick: 4, bold: 8, heavy: 16 } as const;
+/** Every stroke weight, thinnest first. Mirrors strokeWeights in backend validate.go. */
+export const STROKE_WEIGHTS = ['thin', 'thick', 'bold', 'heavy'] as const;
+/** Eraser reach in screen pixels; divided by zoom to get world units. */
+export const ERASER_RADIUS_PX = 12;
 /** Applied to the selected stroke weight, opaque rather than highlighter alpha. */
 export const MARKER_WIDTH_MULTIPLIER = 3;
 export const TINT_FILL_OPACITY = 0.15;

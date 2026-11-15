@@ -153,8 +153,9 @@ func TestOpsRateLimitRouteAndStandardEnvelope(t *testing.T) {
 		status, _ := do(t, app, "POST", "/channels/"+chID+"/board/ops", `{}`)
 		require.Equal(t, 400, status)
 	}
-	status, body := do(t, app, "POST", "/channels/44444444-4444-4444-8444-444444444444/board/ops", `{}`)
+	status, body, headers := doWithHeaders(t, app, "POST", "/channels/44444444-4444-4444-8444-444444444444/board/ops", `{}`)
 	assert.Equal(t, 429, status, "switching boards cannot bypass the user bucket")
+	assert.Equal(t, "1", headers.Get("Retry-After"))
 	assert.Equal(t, map[string]any{"error": "too many board commands"}, body)
 	status, _ = do(t, app, "GET", "/channels/"+chID+"/board", "")
 	assert.Equal(t, 200, status, "GET recovery snapshots are not command-limited")

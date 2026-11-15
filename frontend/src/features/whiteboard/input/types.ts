@@ -42,6 +42,7 @@ export type GestureKind =
   | 'resizing'
   | 'endpoint-dragging'
   | 'drawing'
+  | 'erasing'
   | 'panning';
 
 /**

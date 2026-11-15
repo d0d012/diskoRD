@@ -329,6 +329,7 @@ export function createBoardStore(options: BoardStoreOptions): ManagedBoardStore 
       publish();
     },
     getSeq: () => lastSeq,
+    getBoardId: () => boardId,
     getUserId: () => userId,
     dispatch(changes, opts = {}): OpId {
       const opId = newId();
@@ -393,6 +394,7 @@ export function createBoardStore(options: BoardStoreOptions): ManagedBoardStore 
     getObjectIds: () => view.getState().ids,
     subscribeObject: (id, listener) => subscribe(state => state.objects.get(id), listener),
     subscribeIds: listener => subscribe(state => state.ids, listener),
+    subscribeObjects: listener => subscribe(state => state.ordered, listener),
     subscribeHistory: listener => subscribe(state => state.historyRevision, listener),
     getPendingOperations: () => view.getState().pending,
     subscribePending: listener => subscribe(state => state.pending, listener),

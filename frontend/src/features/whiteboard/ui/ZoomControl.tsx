@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { MAX_ZOOM, MIN_ZOOM } from '../contract';
 import { fitToBounds, getBounds, unionBounds, zoomAt } from '../core';
+import { filterVisibleObjects } from '../state';
 import { BoardIcon } from './icons';
 import type { BoardUIProps } from './Toolbar';
 
-export function ZoomControl({ store, runtime }: BoardUIProps) {
+export function ZoomControl({ store, session, runtime }: BoardUIProps) {
   const root = useRef<HTMLDivElement>(null);
   const readout = useRef<HTMLButtonElement>(null);
   const minus = useRef<HTMLButtonElement>(null);
@@ -33,7 +34,7 @@ export function ZoomControl({ store, runtime }: BoardUIProps) {
   }
   function fit() {
     const element = viewport();
-    const objects = store.getObjectsInRank();
+    const objects = filterVisibleObjects(store.getObjectsInRank(), session);
     if (!element) return;
     runtime.setCamera(objects.length ? fitToBounds(unionBounds(objects.map(getBounds)), { x: 0, y: 0, w: element.clientWidth, h: element.clientHeight }, 64) : { x: 0, y: 0, zoom: 1 });
   }

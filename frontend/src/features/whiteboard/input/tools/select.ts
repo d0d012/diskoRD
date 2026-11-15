@@ -3,6 +3,7 @@ import type { BoardObject, HandleId, ObjectId, ObjectPatch, Point, Rect } from '
 import { hitTestMarquee, objectsInsideFrame, resizeObject } from '../../core';
 import { textObjectHeight } from '../../editing/measure';
 import type { ResizeResult } from '../../core';
+import { filterVisibleObjects, isObjectVisible } from '../../state';
 import {
   CLICK_SLOP_PX, EMPTY_PREVIEW, TOO_MANY_CHANGES_MESSAGE, clearPreview, existingObjects, objectAt, rectFromPoints,
   reportRefusal, safeDispatch, sameIds, screenDistance, translated, updateChange,
@@ -26,13 +27,13 @@ export function beginSelect(ctx: ToolContext, down: PointerDownInfo): Gesture {
 
   if (down.handle && selected.length === 1) {
     const object = store.getObject(selected[0]);
-    if (object && canDragHandle(object, down.handle)) {
+    if (object && isObjectVisible(object, session) && canDragHandle(object, down.handle)) {
       return createResizeGesture(ctx, object, down.handle, down.sample);
     }
   }
 
   const labelled = down.frameLabelId ? store.getObject(down.frameLabelId) : undefined;
-  const hit = labelled?.kind === 'frame' ? labelled : objectAt(ctx, down.sample.world);
+  const hit = labelled?.kind === 'frame' && isObjectVisible(labelled, session) ? labelled : objectAt(ctx, down.sample.world);
   if (!hit) return createMarqueeGesture(ctx, down.sample);
 
   const alreadySelected = selected.includes(hit.id);
@@ -98,7 +99,7 @@ export function createMarqueeGesture(ctx: ToolContext, start: PointerSample): Ge
         return;
       }
       const rect = marquee(sample);
-      const hits = store.getObjectsInRank().filter(object => hitTestMarquee(object, rect)).map(object => object.id);
+      const hits = filterVisibleObjects(store.getObjectsInRank(), session).filter(object => hitTestMarquee(object, rect)).map(object => object.id);
       session.setSelectedIds([...base, ...hits.filter(id => !base.includes(id))]);
     },
     cancel() {

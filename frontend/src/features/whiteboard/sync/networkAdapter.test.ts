@@ -169,6 +169,34 @@ describe('connect', () => {
     expect(adapter.getStatus()).toBe('offline');
   });
 
+  it('a 429 on the snapshot GET backs off for Retry-After, keeps buffering commits, and retries', async () => {
+    const commits: number[] = [];
+    adapter.onCommit(c => commits.push(c.seq));
+    apiMock.get
+      .mockRejectedValueOnce({ response: { status: 429, headers: { 'retry-after': '3' }, data: { error: 'rate limit' } } })
+      .mockResolvedValueOnce({ data: { data: { seq: 5, objects: [] } } });
+
+    const connecting = adapter.connect();
+    subscribed();
+    await tick();
+    expect(apiMock.get).toHaveBeenCalledTimes(1);
+    expect(adapter.getStatus()).toBe('connecting');
+    emit('BOARD_COMMIT', commit(5));
+    emit('BOARD_COMMIT', commit(6));
+
+    await tick(2_999);
+    expect(apiMock.get).toHaveBeenCalledTimes(1);
+    await tick(1);
+    await expect(connecting).resolves.toEqual({ seq: 5, objects: [] });
+    expect(apiMock.get).toHaveBeenCalledTimes(2);
+    expect(adapter.getStatus()).toBe('live');
+    expect(commits).toEqual([]); // the caller must hydrate before buffered commits drain
+    // The GET resolved inside the backoff timer. Fake timers defer its nested
+    // zero-delay flush to the next millisecond, unlike the deferred GET above.
+    await tick(1);
+    expect(commits).toEqual([6]);
+  });
+
   it('rejects a malformed snapshot instead of hydrating garbage', async () => {
     apiMock.get.mockResolvedValue({ data: { data: { seq: 'x' } } });
     const connecting = adapter.connect();
@@ -196,6 +224,30 @@ describe('refetch', () => {
     expect(commits).toEqual([3]);
     expect(sentOps('BOARD_SUBSCRIBE')).toHaveLength(1); // refetch never re-subscribes
   });
+
+  it('defaults to a 1 s backoff when a 429 snapshot GET has no Retry-After header and caps large values at 10 s', async () => {
+    await goLive({ seq: 1, objects: [] });
+    apiMock.get
+      .mockRejectedValueOnce({ response: { status: 429, headers: {}, data: { error: 'slow down' } } })
+      .mockRejectedValueOnce({ response: { status: 429, headers: { 'Retry-After': '60' }, data: { error: 'slow down' } } })
+      .mockResolvedValueOnce({ data: { data: { seq: 4, objects: [] } } });
+
+    const refetching = adapter.refetch();
+    await tick(0);
+    expect(apiMock.get).toHaveBeenCalledTimes(2); // 1 from goLive + 1 initial refetch
+
+    await tick(999);
+    expect(apiMock.get).toHaveBeenCalledTimes(2);
+    await tick(1); // 1 s default elapses -> second refetch attempt (returns 429 with Retry-After: 60)
+    expect(apiMock.get).toHaveBeenCalledTimes(3);
+
+    await tick(9_999);
+    expect(apiMock.get).toHaveBeenCalledTimes(3);
+    await tick(1); // capped 10 s elapses -> third refetch attempt succeeds
+    await expect(refetching).resolves.toEqual({ seq: 4, objects: [] });
+    expect(apiMock.get).toHaveBeenCalledTimes(4);
+    expect(adapter.getStatus()).toBe('live');
+  });
 });
 
 describe('submit', () => {
@@ -215,7 +267,7 @@ describe('submit', () => {
   });
 
   it.each([
-    [400, 'invalid'], [403, 'forbidden'], [413, 'limit'], [429, 'limit'],
+    [400, 'invalid'], [403, 'forbidden'], [413, 'limit'], [422, 'invalid'],
   ] as const)('maps HTTP %i to a %s Reject without state evidence', async (status, code) => {
     apiMock.post.mockRejectedValue({ response: { status, data: { error: 'nope' } } });
     await expect(adapter.submit(command)).resolves.toEqual({ opId: OPID, code, error: 'nope', current: [] });
@@ -228,6 +280,7 @@ describe('submit', () => {
 
   it.each([
     ['a network error', new Error('Network Error')],
+    ['a 429 rate limit', { response: { status: 429, headers: { 'retry-after': '2' }, data: { error: 'rate limit' } } }],
     ['a 500', { response: { status: 500, data: { error: 'boom' } } }],
     ['a 404', { response: { status: 404, data: { error: 'no board' } } }],
     ['a malformed 409', { response: { status: 409, data: { error: 'x' } } }],
@@ -590,11 +643,49 @@ describe('dispose', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it.each(['connect', 'refetch'] as const)('disposes during a 429 %s backoff without leaking a timer or retrying', async kind => {
+    if (kind === 'refetch') await goLive();
+    apiMock.get.mockRejectedValue({ response: { status: 429, headers: { 'retry-after': '3' } } });
+    const syncing = adapter[kind]();
+    const assertion = expect(syncing).rejects.toMatchObject({ name: 'AbortError' });
+    if (kind === 'connect') subscribed();
+    await tick();
+    const calls = apiMock.get.mock.calls.length;
+    expect(vi.getTimerCount()).toBe(1);
+
+    adapter.dispose();
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+    await tick(10_000);
+    expect(apiMock.get).toHaveBeenCalledTimes(calls);
+  });
+
   it('a pending subscribe wait is rejected, not left to time out', async () => {
     const connecting = adapter.connect();
     const assertion = expect(connecting).rejects.toThrow();
     adapter.dispose();
     await assertion;
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('purge', () => {
+  it('posts createdBy and rect to /channels/:id/board/purge and returns deleted count', async () => {
+    apiMock.post.mockResolvedValue({ data: { data: { deleted: 12 } } });
+    const result = await adapter.purge!({ createdBy: BOB, rect: { x: 10, y: 20, w: 300, h: 400 } });
+    expect(result).toEqual({ deleted: 12 });
+    expect(apiMock.post).toHaveBeenCalledWith(
+      `/channels/${BOARD}/board/purge`,
+      { createdBy: BOB, rect: { x: 10, y: 20, w: 300, h: 400 } },
+      expect.anything(),
+    );
+  });
+
+  it('surfaces 403 and 429 Retry-After errors as user-readable messages', async () => {
+    apiMock.post.mockRejectedValueOnce({ response: { status: 403, data: { error: 'Forbidden' } } });
+    await expect(adapter.purge!({ createdBy: BOB })).rejects.toThrow('Forbidden');
+
+    apiMock.post.mockRejectedValueOnce({ response: { status: 429, headers: { 'Retry-After': '4' }, data: {} } });
+    await expect(adapter.purge!({ createdBy: BOB })).rejects.toThrow(/4s/);
   });
 });

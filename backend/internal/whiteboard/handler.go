@@ -57,6 +57,22 @@ func (h *Handler) PostAsset(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(Response{Data: asset})
 }
 
+func (h *Handler) PostPurge(c *fiber.Ctx) error {
+	channelID, err := channelParam(c)
+	if err != nil {
+		return err
+	}
+	var req PurgeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	result, err := h.svc.Purge(c.Context(), c.Locals("userID").(string), channelID, req)
+	if err != nil {
+		return err
+	}
+	return c.JSON(Response{Data: result})
+}
+
 func (h *Handler) PostOps(c *fiber.Ctx) error {
 	channelID, err := channelParam(c)
 	if err != nil {

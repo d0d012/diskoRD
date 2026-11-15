@@ -1,5 +1,32 @@
-import { COMMAND_ACK_TIMEOUT_MS, SEQUENCE_GAP_HOLD_MS } from '../contract';
+import { COMMAND_ACK_TIMEOUT_MS, OP_IDEMPOTENCY_TTL_MS, SEQUENCE_GAP_HOLD_MS } from '../contract';
 import type { BoardStore, Command, Commit, OpId, Snapshot, SyncAdapter, Unsubscribe } from '../contract';
+
+export const DEFAULT_RETRY_AFTER_MS = 1_000;
+export const MAX_RETRY_AFTER_MS = 10_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Extracts the Retry-After backoff in ms from an HTTP 429 error (default 1 s, capped at 10 s). */
+export function retryAfterMs(error: unknown): number | undefined {
+  if (!isRecord(error)) return undefined;
+  const response = isRecord(error.response) ? error.response : undefined;
+  const status = typeof response?.status === 'number' ? response.status : typeof error.status === 'number' ? error.status : undefined;
+  if (status !== 429) return undefined;
+  const headers = isRecord(response?.headers) ? response.headers : isRecord(error.headers) ? error.headers : undefined;
+  let raw: unknown = error.retryAfter;
+  if (raw === undefined && headers) {
+    if (typeof headers.get === 'function') raw = (headers.get as (name: string) => unknown)('retry-after');
+    if (raw === undefined) {
+      const key = Object.keys(headers).find(k => k.toLowerCase() === 'retry-after');
+      if (key !== undefined) raw = headers[key];
+    }
+  }
+  const seconds = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_RETRY_AFTER_MS;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.max(DEFAULT_RETRY_AFTER_MS, Math.ceil(seconds * 1000)));
+}
 
 export interface SyncNotice {
   readonly type: 'outcome-unknown' | 'transport-error' | 'recovery-error' | 'rejected';
@@ -35,10 +62,15 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
   let scheduled = false;
   let wakeTimer: ReturnType<typeof setTimeout> | undefined;
   let gapTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let settleRetry: (() => void) | undefined;
   let bootstrapCommits: Commit[] = [];
   let bootstrapSnapshot: Snapshot | undefined;
   const subscriptions: Unsubscribe[] = [];
   const abandonAfterRecovery = new Set<OpId>();
+  const retryAfterUntil = new Map<OpId, number>();
+  const lastSentAt = new Map<OpId, number>();
+  const inFlight = new Map<OpId, symbol>();
   const noticeListeners = new Set<() => void>();
   let notices: readonly SyncNotice[] = Object.freeze([]);
 
@@ -59,6 +91,39 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
   function clearGap(): void {
     if (gapTimer !== undefined) clearTimeout(gapTimer);
     gapTimer = undefined;
+  }
+
+  function clearRetry(): void {
+    if (retryTimer !== undefined) clearTimeout(retryTimer);
+    retryTimer = undefined;
+    const settle = settleRetry;
+    settleRetry = undefined;
+    settle?.();
+  }
+
+  function waitRetry(delay: number): Promise<void> {
+    return new Promise<void>(resolve => {
+      clearRetry();
+      settleRetry = resolve;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        settleRetry = undefined;
+        resolve();
+      }, delay);
+    });
+  }
+
+  async function fetchWithBackoff(get: () => Promise<Snapshot>): Promise<Snapshot> {
+    for (;;) {
+      try {
+        return await get();
+      } catch (error) {
+        const delay = !disposed ? retryAfterMs(error) : undefined;
+        if (delay === undefined) throw error;
+        await waitRetry(delay);
+        if (disposed) throw new DOMException('Board coordinator disposed', 'AbortError');
+      }
+    }
   }
 
   function scheduleWork(): void {
@@ -98,7 +163,7 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
     recovery = Promise.resolve().then(async () => {
       if (disposed) return;
       try {
-        const snapshot = await adapter.refetch();
+        const snapshot = await fetchWithBackoff(() => adapter.refetch());
         if (disposed) return;
         hydrate(snapshot);
         for (const opId of abandonAfterRecovery) {
@@ -126,15 +191,33 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
     return recovery;
   }
 
-  function submit(command: Command): void {
-    if (!store.markSending(command.opId)) return;
+  function submit(command: Command, countAttempt = true): void {
+    if (countAttempt) {
+      if (!store.markSending(command.opId)) return;
+    } else {
+      const pending = store.getPendingOperations().find(item => item.command.opId === command.opId);
+      if (!pending || pending.status === 'acknowledged') return;
+      const firstSent = store.getSentAt(command.opId);
+      if (firstSent !== undefined && Date.now() - firstSent >= OP_IDEMPOTENCY_TTL_MS) {
+        abandonAfterRecovery.add(command.opId);
+        void recover();
+        return;
+      }
+    }
+    retryAfterUntil.delete(command.opId);
+    lastSentAt.set(command.opId, Date.now());
+    const flight = Symbol();
+    inFlight.set(command.opId, flight);
     // The SAME command object is reused on retries. A transport failure is not
     // an application rejection and leaves optimistic work pending until recovery.
     void Promise.resolve().then(() => {
       if (disposed) return undefined;
       return adapter.submit(command);
     }).then(result => {
+      if (inFlight.get(command.opId) === flight) inFlight.delete(command.opId);
       if (disposed || !result) return;
+      retryAfterUntil.delete(command.opId);
+      lastSentAt.delete(command.opId);
       if ('code' in result) {
         store.applyReject(result);
         // Never silent: the optimistic work just disappeared, so say why.
@@ -148,7 +231,18 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
       }
       scheduleWork();
     }).catch(error => {
-      if (!disposed) notice({
+      // An ack-timeout resend may already be in flight (or have settled).
+      // A late failure of the older send must not clear its gate or retry it.
+      if (inFlight.get(command.opId) !== flight) return;
+      inFlight.delete(command.opId);
+      if (disposed) return;
+      const delay = retryAfterMs(error);
+      if (delay !== undefined) {
+        retryAfterUntil.set(command.opId, Date.now() + delay);
+        scheduleWork();
+        return;
+      }
+      notice({
         type: 'transport-error', opId: command.opId,
         message: error instanceof Error ? error.message : 'Board transport failed',
       });
@@ -161,16 +255,27 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
       checkGap();
       return;
     }
-    for (const operation of store.getPendingOperations()) {
+    const pending = store.getPendingOperations();
+    const activeIds = new Set(pending.filter(op => op.status !== 'acknowledged').map(op => op.command.opId));
+    for (const id of retryAfterUntil.keys()) if (!activeIds.has(id)) retryAfterUntil.delete(id);
+    for (const id of lastSentAt.keys()) if (!activeIds.has(id)) lastSentAt.delete(id);
+
+    const now = Date.now();
+    for (const operation of pending) {
       const { opId } = operation.command;
       if (operation.status === 'acknowledged') continue;
-      if (operation.attempts === 0) {
-        if (store.canSend(opId)) submit(operation.command);
+      const retryAt = retryAfterUntil.get(opId);
+      if (retryAt !== undefined) {
+        if (now >= retryAt && !inFlight.has(opId)) submit(operation.command, false);
         continue;
       }
-      const sentAt = store.getSentAt(opId);
-      if (sentAt !== undefined && Date.now() - sentAt < COMMAND_ACK_TIMEOUT_MS) continue;
-      if (operation.attempts === 1 && store.canSend(opId)) submit(operation.command);
+      if (operation.attempts === 0) {
+        if (store.canSend(opId)) submit(operation.command, true);
+        continue;
+      }
+      const sentAt = lastSentAt.get(opId) ?? store.getSentAt(opId);
+      if (sentAt !== undefined && now - sentAt < COMMAND_ACK_TIMEOUT_MS) continue;
+      if (operation.attempts === 1 && store.canSend(opId)) submit(operation.command, true);
       else abandonAfterRecovery.add(opId); // exhausted or past the store's TTL guard
     }
     if (abandonAfterRecovery.size) {
@@ -180,7 +285,13 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
     let nextDeadline = Infinity;
     for (const operation of store.getPendingOperations()) {
       if (operation.attempts === 0 || operation.status === 'acknowledged') continue;
-      const sentAt = store.getSentAt(operation.command.opId);
+      const { opId } = operation.command;
+      const retryAt = retryAfterUntil.get(opId);
+      if (retryAt !== undefined) {
+        nextDeadline = Math.min(nextDeadline, retryAt);
+        continue;
+      }
+      const sentAt = lastSentAt.get(opId) ?? store.getSentAt(opId);
       if (sentAt !== undefined) nextDeadline = Math.min(nextDeadline, sentAt + COMMAND_ACK_TIMEOUT_MS);
     }
     if (Number.isFinite(nextDeadline)) wakeTimer = setTimeout(scheduleWork, Math.max(0, nextDeadline - Date.now()));
@@ -227,7 +338,7 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
       if (startPromise) return startPromise;
       attach();
       startPromise = Promise.resolve().then(async () => {
-        const snapshot = await adapter.connect();
+        const snapshot = await fetchWithBackoff(() => adapter.connect());
         if (disposed) throw new DOMException('Board coordinator disposed', 'AbortError');
         hydrate(bootstrapSnapshot && bootstrapSnapshot.seq > snapshot.seq ? bootstrapSnapshot : snapshot);
         bootstrapSnapshot = undefined;
@@ -251,12 +362,15 @@ export function createSyncCoordinator({ store, adapter, onNotice }: SyncCoordina
     dispose(): void {
       if (disposed) return;
       disposed = true;
-      clearWake(); clearGap();
+      clearWake(); clearGap(); clearRetry();
       for (const unsubscribe of subscriptions) unsubscribe();
       subscriptions.length = 0;
       bootstrapCommits = [];
       bootstrapSnapshot = undefined;
       abandonAfterRecovery.clear();
+      retryAfterUntil.clear();
+      lastSentAt.clear();
+      inFlight.clear();
       noticeListeners.clear();
       adapter.dispose();
     },

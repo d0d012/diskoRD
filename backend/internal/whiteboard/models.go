@@ -11,10 +11,13 @@ import (
 const (
 	ChannelTypeWhiteboard = "whiteboard"
 
+	MaxObjectsPerUser           = 1500
+	MaxPlacementMargin          = 50000
 	MaxObjectsPerBoard          = 5000
 	MaxBoardBytes               = 10_000_000
 	MaxObjectBytes              = 32 * 1024
 	MaxChangesPerCommand        = 500
+	MaxCommandBytes             = 1024 * 1024
 	maxCoord                    = 10_000_000
 	maxStrokePoints             = 2048
 	maxTextRunes                = 10000
@@ -156,6 +159,7 @@ type OpStore interface {
 // GuildMembership is the membership check the service needs.
 type GuildMembership interface {
 	IsMember(ctx context.Context, guildID, userID string) (bool, error)
+	GetMemberRole(ctx context.Context, guildID, userID string) (string, error)
 }
 
 // Response is the standard envelope.

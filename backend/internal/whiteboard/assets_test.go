@@ -219,7 +219,10 @@ func seedReferencedAssets(h *harness, count int) {
 		b := assetImage(id, a, "")
 		delete(b, "id")
 		delete(b, "version")
-		h.repo.objects[id] = Object{ID: id, Version: 1, Body: raw(b)}
+		body := raw(b)
+		h.repo.objects[id] = Object{ID: id, Version: 1, Body: body}
+		h.repo.objectCount++
+		h.repo.bodyBytes += int64(len(body))
 	}
 }
 

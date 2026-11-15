@@ -3,6 +3,7 @@ import type { Gesture, PointerDownInfo, ToolContext } from '../types';
 import { objectAt } from '../objects';
 import { isSoftLocked } from '../presence';
 import { startCropping } from '../shortcuts';
+import { createEraserGesture } from './eraser';
 import { createCreationGesture, createTextAt, isCreationTool } from './create';
 import { createLaserGesture } from './laser';
 import { createPanGesture } from './pan';
@@ -10,6 +11,7 @@ import { createPenGesture } from './pen';
 import { beginSelect } from './select';
 
 export * from './create';
+export * from './eraser';
 export * from './laser';
 export * from './pan';
 export * from './pen';
@@ -25,6 +27,7 @@ export function beginGesture(ctx: ToolContext, down: PointerDownInfo): Gesture |
   const tool = ctx.session.getState().tool;
   if (tool === 'hand') return createPanGesture(ctx, down.sample);
   if (tool === 'pen') return createPenGesture(ctx, down.sample);
+  if (tool === 'eraser') return createEraserGesture(ctx, down.sample);
   if (tool === 'laser') return createLaserGesture(ctx, down.sample);
   if (tool === 'image') {
     // 'image' only means "the picker is open": a press on the board dismisses it.

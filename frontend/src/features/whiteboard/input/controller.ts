@@ -1,3 +1,4 @@
+import { ERASER_RADIUS_PX } from '../contract';
 import type { BoardStore, HandleId, ObjectId, Point, Runtime, UserId } from '../contract';
 import type { BoardNotify, SessionStore } from '../state';
 import { carriesFiles, copySelection, filesOf, pasteObjects, pasteText } from './clipboard';
@@ -60,10 +61,16 @@ function asHandle(value: string | undefined): HandleId | null {
   return value && (HANDLE_IDS as readonly string[]).includes(value) ? value as HandleId : null;
 }
 
+/** A ring the size of the eraser's reach (ERASER_RADIUS_PX), hotspot at its centre. */
+const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='${ERASER_RADIUS_PX * 2 + 2}' height='${ERASER_RADIUS_PX * 2 + 2}'><circle cx='${ERASER_RADIUS_PX + 1}' cy='${ERASER_RADIUS_PX + 1}' r='${ERASER_RADIUS_PX}' fill='rgba(255,255,255,0.15)' stroke='white' stroke-width='1.5'/><circle cx='${ERASER_RADIUS_PX + 1}' cy='${ERASER_RADIUS_PX + 1}' r='${ERASER_RADIUS_PX}' fill='none' stroke='black' stroke-width='0.5'/></svg>`,
+)}") ${ERASER_RADIUS_PX + 1} ${ERASER_RADIUS_PX + 1}, crosshair`;
+
 function cursorFor(tool: string, spaceHeld: boolean, panning: boolean): string {
   if (panning) return 'grabbing';
   if (spaceHeld || tool === 'hand') return 'grab';
   if (tool === 'select') return '';
+  if (tool === 'eraser') return ERASER_CURSOR;
   return 'crosshair';
 }
 
@@ -364,7 +371,10 @@ export function createInputController(options: InputControllerOptions): InputCon
 
   function zoomToFit(): void {
     const rect = bounds();
-    const camera = cameraToFit(store.getObjectsInRank(), { x: 0, y: 0, w: rect.width, h: rect.height });
+    const visible = session.hasHiddenAuthors?.()
+      ? store.getObjectsInRank().filter(object => !session.isAuthorHidden(object.createdBy))
+      : store.getObjectsInRank();
+    const camera = cameraToFit(visible, { x: 0, y: 0, w: rect.width, h: rect.height });
     if (camera) runtime.setCamera(camera);
   }
 
@@ -574,7 +584,28 @@ export function createInputController(options: InputControllerOptions): InputCon
 
   /* ------------------------------------------------------------------ wiring */
 
+  let visibility = session.getVisibilityState();
   const unsubscribeSession = session.subscribe((state, previous) => {
+    const nextVisibility = session.getVisibilityState();
+    if (nextVisibility !== visibility) {
+      visibility = nextVisibility;
+      // A gesture captures its original selection; do not let it commit or
+      // restore objects that became hidden while it was in progress.
+      cancelActive();
+    }
+    if (session.hasHiddenAuthors()) {
+      const hidden = (id: ObjectId | null) => {
+        const object = id ? store.getObject(id) : undefined;
+        return !!object && session.isAuthorHidden(object.createdBy);
+      };
+      const selectedIds = state.selectedIds.filter(id => !hidden(id));
+      const editingId = hidden(state.editingId) ? null : state.editingId;
+      const croppingId = hidden(state.croppingId) ? null : state.croppingId;
+      if (selectedIds.length !== state.selectedIds.length || editingId !== state.editingId || croppingId !== state.croppingId) {
+        session.setState({ selectedIds, editingId, croppingId });
+        return;
+      }
+    }
     if (state.tool !== previous.tool) updateCursor();
     if (state.selectedIds !== previous.selectedIds) presence?.send({ selectedIds: state.selectedIds });
     if (state.editingId !== previous.editingId) presence?.send({ editingId: state.editingId });

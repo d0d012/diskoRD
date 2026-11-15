@@ -38,6 +38,8 @@ export interface HistoryReport {
  * subscriptions). No camera, pointer samples, presence or drag previews here.
  */
 export interface BoardStore {
+  /** Board/channel UUID bound at store creation. */
+  getBoardId?(): BoardId;
   /** Local actor UUID bound at store creation. */
   getUserId?(): UserId;
   /** Replace confirmed state and rebase pending, as specified in operations.ts. */
@@ -66,6 +68,8 @@ export interface BoardStore {
   subscribeObject(id: ObjectId, listener: () => void): Unsubscribe;
   /** Fires only for membership/order changes; list uses getObjectsInRank order. */
   subscribeIds(listener: () => void): Unsubscribe;
+  /** Fires whenever any object is created, updated, deleted, or reordered. */
+  subscribeObjects?(listener: () => void): Unsubscribe;
   /** History buttons and sync worker must also observe non-object transitions. */
   subscribeHistory(listener: () => void): Unsubscribe;
   getPendingOperations(): readonly PendingOperation[];
@@ -191,6 +195,15 @@ export interface UploadedAsset {
   readonly height: number;
 }
 
+export interface PurgeFilter {
+  readonly createdBy?: UserId;
+  readonly rect?: Rect;
+}
+
+export interface PurgeResult {
+  readonly deleted: number;
+}
+
 /**
  * Board/user are bound at construction. Store integration has ONE owner (the
  * composition layer): connect() returns the bootstrap snapshot, onCommit feeds
@@ -229,6 +242,8 @@ export interface SyncAdapter {
   subscribePresence(listener: (participants: readonly PresenceParticipant[]) => void): Unsubscribe;
   /** Multipart upload. Blob may be a File; SVG is always refused. */
   uploadAsset(file: Blob): Promise<UploadedAsset>;
+  /** Moderator cleanup of objects matching createdBy and/or intersecting rect. */
+  purge?(filter: PurgeFilter): Promise<PurgeResult>;
 }
 
 /**

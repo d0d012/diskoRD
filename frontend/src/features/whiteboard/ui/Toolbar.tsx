@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import { useStore } from 'zustand';
-import { STICKY_TONES } from '../contract';
-import type { BoardStore, Runtime, ToolId } from '../contract';
+import { STICKY_TONES, STROKE_WEIGHTS, STROKE_WEIGHT_WORLD_UNITS } from '../contract';
+import type { BoardStore, Runtime, StrokeWeight, ToolId } from '../contract';
 import { isHexColour, normalizeHexColour, pickerHexForColour, pickerHexForStickyTone, resolveInkCss } from '../core';
 import type { SessionStore } from '../state';
 import { BoardIcon } from './icons';
@@ -37,7 +37,68 @@ function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
   buttons[next]?.focus();
 }
 
+const WEIGHT_LABELS: Record<StrokeWeight, string> = { thin: 'Thin', thick: 'Medium', bold: 'Bold', heavy: 'Heavy' };
+
+interface PenMenuProps {
+  session: SessionStore;
+  onClose: () => void;
+}
+
+/** Right-click menu of the Pen button: line thickness and the pen/eraser switch. */
+function PenMenu({ session, onClose }: PenMenuProps) {
+  const tool = useStore(session, state => state.tool);
+  const defaults = useStore(session, state => state.styleDefaults);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    function onPointerDown(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    }
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [onClose]);
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')];
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    event.preventDefault();
+    event.stopPropagation();
+    items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+  }
+  return (
+    <div ref={ref} data-wb-ui className="wb-pen-menu" role="menu" aria-label="Pen options" onKeyDown={onKeyDown}>
+      <div className="wb-pen-menu__title">Thickness</div>
+      {STROKE_WEIGHTS.map(weight => (
+        <button type="button" key={weight} role="menuitemradio" className="wb-pen-menu__item"
+          aria-checked={defaults.stroke.weight === weight}
+          onClick={() => {
+            session.setStyleDefaults({ stroke: { ...defaults.stroke, weight } });
+            if (session.getState().tool !== 'pen') session.setTool('pen');
+            onClose();
+          }}>
+          <span className="wb-pen-menu__line" style={{ height: STROKE_WEIGHT_WORLD_UNITS[weight], background: resolveInkCss(defaults.stroke.colour) }} />
+          <span>{WEIGHT_LABELS[weight]}</span>
+        </button>
+      ))}
+      <div className="wb-pen-menu__separator" role="separator" />
+      <button type="button" role="menuitemcheckbox" className="wb-pen-menu__item" aria-checked={tool === 'eraser'}
+        onClick={() => { session.setEditingId(null); session.setTool(tool === 'eraser' ? 'pen' : 'eraser'); onClose(); }}>
+        <BoardIcon name={tool === 'eraser' ? 'pen' : 'eraser'} />
+        <span>{tool === 'eraser' ? 'Switch to pen' : 'Switch to eraser'}</span>
+        <kbd>{tool === 'eraser' ? 'P' : 'E'}</kbd>
+      </button>
+    </div>
+  );
+}
+
 export function Toolbar({ session }: BoardUIProps) {
+  const [penMenuOpen, setPenMenuOpen] = useState(false);
   const tool = useStore(session, state => state.tool);
   const defaults = useStore(session, state => state.styleDefaults);
   // Roving tabindex: exactly one dock button is a tab stop (the focused one, else the active tool).
@@ -71,11 +132,15 @@ export function Toolbar({ session }: BoardUIProps) {
       {tools.map(([id, label, shortcut]) => (
         <div className="wb-ui-tool-group" key={id}>
           <button type="button" className="wb-root__tool-button" aria-label={`${label} (${shortcut})`} aria-keyshortcuts={shortcut}
-            aria-pressed={tool === id} tabIndex={stop === id ? 0 : -1} onFocus={() => setFocusKey(id)}
-            data-wb-tooltip={`${label} · ${shortcut}`} onClick={() => selectTool(id)}>
-            {id === 'image' ? <ImageIcon /> : <BoardIcon name={id} />}
+            aria-pressed={tool === id || (id === 'pen' && tool === 'eraser')} tabIndex={stop === id || (id === 'pen' && stop === 'eraser') ? 0 : -1} onFocus={() => setFocusKey(id)}
+            aria-haspopup={id === 'pen' ? 'menu' : undefined} aria-expanded={id === 'pen' ? penMenuOpen : undefined}
+            data-wb-tooltip={penMenuOpen && id === 'pen' ? undefined : id === 'pen' ? (tool === 'eraser' ? 'Eraser · E · right-click for options' : `${label} · ${shortcut} · right-click for options`) : `${label} · ${shortcut}`}
+            onClick={() => selectTool(id)}
+            onContextMenu={id === 'pen' ? event => { event.preventDefault(); setPenMenuOpen(open => !open); } : undefined}>
+            {id === 'image' ? <ImageIcon /> : <BoardIcon name={id === 'pen' && tool === 'eraser' ? 'eraser' : id} />}
             {id === 'pen' && <span className="wb-root__tool-ink-dot" style={{ '--wb-current-ink': resolveInkCss(defaults.stroke.colour) } as CSSProperties} />}
           </button>
+          {id === 'pen' && penMenuOpen && <PenMenu session={session} onClose={() => setPenMenuOpen(false)} />}
           {id === 'pen' && <label className="wb-root__swatch wb-ui-colour-picker" data-wb-tooltip="Custom ink colour" style={{ background: resolveInkCss(defaults.stroke.colour) }}>
             <input type="color" tabIndex={-1} aria-label="Dock custom ink colour" value={pickerHexForColour(defaults.stroke.colour)} onChange={event => {
               const hex = normalizeHexColour(event.target.value);

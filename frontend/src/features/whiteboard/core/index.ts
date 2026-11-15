@@ -8,3 +8,5 @@ export * from './frames';
 export * from './checkbox';
 export * from './reactions';
 export * from './colour';
+export * from './regions';
+export * from './erase';

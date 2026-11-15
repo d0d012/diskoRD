@@ -143,7 +143,7 @@ export interface ConflictResponse {
  * 429 maps to limit when the future per-user rate limiter is installed.
  */
 export const REJECT_CODE_BY_HTTP_STATUS = {
-  400: 'invalid', 403: 'forbidden', 413: 'limit', 429: 'limit',
+  400: 'invalid', 403: 'forbidden', 413: 'limit', 422: 'invalid', 429: 'limit',
 } as const;
 
 /** Normalized adapter value: attach opId to 409; other errors have no current

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSessionStore, DEFAULT_STYLE_DEFAULTS } from './sessionStore';
+import { createSessionStore, DEFAULT_STYLE_DEFAULTS, filterVisibleObjects } from './sessionStore';
 
 describe('per-board session store', () => {
   it('has contract-shaped defaults and never shares mutable state between boards', () => {
@@ -29,6 +29,25 @@ describe('per-board session store', () => {
     expect(store.getState().selectedIds).toEqual(['a', 'b']);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(Object.isFrozen(store.getState().selectedIds)).toBe(true);
+  });
+
+  it('returns the original object array without filtering when no author is hidden', () => {
+    const session = createSessionStore();
+    const objects = Object.freeze([]);
+    const isHidden = vi.spyOn(session, 'isAuthorHidden');
+    expect(filterVisibleObjects(objects, session)).toBe(objects);
+    expect(isHidden).not.toHaveBeenCalled();
+  });
+
+  it('publishes reset of visibility even when SessionState is already at defaults', () => {
+    const session = createSessionStore();
+    session.toggleHideAuthor('alice');
+    const listener = vi.fn();
+    const unsubscribe = session.subscribe(listener);
+    session.reset();
+    expect(session.hasHiddenAuthors()).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 
   it('updates complete style defaults without losing unrelated defaults, and resets', () => {

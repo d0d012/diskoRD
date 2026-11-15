@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { MAX_TEXT_LENGTH } from '../contract';
-import type { BoardObject, TextObject } from '../contract';
+import { describe, expect, it, vi } from 'vitest';
+import { MAX_COMMAND_BYTES, MAX_TEXT_LENGTH } from '../contract';
+import type { BoardObject, Change, TextObject } from '../contract';
 import { compareRank, rankPrefix } from '../core';
 import { copySelection, pasteObjects, pasteText, sanitizeText } from './clipboard';
+import { safeDispatch } from './objects';
 import {
   deleteSelection, duplicateSelection, editSelection, isComposing, isGuardedElement, matchShortcut,
   nudgeSelection, reorderSelection, selectAll,
@@ -208,5 +209,43 @@ describe('wheel and zoom', () => {
     expect(cameraToFit([], { x: 0, y: 0, w: 800, h: 600 })).toBeNull();
     const camera = cameraToFit([rectObject({ x: 1000, y: 1000, w: 200, h: 100 })], { x: 0, y: 0, w: 800, h: 600 })!;
     expect((400 - camera.x) / camera.zoom).toBeCloseTo(1100);
+  });
+});
+
+describe('command byte limit (MAX_COMMAND_BYTES)', () => {
+  it('refuses a command whose create bodies plus update patches exceed MAX_COMMAND_BYTES as UTF-8 JSON without splitting', () => {
+    const existing = textObject({ text: 'seed' });
+    const h = createHarness([existing]);
+    const notify = vi.fn();
+    // 'ğ' encodes to 2 UTF-8 bytes in JSON.
+    const bigText = 'ğ'.repeat(2_000);
+    const changes: Change[] = Array.from({ length: 260 }, (_, i) => {
+      const body = { ...(textObject({ x: i, text: bigText }) as TextObject), version: 0 as const };
+      return { id: body.id, action: 'create', expectedVersion: 0, body };
+    });
+    changes.push({ id: existing.id, action: 'update', expectedVersion: existing.version, patch: { text: bigText } });
+
+    expect(safeDispatch(h.store, changes, 'Paste', notify)).toBeNull();
+    expect(h.dispatch).not.toHaveBeenCalled();
+    expect(h.store.getObjectIds()).toEqual([existing.id]);
+    expect(notify).toHaveBeenCalledExactlyOnceWith('too-many-changes', expect.stringContaining('1 MB'));
+  });
+
+  it('allows a command within MAX_COMMAND_BYTES and ignores delete changes in the byte count', () => {
+    const a = textObject({ text: 'a' });
+    const b = textObject({ x: 50, rank: '1:a1', text: 'b' });
+    const h = createHarness([a, b]);
+    const notify = vi.fn();
+    const createBody = { ...(textObject({ x: 100, rank: '1:a2', text: 'hello' }) as TextObject), version: 0 as const };
+    const changes: Change[] = [
+      { id: createBody.id, action: 'create', expectedVersion: 0, body: createBody },
+      { id: a.id, action: 'update', expectedVersion: a.version, patch: { text: 'updated' } },
+      { id: b.id, action: 'delete', expectedVersion: b.version },
+    ];
+
+    expect(MAX_COMMAND_BYTES).toBe(1_048_576);
+    expect(safeDispatch(h.store, changes, 'Mixed', notify)).not.toBeNull();
+    expect(h.dispatch).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
   });
 });

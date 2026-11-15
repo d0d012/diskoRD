@@ -1,5 +1,6 @@
 import type { BoardObject, ObjectPatch, ToolId } from '../contract';
 import { bringToFront, sendToBack } from '../core';
+import { filterVisibleObjects } from '../state';
 import {
   DUPLICATE_OFFSET, createChange, deleteChange, existingObjects, safeDispatch, sameIds, topRanks,
   translated, updateChange,
@@ -36,7 +37,7 @@ export type ShortcutAction =
   | { readonly type: 'edit' };
 
 export const TOOL_KEYS: Readonly<Record<string, Exclude<ToolId, 'image'>>> = {
-  v: 'select', h: 'hand', p: 'pen', k: 'laser', s: 'sticky', r: 'rect', o: 'ellipse',
+  v: 'select', h: 'hand', p: 'pen', e: 'eraser', k: 'laser', s: 'sticky', r: 'rect', o: 'ellipse',
   l: 'line', a: 'arrow', t: 'text', f: 'frame',
 };
 
@@ -114,7 +115,7 @@ export function deleteSelection(ctx: ToolContext): boolean {
 }
 
 export function selectAll(ctx: ToolContext): void {
-  const ids = ctx.store.getObjectIds();
+  const ids = filterVisibleObjects(ctx.store.getObjectsInRank(), ctx.session).map(object => object.id);
   if (!sameIds(ids, ctx.session.getState().selectedIds)) ctx.session.setSelectedIds(ids);
 }
 

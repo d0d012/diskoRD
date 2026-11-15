@@ -31,6 +31,12 @@ func testApp(h *harness, member bool) *fiber.App {
 
 func do(t *testing.T, app *fiber.App, method, path, body string) (int, map[string]any) {
 	t.Helper()
+	status, out, _ := doWithHeaders(t, app, method, path, body)
+	return status, out
+}
+
+func doWithHeaders(t *testing.T, app *fiber.App, method, path, body string) (int, map[string]any, http.Header) {
+	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -39,7 +45,7 @@ func do(t *testing.T, app *fiber.App, method, path, body string) (int, map[strin
 	b, _ := io.ReadAll(resp.Body)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(b, &out), string(b))
-	return resp.StatusCode, out
+	return resp.StatusCode, out, resp.Header
 }
 
 func TestHandlerGetBoardEnvelope(t *testing.T) {
@@ -59,6 +65,18 @@ func TestHandlerGetBoardEnvelope(t *testing.T) {
 
 	status, _ = do(t, testApp(newHarness(), false), "GET", "/channels/"+chID+"/board", "")
 	assert.Equal(t, http.StatusForbidden, status)
+}
+
+func TestHandlerPlacementRejection(t *testing.T) {
+	h := newHarness()
+	ids := seedObjects(t, h, 2, userID, Rect{W: 100, H: 100})
+	app := testApp(h, true)
+	req := CommandRequest{OpID: h.uuid(), Changes: []ChangeRequest{updateChange(ids[0], 1, m{"x": 99999})}}
+	status, body := do(t, app, "POST", "/channels/"+chID+"/board/ops", string(raw(req)))
+	assert.Equal(t, http.StatusUnprocessableEntity, status)
+	assert.Equal(t, map[string]any{"error": "too far from existing content"}, body)
+	assert.EqualValues(t, 1, h.repo.seq)
+	assertCounters(t, h)
 }
 
 func TestHandlerOpsEnvelopes(t *testing.T) {

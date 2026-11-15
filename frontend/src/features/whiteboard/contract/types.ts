@@ -51,7 +51,7 @@ export const STICKY_REACTION_PRESETS = [
 ] as const;
 export type StickyReactions = Readonly<Record<string, readonly UserId[]>>;
 export type FillMode = 'none' | 'tint' | 'solid';
-export type StrokeWeight = 'thin' | 'thick';
+export type StrokeWeight = 'thin' | 'thick' | 'bold' | 'heavy';
 export type StrokePreset = 'pen' | 'marker';
 export type TextSize = 'S' | 'M' | 'L' | 'XL';
 export type FontKind = 'app' | 'handwriting';
@@ -225,7 +225,7 @@ export type EndpointHandleId = 'start' | 'end';
 export type HandleId = ResizeHandleId | EndpointHandleId;
 /** Text: e/w reflow, corners step size. Images: aspect-locked corners. */
 export type ToolId =
-  | 'select' | 'hand' | 'pen' | 'laser' | 'sticky' | 'rect' | 'ellipse'
+  | 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse'
   | 'line' | 'arrow' | 'text' | 'frame' | 'image';
 /** Pen and arrow stay active; other creation tools return to select. */
 export type Unsubscribe = () => void;

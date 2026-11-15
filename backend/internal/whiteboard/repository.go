@@ -31,8 +31,14 @@ type BoardTx interface {
 	Seq() int64
 	// Objects returns the existing objects among ids, keyed by id.
 	Objects(ctx context.Context, ids []string) (map[string]Object, error)
-	// Totals returns object count and canonical compact stored-body bytes.
+	// Totals returns the locked counters (initialising legacy boards once).
 	Totals(ctx context.Context) (count int, bytes int64, err error)
+	// CountByAuthor excludes objects deleted by this command.
+	CountByAuthor(ctx context.Context, userID string, excludeIDs []string) (int, error)
+	// Bounds excludes every object touched by this command; nil means empty.
+	Bounds(ctx context.Context, excludeIDs []string) (*bounds, error)
+	// PurgeTargets selects at most MaxChangesPerCommand matching objects.
+	PurgeTargets(ctx context.Context, req PurgeRequest) ([]Object, error)
 	// Assets returns only metadata belonging to this locked board.
 	Assets(ctx context.Context, ids []string) (map[string]Asset, error)
 	// ReferencedAssets returns distinct live image asset ids, excluding objects
@@ -43,7 +49,8 @@ type BoardTx interface {
 	Insert(ctx context.Context, o Object) error
 	Update(ctx context.Context, o Object) error
 	Delete(ctx context.Context, id string) error
-	SetSeq(ctx context.Context, seq int64) error
+	// SetState persists the sequence and quota counters with the object writes.
+	SetState(ctx context.Context, seq int64, count int, bytes int64) error
 }
 
 // ErrObjectIDTaken is returned by Insert when the id exists on another board
@@ -143,12 +150,14 @@ func (r *PgRepository) Commit(ctx context.Context, boardID string, fn func(ctx c
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	var seq int64
-	if err := tx.QueryRow(ctx, `SELECT seq FROM whiteboards WHERE id = $1 FOR UPDATE`, boardID).Scan(&seq); err != nil {
+	var seq, bodyBytes int64
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT seq, object_count, body_bytes FROM whiteboards WHERE id = $1 FOR UPDATE`, boardID).
+		Scan(&seq, &count, &bodyBytes); err != nil {
 		return fmt.Errorf("whiteboard.Repository.Commit: lock: %w", err)
 	}
 
-	if err := fn(ctx, &pgBoardTx{tx: tx, boardID: boardID, seq: seq}); err != nil {
+	if err := fn(ctx, &pgBoardTx{tx: tx, boardID: boardID, seq: seq, count: count, bodyBytes: bodyBytes}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -158,9 +167,11 @@ func (r *PgRepository) Commit(ctx context.Context, boardID string, fn func(ctx c
 }
 
 type pgBoardTx struct {
-	tx      pgx.Tx
-	boardID string
-	seq     int64
+	tx        pgx.Tx
+	boardID   string
+	seq       int64
+	count     int
+	bodyBytes int64
 }
 
 func (t *pgBoardTx) Seq() int64 { return t.seq }
@@ -189,9 +200,13 @@ func (t *pgBoardTx) Objects(ctx context.Context, ids []string) (map[string]Objec
 }
 
 func (t *pgBoardTx) Totals(ctx context.Context) (int, int64, error) {
-	// JSONB adds whitespace and expands exponent-form numbers. Re-encode through
-	// the same canonical encoder as writes so the quota does not drift per edit.
-	// This scan is bounded by the board quota; no schema/counter migration in v2.
+	if t.bodyBytes >= 0 {
+		return t.count, t.bodyBytes, nil
+	}
+	// Migration 000029 marks nonempty legacy boards with -1: SQL's JSONB text
+	// cannot reproduce Go's float64 encoding and HTML escaping exactly. Only
+	// these boards need a full scan, once on their first successful command.
+	// SetState persists the exact totals with the command under this row lock.
 	rows, err := t.tx.Query(ctx, `SELECT body FROM whiteboard_objects WHERE board_id = $1`, t.boardID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("whiteboard.BoardTx.Totals: %w", err)
@@ -214,7 +229,69 @@ func (t *pgBoardTx) Totals(ctx context.Context) (int, int64, error) {
 	if err := rows.Err(); err != nil {
 		return 0, 0, fmt.Errorf("whiteboard.BoardTx.Totals: rows: %w", err)
 	}
+	t.count, t.bodyBytes = count, size
 	return count, size, nil
+}
+
+func (t *pgBoardTx) CountByAuthor(ctx context.Context, userID string, excludeIDs []string) (int, error) {
+	if excludeIDs == nil {
+		excludeIDs = []string{}
+	}
+	var count int
+	err := t.tx.QueryRow(ctx, `SELECT count(*) FROM whiteboard_objects
+		WHERE board_id = $1 AND created_by = $2
+		AND NOT (id = ANY($3::text[]::uuid[]))`, t.boardID, userID, excludeIDs).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("whiteboard.BoardTx.CountByAuthor: %w", err)
+	}
+	return count, nil
+}
+
+func (t *pgBoardTx) Bounds(ctx context.Context, excludeIDs []string) (*bounds, error) {
+	if excludeIDs == nil {
+		excludeIDs = []string{}
+	}
+	var minX, minY, maxX, maxY *float64
+	err := t.tx.QueryRow(ctx, `SELECT min(x), min(y), max(x + w), max(y + h)
+		FROM whiteboard_objects WHERE board_id = $1
+		AND NOT (id = ANY($2::text[]::uuid[]))`, t.boardID, excludeIDs).Scan(&minX, &minY, &maxX, &maxY)
+	if err != nil {
+		return nil, fmt.Errorf("whiteboard.BoardTx.Bounds: %w", err)
+	}
+	if minX == nil {
+		return nil, nil
+	}
+	return &bounds{*minX, *minY, *maxX, *maxY}, nil
+}
+
+func (t *pgBoardTx) PurgeTargets(ctx context.Context, req PurgeRequest) ([]Object, error) {
+	var rect Rect
+	if req.Rect != nil {
+		rect = *req.Rect
+	}
+	rows, err := t.tx.Query(ctx, `SELECT id, version, body FROM whiteboard_objects
+		WHERE board_id = $1 AND ($2::uuid IS NULL OR created_by = $2::uuid)
+		AND (NOT $3::boolean OR (x <= $4::double precision + $6::double precision
+		AND x + w >= $4::double precision AND y <= $5::double precision + $7::double precision
+		AND y + h >= $5::double precision))
+		ORDER BY id LIMIT $8`, t.boardID, req.CreatedBy, req.Rect != nil,
+		rect.X, rect.Y, rect.W, rect.H, MaxChangesPerCommand)
+	if err != nil {
+		return nil, fmt.Errorf("whiteboard.BoardTx.PurgeTargets: %w", err)
+	}
+	defer rows.Close()
+	var objects []Object
+	for rows.Next() {
+		var o Object
+		if err := rows.Scan(&o.ID, &o.Version, &o.Body); err != nil {
+			return nil, fmt.Errorf("whiteboard.BoardTx.PurgeTargets: scan: %w", err)
+		}
+		objects = append(objects, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("whiteboard.BoardTx.PurgeTargets: rows: %w", err)
+	}
+	return objects, nil
 }
 
 func (t *pgBoardTx) Assets(ctx context.Context, ids []string) (map[string]Asset, error) {
@@ -277,7 +354,11 @@ func (t *pgBoardTx) InsertAsset(ctx context.Context, a Asset) error {
 
 func (t *pgBoardTx) Insert(ctx context.Context, o Object) error {
 	_, err := t.tx.Exec(ctx,
-		`INSERT INTO whiteboard_objects (id, board_id, version, body) VALUES ($1, $2, $3, $4::jsonb)`,
+		`INSERT INTO whiteboard_objects (id, board_id, version, body, created_by, x, y, w, h)
+		 VALUES ($1, $2, $3, $4::jsonb,
+		 (SELECT id FROM users WHERE id = ($4::jsonb->>'createdBy')::uuid),
+		 ($4::jsonb->>'x')::double precision, ($4::jsonb->>'y')::double precision,
+		 ($4::jsonb->>'w')::double precision, ($4::jsonb->>'h')::double precision)`,
 		o.ID, t.boardID, o.Version, []byte(o.Body))
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -291,7 +372,10 @@ func (t *pgBoardTx) Insert(ctx context.Context, o Object) error {
 
 func (t *pgBoardTx) Update(ctx context.Context, o Object) error {
 	tag, err := t.tx.Exec(ctx,
-		`UPDATE whiteboard_objects SET version = $1, body = $2::jsonb, updated_at = now()
+		`UPDATE whiteboard_objects SET version = $1, body = $2::jsonb, updated_at = now(),
+		 created_by = (SELECT id FROM users WHERE id = ($2::jsonb->>'createdBy')::uuid),
+		 x = ($2::jsonb->>'x')::double precision, y = ($2::jsonb->>'y')::double precision,
+		 w = ($2::jsonb->>'w')::double precision, h = ($2::jsonb->>'h')::double precision
 		 WHERE id = $3 AND board_id = $4`,
 		o.Version, []byte(o.Body), o.ID, t.boardID)
 	if err != nil {
@@ -315,11 +399,13 @@ func (t *pgBoardTx) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (t *pgBoardTx) SetSeq(ctx context.Context, seq int64) error {
+func (t *pgBoardTx) SetState(ctx context.Context, seq int64, count int, bytes int64) error {
 	if _, err := t.tx.Exec(ctx,
-		`UPDATE whiteboards SET seq = $1, updated_at = now() WHERE id = $2`, seq, t.boardID,
+		`UPDATE whiteboards SET seq = $1, object_count = $2, body_bytes = $3, updated_at = now() WHERE id = $4`,
+		seq, count, bytes, t.boardID,
 	); err != nil {
-		return fmt.Errorf("whiteboard.BoardTx.SetSeq: %w", err)
+		return fmt.Errorf("whiteboard.BoardTx.SetState: %w", err)
 	}
+	t.seq, t.count, t.bodyBytes = seq, count, bytes
 	return nil
 }

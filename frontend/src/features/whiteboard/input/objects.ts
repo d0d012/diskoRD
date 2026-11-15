@@ -1,7 +1,7 @@
 import {
   DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, DEFAULT_SHAPE_HEIGHT, DEFAULT_SHAPE_WIDTH,
-  DEFAULT_TEXT_WIDTH, MAX_CHANGES_PER_COMMAND, MAX_OBJECTS_PER_BOARD, STICKY_BASE_HEIGHT,
-  STICKY_BASE_WIDTH, TEXT_SIZE_WORLD_UNITS,
+  DEFAULT_TEXT_WIDTH, MAX_CHANGES_PER_COMMAND, MAX_COMMAND_BYTES, MAX_OBJECTS_PER_BOARD,
+  MAX_OBJECTS_PER_USER, MAX_PLACEMENT_MARGIN, STICKY_BASE_HEIGHT, STICKY_BASE_WIDTH, TEXT_SIZE_WORLD_UNITS,
 } from '../contract';
 import type {
   BoardObject, BoardStore, Change, ObjectId, ObjectPatch, OpId, Point, Rank, Rect,
@@ -10,6 +10,7 @@ import type {
 } from '../contract';
 import { rankBetweenMany, rankPrefix, topmostObjectAtPoint } from '../core';
 import { TEXT_LINE_HEIGHT, textObjectHeight } from '../editing/measure';
+import { filterVisibleObjects } from '../state';
 import type { BoardNoticeKind, BoardNotify } from '../state';
 import type { ToolContext } from './types';
 
@@ -44,7 +45,8 @@ export function hitTolerance(runtime: Runtime): number {
 }
 
 export function objectAt(ctx: ToolContext, world: Point): BoardObject | undefined {
-  return topmostObjectAtPoint(ctx.store.getObjectsInRank(), world, hitTolerance(ctx.runtime));
+  const candidates = filterVisibleObjects(ctx.store.getObjectsInRank(), ctx.session);
+  return topmostObjectAtPoint(candidates, world, hitTolerance(ctx.runtime));
 }
 
 export function screenDistance(a: Point, b: Point): number {
@@ -164,11 +166,23 @@ export function reportRefusal(
 
 export const TOO_MANY_CHANGES_MESSAGE = 'Too many objects selected for one action';
 
+const commandEncoder = new TextEncoder();
+
+/** UTF-8 JSON byte total of a command's create bodies plus update patches. */
+export function commandBytes(changes: readonly Change[]): number {
+  let bytes = 0;
+  for (const change of changes) {
+    if (change.action === 'create') bytes += commandEncoder.encode(JSON.stringify(change.body)).byteLength;
+    else if (change.action === 'update') bytes += commandEncoder.encode(JSON.stringify(change.patch)).byteLength;
+  }
+  return bytes;
+}
+
 /**
  * The single dispatch path. Refuses (returns null) empty commands, commands
- * over MAX_CHANGES_PER_COMMAND (never split into several writes), creates that
- * would exceed MAX_OBJECTS_PER_BOARD, and anything the store rejects. Every
- * refusal except an empty command is reported through `notify`.
+ * over MAX_CHANGES_PER_COMMAND or MAX_COMMAND_BYTES (never split into several
+ * writes), creates that would exceed MAX_OBJECTS_PER_BOARD, and anything the
+ * store rejects. Every refusal except an empty command is reported through `notify`.
  */
 export function safeDispatch(store: BoardStore, changes: readonly Change[], label?: string, notify?: BoardNotify): OpId | null {
   if (changes.length === 0) return null;
@@ -176,11 +190,79 @@ export function safeDispatch(store: BoardStore, changes: readonly Change[], labe
     reportRefusal(notify, 'too-many-changes', `${TOO_MANY_CHANGES_MESSAGE} (at most ${MAX_CHANGES_PER_COMMAND}).`);
     return null;
   }
+  if (commandBytes(changes) > MAX_COMMAND_BYTES) {
+    reportRefusal(notify, 'too-many-changes', `${TOO_MANY_CHANGES_MESSAGE} (at most 1 MB).`);
+    return null;
+  }
   const creates = changes.filter(change => change.action === 'create').length;
   const deletes = changes.filter(change => change.action === 'delete').length;
   if (creates > 0 && store.getObjectIds().length - deletes + creates > MAX_OBJECTS_PER_BOARD) {
     reportRefusal(notify, 'board-full', `This board is full (at most ${MAX_OBJECTS_PER_BOARD} objects).`);
     return null;
+  }
+  const allObjects = store.getObjectsInRank();
+  if (creates > 0) {
+    // Do not guess the actor from a create body: the store stamps its bound user.
+    const currentUserId = store.getUserId?.();
+    if (currentUserId) {
+      let ownCount = 0;
+      for (const obj of allObjects) {
+        if (obj.createdBy === currentUserId) ownCount++;
+      }
+      let ownDeletes = 0;
+      for (const change of changes) {
+        if (change.action === 'delete' && store.getObject(change.id)?.createdBy === currentUserId) {
+          ownDeletes++;
+        }
+      }
+      if (ownCount - ownDeletes + creates > MAX_OBJECTS_PER_USER) {
+        reportRefusal(notify, 'board-full', `You can hold at most ${MAX_OBJECTS_PER_USER} objects on a board.`);
+        return null;
+      }
+    }
+  }
+  const placed: Rect[] = [];
+  for (const change of changes) {
+    if (change.action === 'create') {
+      placed.push(change.body);
+    } else if (change.action === 'update') {
+      const current = store.getObject(change.id);
+      if (!current) continue;
+      const next = {
+        x: change.patch.x ?? current.x, y: change.patch.y ?? current.y,
+        w: change.patch.w ?? current.w, h: change.patch.h ?? current.h,
+      };
+      // The server compares resulting geometry, not the presence of patch keys.
+      if (next.x !== current.x || next.y !== current.y || next.w !== current.w || next.h !== current.h) {
+        placed.push(next);
+      }
+    }
+  }
+  // All touched objects are excluded from C, even deletes and style-only edits.
+  const touchedIds = new Set(changes.map(change => change.id));
+  const untouched = placed.length ? allObjects.filter(obj => !touchedIds.has(obj.id)) : [];
+  if (untouched.length > 0) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const obj of untouched) {
+      if (obj.x < minX) minX = obj.x;
+      if (obj.y < minY) minY = obj.y;
+      if (obj.x + obj.w > maxX) maxX = obj.x + obj.w;
+      if (obj.y + obj.h > maxY) maxY = obj.y + obj.h;
+    }
+    const allowedMinX = minX - MAX_PLACEMENT_MARGIN;
+    const allowedMinY = minY - MAX_PLACEMENT_MARGIN;
+    const allowedMaxX = maxX + MAX_PLACEMENT_MARGIN;
+    const allowedMaxY = maxY + MAX_PLACEMENT_MARGIN;
+    // Containment of every resulting box is equivalent to containment of their union N.
+    for (const next of placed) {
+      if (next.x < allowedMinX || next.y < allowedMinY || next.x + next.w > allowedMaxX || next.y + next.h > allowedMaxY) {
+        reportRefusal(notify, 'refused', 'Too far from existing content.');
+        return null;
+      }
+    }
   }
   try {
     return store.dispatch(changes, label ? { label } : undefined);

@@ -17,7 +17,7 @@ var (
 	paletteColours = []string{"ink", "gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"}
 	stickyTones    = []string{"yellow", "pink", "mint", "sky"}
 	fillModes      = []string{"none", "tint", "solid"}
-	strokeWeights  = []string{"thin", "thick"}
+	strokeWeights  = []string{"thin", "thick", "bold", "heavy"}
 	strokePresets  = []string{"pen", "marker"}
 	textSizes      = []string{"S", "M", "L", "XL"}
 	textAligns     = []string{"left", "center", "right"}
@@ -667,6 +667,20 @@ func validateCommandShape(req CommandRequest) error {
 	}
 	if len(req.Changes) > MaxChangesPerCommand {
 		return limitf("a command can hold at most %d changes", MaxChangesPerCommand)
+	}
+	// Count the submitted bodies/patches, including their JSON whitespace,
+	// before content validation or either the in-process or database board lock.
+	var size int
+	for _, ch := range req.Changes {
+		switch ch.Action {
+		case ActionCreate:
+			size += len(ch.Body)
+		case ActionUpdate:
+			size += len(ch.Patch)
+		}
+		if size > MaxCommandBytes {
+			return limitf("command bodies and patches exceed %d bytes", MaxCommandBytes)
+		}
 	}
 	seen := make(map[string]bool, len(req.Changes))
 	for _, ch := range req.Changes {

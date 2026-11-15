@@ -23,14 +23,20 @@ const (
 // fakeRepo is an in-memory Repository with transactional semantics: Commit
 // works on a copy and keeps it only when fn succeeds.
 type fakeRepo struct {
-	channels   map[string]*ChannelInfo
-	seq        int64
-	objects    map[string]Object
-	assets     map[string]Asset
-	commits    int
-	failNext   error
-	failAsset  error
-	failCommit error
+	channels      map[string]*ChannelInfo
+	seq           int64
+	objectCount   int
+	bodyBytes     int64
+	commitCalls   int
+	snapshots     int
+	objects       map[string]Object
+	assets        map[string]Asset
+	commits       int
+	failNext      error
+	failAsset     error
+	failCommit    error
+	authorQueries int
+	boundsQueries int
 }
 
 func newFakeRepo() *fakeRepo {
@@ -52,6 +58,7 @@ func (r *fakeRepo) GetChannel(_ context.Context, id string) (*ChannelInfo, error
 func (r *fakeRepo) CurrentSeq(context.Context, string) (int64, error) { return r.seq, nil }
 
 func (r *fakeRepo) Snapshot(_ context.Context, _ string) (int64, []Object, error) {
+	r.snapshots++
 	out := []Object{}
 	for _, o := range r.objects {
 		out = append(out, o)
@@ -60,12 +67,14 @@ func (r *fakeRepo) Snapshot(_ context.Context, _ string) (int64, []Object, error
 }
 
 func (r *fakeRepo) Commit(ctx context.Context, boardID string, fn func(context.Context, BoardTx) error) error {
+	r.commitCalls++
 	if r.failNext != nil {
 		err := r.failNext
 		r.failNext = nil
 		return err
 	}
-	tx := &fakeTx{seq: r.seq, boardID: boardID, objects: map[string]Object{}, assets: map[string]Asset{}, failAsset: r.failAsset}
+	tx := &fakeTx{repo: r, seq: r.seq, count: r.objectCount, bodyBytes: r.bodyBytes, boardID: boardID,
+		objects: map[string]Object{}, assets: map[string]Asset{}, failAsset: r.failAsset}
 	for k, v := range r.objects {
 		tx.objects[k] = v
 	}
@@ -79,12 +88,16 @@ func (r *fakeRepo) Commit(ctx context.Context, boardID string, fn func(context.C
 		return r.failCommit
 	}
 	r.seq, r.objects, r.assets = tx.seq, tx.objects, tx.assets
+	r.objectCount, r.bodyBytes = tx.count, tx.bodyBytes
 	r.commits++
 	return nil
 }
 
 type fakeTx struct {
+	repo      *fakeRepo
 	seq       int64
+	count     int
+	bodyBytes int64
 	objects   map[string]Object
 	assets    map[string]Asset
 	boardID   string
@@ -102,15 +115,7 @@ func (t *fakeTx) Objects(_ context.Context, ids []string) (map[string]Object, er
 	return out, nil
 }
 func (t *fakeTx) Totals(context.Context) (int, int64, error) {
-	var n int64
-	for _, o := range t.objects {
-		body, err := canonicalStoredBody(o.Body)
-		if err != nil {
-			return 0, 0, err
-		}
-		n += int64(len(body))
-	}
-	return len(t.objects), n, nil
+	return t.count, t.bodyBytes, nil
 }
 func (t *fakeTx) Assets(_ context.Context, ids []string) (map[string]Asset, error) {
 	out := map[string]Asset{}
@@ -154,7 +159,10 @@ func (t *fakeTx) InsertAsset(_ context.Context, a Asset) error {
 func (t *fakeTx) Insert(_ context.Context, o Object) error  { t.objects[o.ID] = o; return nil }
 func (t *fakeTx) Update(_ context.Context, o Object) error  { t.objects[o.ID] = o; return nil }
 func (t *fakeTx) Delete(_ context.Context, id string) error { delete(t.objects, id); return nil }
-func (t *fakeTx) SetSeq(_ context.Context, s int64) error   { t.seq = s; return nil }
+func (t *fakeTx) SetState(_ context.Context, seq int64, count int, bytes int64) error {
+	t.seq, t.count, t.bodyBytes = seq, count, bytes
+	return nil
+}
 
 type fakeOps struct {
 	records map[string]OpRecord
@@ -179,6 +187,18 @@ func (o *fakeOps) Put(_ context.Context, id string, r OpRecord) error {
 type fakeMembers struct{ member bool }
 
 func (m fakeMembers) IsMember(context.Context, string, string) (bool, error) { return m.member, nil }
+func (m fakeMembers) GetMemberRole(context.Context, string, string) (string, error) {
+	return "member", nil
+}
+
+type fakeRoleMembers struct {
+	fakeMembers
+	role string
+}
+
+func (m fakeRoleMembers) GetMemberRole(context.Context, string, string) (string, error) {
+	return m.role, nil
+}
 
 type recordingPublisher struct{ payloads []CommitPayload }
 
@@ -509,6 +529,7 @@ func TestLimits(t *testing.T) {
 		for i := 0; i < MaxObjectsPerBoard; i++ {
 			h.repo.objects[fmt.Sprintf("bbbbbbbb-0000-4000-8000-%012d", i)] = Object{Version: 1, Body: raw(m{"kind": "rect"})}
 		}
+		h.repo.objectCount, h.repo.bodyBytes = objectTotals(t, h.repo.objects)
 		id := h.uuid()
 		_, err := h.run(createChange(id, rectBody(id)))
 		assert.Equal(t, 413, httpCode(t, err))
@@ -521,6 +542,7 @@ func TestLimits(t *testing.T) {
 	t.Run("bytes per board", func(t *testing.T) {
 		h := newHarness()
 		h.repo.objects["bbbbbbbb-0000-4000-8000-000000000000"] = Object{Version: 1, Body: raw(m{"text": strings.Repeat("x", MaxBoardBytes)})}
+		h.repo.objectCount, h.repo.bodyBytes = objectTotals(t, h.repo.objects)
 		id := h.uuid()
 		_, err := h.run(createChange(id, rectBody(id)))
 		assert.Equal(t, 413, httpCode(t, err))

@@ -6,10 +6,11 @@ import {
 } from '../contract';
 import type {
   BoardId, BoardObject, BoardSeq, Command, CommandResult, Commit, ObjectId, OpId, Participant,
-  Point, PresenceDrag, PresenceFields, PresenceParticipant, Rect, Reject, Snapshot, SyncAdapter,
-  SyncStatus, Unsubscribe, UploadedAsset, UserId,
+  Point, PresenceDrag, PresenceFields, PresenceParticipant, PurgeFilter, PurgeResult, Rect, Reject,
+  Snapshot, SyncAdapter, SyncStatus, Unsubscribe, UploadedAsset, UserId,
 } from '../contract';
 import { jsonBytes } from './validation';
+import { retryAfterMs } from './coordinator';
 
 export interface NetworkAdapterOptions {
   /** The channel id; also the gateway room key. Must equal the store's board id. */
@@ -132,6 +133,7 @@ function isCanceled(error: unknown): boolean {
 }
 
 const UPLOAD_FALLBACK = 'The image could not be uploaded. Try again.';
+const PURGE_FALLBACK = 'Could not remove objects. Try again.';
 
 /** A message fit to show the user: the server's own text where it is written for them. */
 function uploadFailureMessage(error: unknown): string {
@@ -141,6 +143,49 @@ function uploadFailureMessage(error: unknown): string {
   if (status === 403) return "You can't add images to this board.";
   if (status === 404) return 'This board is no longer available.';
   return UPLOAD_FALLBACK;
+}
+
+export function purgeFailureMessage(error: unknown): string {
+  const status = httpStatus(error);
+  if (status === undefined) return "Couldn't reach the server. Check your connection and try again.";
+  if (status === 403) return httpMessage(error, 'You do not have permission to manage this channel.');
+  if (status === 429) {
+    const delay = retryAfterMs(error);
+    const sec = delay !== undefined ? Math.max(1, Math.ceil(delay / 1000)) : undefined;
+    const msg = httpMessage(error, '');
+    if (msg) return sec !== undefined && !msg.includes(String(sec)) ? `${msg} (retry after ${sec}s)` : msg;
+    return sec !== undefined ? `Too many requests — try again in ${sec}s.` : 'Too many requests — try again in a moment.';
+  }
+  if (status === 400 || status === 422) return httpMessage(error, PURGE_FALLBACK);
+  if (status === 404) return 'This board is no longer available.';
+  return httpMessage(error, PURGE_FALLBACK);
+}
+
+function parsePurgeResult(value: unknown): PurgeResult {
+  if (!isRecord(value) || typeof value.deleted !== 'number' || !Number.isSafeInteger(value.deleted) || value.deleted < 0) {
+    throw new Error('Malformed board purge response');
+  }
+  return { deleted: value.deleted };
+}
+
+export async function purgeBoard(
+  boardId: BoardId,
+  filter: PurgeFilter,
+  signal?: AbortSignal,
+): Promise<PurgeResult> {
+  const body: Record<string, unknown> = {};
+  if (filter.createdBy !== undefined) body.createdBy = filter.createdBy;
+  if (filter.rect !== undefined) {
+    body.rect = { x: filter.rect.x, y: filter.rect.y, w: filter.rect.w, h: filter.rect.h };
+  }
+  let response: unknown;
+  try {
+    response = await api.post(`/channels/${boardId}/board/purge`, body, signal ? { signal } : undefined);
+  } catch (error) {
+    if (isCanceled(error)) throw abortError();
+    throw new Error(purgeFailureMessage(error), { cause: error });
+  }
+  return parsePurgeResult(envelope(response));
 }
 
 function parseUploadedAsset(value: unknown): UploadedAsset {
@@ -277,15 +322,22 @@ export function createNetworkAdapter(options: NetworkAdapterOptions): SyncAdapte
   }
 
   async function fetchSnapshot(): Promise<Snapshot> {
-    let response: unknown;
-    try {
-      response = await untilDisposed(api.get(snapshotPath, { signal: abort.signal }));
-    } catch (error) {
-      if (disposed || isCanceled(error)) throw abortError();
-      throw error;
+    for (;;) {
+      let response: unknown;
+      try {
+        response = await untilDisposed(api.get(snapshotPath, { signal: abort.signal }));
+      } catch (error) {
+        if (disposed || isCanceled(error)) throw abortError();
+        const delay = retryAfterMs(error);
+        if (delay !== undefined) {
+          await untilDisposed(new Promise<void>(resolve => { schedule(resolve, delay); }));
+          continue;
+        }
+        throw error;
+      }
+      if (disposed) throw abortError();
+      return parseSnapshot(envelope(response));
     }
-    if (disposed) throw abortError();
-    return parseSnapshot(envelope(response));
   }
 
   function flushLater(): void {
@@ -397,11 +449,11 @@ export function createNetworkAdapter(options: NetworkAdapterOptions): SyncAdapte
         }
         return { opId: command.opId, error: body.error, code: body.code, seq: body.seq, current: body.current as BoardObject[] };
       }
-      if (statusCode !== undefined && statusCode in REJECT_CODE_BY_HTTP_STATUS) {
+      if (statusCode !== undefined && statusCode !== 429 && statusCode in REJECT_CODE_BY_HTTP_STATUS) {
         const code = REJECT_CODE_BY_HTTP_STATUS[statusCode as keyof typeof REJECT_CODE_BY_HTTP_STATUS];
         return { opId: command.opId as OpId, code, error: httpMessage(error, `Board change rejected (${statusCode})`), current: [] };
       }
-      throw error; // network, 401 after refresh, 404, 5xx: a transport error, never a Reject
+      throw error; // network, 401 after refresh, 404, 429, 5xx: a transport/rate-limit error, never a Reject
     }
     if (disposed) throw abortError();
     return parseCommandResult(envelope(response));
@@ -425,6 +477,11 @@ export function createNetworkAdapter(options: NetworkAdapterOptions): SyncAdapte
     }
     if (disposed) throw abortError();
     return parseUploadedAsset(envelope(response));
+  }
+
+  async function purge(filter: PurgeFilter): Promise<PurgeResult> {
+    if (disposed) throw abortError();
+    return untilDisposed(purgeBoard(boardId, filter, abort.signal));
   }
 
   // ---- presence: incoming ---------------------------------------------
@@ -681,5 +738,6 @@ export function createNetworkAdapter(options: NetworkAdapterOptions): SyncAdapte
     getPresence: () => presenceView,
     subscribePresence: listener => listen(presenceListeners, listener),
     uploadAsset,
+    purge,
   };
 }

@@ -99,6 +99,38 @@ describe('input controller: pointer gestures', () => {
     expect(h.session.getState().tool).toBe('select');
   });
 
+  it('immediately prunes hidden selection, editing and cropping, and cancels captured drags', () => {
+    const own = rectObject();
+    const other = { ...rectObject(), id: 'other', createdBy: 'other-user', x: 500 };
+    setup([own, other]);
+    h.session.setSelectedIds([own.id, other.id]);
+    h.session.setEditingId(other.id);
+    h.session.setCroppingId(other.id);
+    pointer('pointerdown', 10, 10);
+    pointer('pointermove', 80, 80);
+    expect(h.runtime.getPreview().objects).toHaveLength(2);
+    h.session.toggleHideAuthor('other-user');
+    expect(h.session.getState()).toMatchObject({ selectedIds: [own.id], editingId: null, croppingId: null });
+    expect(h.runtime.getPreview()).toEqual(EMPTY_PREVIEW);
+    pointer('pointerup', 80, 80);
+    expect(h.dispatch).not.toHaveBeenCalled();
+    h.session.toggleSoloAuthor('other-user');
+    expect(h.session.getState().selectedIds).toEqual([]);
+    h.session.setSelectedIds([own.id, other.id]);
+    expect(h.session.getState().selectedIds).toEqual([other.id]);
+    h.session.showAllAuthors();
+    expect(h.session.getState().selectedIds).toEqual([other.id]);
+  });
+
+  it('unsubscribes author visibility handling on disposal', () => {
+    setup();
+    const id = h.store.getObjectIds()[0];
+    h.session.setSelectedIds([id]);
+    controller.dispose();
+    h.session.toggleHideAuthor(USER);
+    expect(h.session.getState().selectedIds).toEqual([id]);
+  });
+
   it('a second pointer never starts a parallel gesture', () => {
     setup([]);
     h.session.setTool('rect');

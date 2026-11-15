@@ -64,7 +64,12 @@ export interface LocalBoardConnection {
 
 export function syncNoticeMessage(notice: SyncNotice): string {
   switch (notice.type) {
-    case 'rejected': return 'That change could not be saved, so it was undone.';
+    case 'rejected': {
+      const detail = notice.message.replace(/^(invalid|limit|forbidden|conflict|gone):\s*/i, '').trim();
+      return detail
+        ? `That change could not be saved (${detail}), so it was undone.`
+        : 'That change could not be saved, so it was undone.';
+    }
     case 'outcome-unknown': return 'A change may not have been saved.';
     default: return 'The board could not sync a change.';
   }

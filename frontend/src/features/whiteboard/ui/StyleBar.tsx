@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 import { useAuthStore } from '../../../stores/authStore';
-import { MAX_CHANGES_PER_COMMAND, PALETTE_COLOURS, STICKY_REACTION_PRESETS, STICKY_TONES } from '../contract';
+import { MAX_CHANGES_PER_COMMAND, PALETTE_COLOURS, STICKY_REACTION_PRESETS, STICKY_TONES, STROKE_WEIGHTS } from '../contract';
 import type { BoardObject, Change, ObjectPatch, StickyObject } from '../contract';
 import {
   bringToFront, getBounds, isHexColour, normalizeHexColour, pickerHexForColour,
@@ -194,7 +194,7 @@ export function StyleBar({ store, session, runtime, notify }: StyleBarProps) {
       </label>
     </div>}
     {supports('fill') && select('fill', 'Fill', ['none', 'tint', 'solid'])}
-    {supports('weight') && select('weight', 'Weight', ['thin', 'thick'])}
+    {supports('weight') && select('weight', 'Weight', [...STROKE_WEIGHTS])}
     {selected.every(object => object.kind === 'stroke') && <label className="wb-ui-select-label">Preset<select aria-label="Stroke preset" value={selected.every(object => object.kind === 'stroke' && object.preset === (selected[0] as Extract<BoardObject, { kind: 'stroke' }>).preset) ? (selected[0] as Extract<BoardObject, { kind: 'stroke' }>).preset : ''} onChange={event => preset(event.target.value as 'pen' | 'marker')}><option value="" disabled>Mixed</option><option value="pen">Pen</option><option value="marker">Marker</option></select></label>}
     {supports('size') && select('size', 'Text size', ['S', 'M', 'L', 'XL'])}
     {supports('bold') && toggle('bold', 'Bold')}{supports('italic') && toggle('italic', 'Italic')}

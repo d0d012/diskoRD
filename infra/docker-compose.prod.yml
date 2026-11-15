@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    cpu_shares: 512
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -29,6 +30,7 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     restart: unless-stopped
+    cpu_shares: 4096
     command: >
       --config /livekit.yaml
       --keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
@@ -67,6 +69,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    cpu_shares: 512
     env_file: ../.env.prod
     depends_on:
       postgres:

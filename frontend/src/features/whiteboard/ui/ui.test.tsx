@@ -43,6 +43,43 @@ beforeEach(() => {
 });
 
 describe('Toolbar', () => {
+  it('opens pen options on right-click: picks a thickness and switches between pen and eraser', () => {
+    const props = setup();
+    render(<Toolbar {...props} />);
+    const pen = screen.getByRole('button', { name: 'Pen (P)' });
+    expect(screen.queryByRole('menu', { name: 'Pen options' })).toBeNull();
+    fireEvent.contextMenu(pen);
+    expect(screen.getByRole('menu', { name: 'Pen options' })).toBeTruthy();
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['Thin', 'Medium', 'Bold', 'Heavy']);
+    expect(screen.getByRole('menuitemradio', { name: 'Thin' }).getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Heavy' }));
+    expect(props.session.getState().styleDefaults.stroke.weight).toBe('heavy');
+    expect(props.session.getState().tool).toBe('pen');
+    expect(screen.queryByRole('menu', { name: 'Pen options' })).toBeNull();
+
+    fireEvent.contextMenu(pen);
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Switch to eraser/ }));
+    expect(props.session.getState().tool).toBe('eraser');
+    expect(pen.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.contextMenu(pen);
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Switch to pen/ }));
+    expect(props.session.getState().tool).toBe('pen');
+  });
+
+  it('closes pen options on Escape and on a press outside', () => {
+    const props = setup();
+    render(<Toolbar {...props} />);
+    const pen = screen.getByRole('button', { name: 'Pen (P)' });
+    fireEvent.contextMenu(pen);
+    fireEvent.keyDown(screen.getByRole('menu', { name: 'Pen options' }), { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Pen options' })).toBeNull();
+    fireEvent.contextMenu(pen);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu', { name: 'Pen options' })).toBeNull();
+  });
+
   it('lists the tools, the Image tool between Text and Frame, and marks the active one', () => {
     const props = setup();
     render(<Toolbar {...props} />);

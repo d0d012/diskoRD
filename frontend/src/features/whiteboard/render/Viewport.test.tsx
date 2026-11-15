@@ -87,6 +87,32 @@ describe('Viewport', () => {
     }
   });
 
+  it('updates author visibility without moving the camera and skips author checks on the default fast path', () => {
+    const other = { ...rect, id: 'other', createdBy: 'other-user', rank: '2:b' };
+    const { session, runtime, ids, view } = setup([rect, other]);
+    const isHidden = vi.spyOn(session, 'isAuthorHidden');
+    act(() => runtime.setCamera({ x: 10, y: 20, zoom: 1 }));
+    flush();
+    expect(isHidden).not.toHaveBeenCalled();
+    act(() => session.toggleHideAuthor('other-user'));
+    flush();
+    expect(ids()).toEqual([rect.id]);
+    act(() => session.toggleSoloAuthor('other-user'));
+    flush();
+    expect(ids()).toEqual([other.id]);
+    act(() => session.showAllAuthors());
+    flush();
+    expect(ids()).toEqual([rect.id, other.id]);
+    isHidden.mockClear();
+    act(() => runtime.setCamera({ x: 20, y: 30, zoom: 1 }));
+    flush();
+    expect(isHidden).not.toHaveBeenCalled();
+    view.unmount();
+    frames = [];
+    act(() => session.toggleHideAuthor('other-user'));
+    expect(frames).toHaveLength(0);
+  });
+
   it('re-renders and repaints only the changed object', () => {
     const { store, node } = setup();
     const before = node(text.id);

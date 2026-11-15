@@ -132,27 +132,43 @@ func (s *Service) Execute(ctx context.Context, userID, channelID string, req Com
 		return &result, nil
 	}
 
-	var result CommandResult
-	var payload CommitPayload
-	err = s.repo.Commit(ctx, channelID, func(ctx context.Context, tx BoardTx) error {
-		r, p, err := s.apply(ctx, tx, userID, channelID, req.OpID, changes)
+	return s.commitCommand(ctx, ch, userID, req.OpID, func(context.Context, BoardTx) ([]prepared, error) {
+		return changes, nil
+	})
+}
+
+// commitCommand is shared by ordinary ops and server-generated purge commands.
+// The caller holds the board mutex through commit, cache write and fanout.
+// A nil result means there were no changes to commit.
+func (s *Service) commitCommand(ctx context.Context, ch *ChannelInfo, userID, opID string, prepare func(context.Context, BoardTx) ([]prepared, error)) (*CommandResult, error) {
+	var result *CommandResult
+	var payload *CommitPayload
+	err := s.repo.Commit(ctx, ch.ID, func(ctx context.Context, tx BoardTx) error {
+		changes, err := prepare(ctx, tx)
+		if err != nil || len(changes) == 0 {
+			return err
+		}
+		r, p, err := s.apply(ctx, tx, userID, ch.ID, opID, changes)
 		if err != nil {
 			return err
 		}
-		result, payload = *r, *p
+		result, payload = r, p
 		return nil
 	})
 	if err != nil {
-		return nil, s.commitError(err, channelID)
+		return nil, s.commitError(err, ch.ID)
+	}
+	if result == nil {
+		return nil, nil
 	}
 
 	// The commit is durable; from here on nothing may fail the request.
 	bg := context.WithoutCancel(ctx)
-	if err := s.ops.Put(bg, req.OpID, OpRecord{ChannelID: channelID, UserID: userID, Result: result}); err != nil {
-		log.Warn().Err(err).Str("opID", req.OpID).Msg("whiteboard.Service.Execute: remember op failed")
+	if err := s.ops.Put(bg, opID, OpRecord{ChannelID: ch.ID, UserID: userID, Result: *result}); err != nil {
+		log.Warn().Err(err).Str("opID", opID).Msg("whiteboard.Service.Execute: remember op failed")
 	}
-	s.pub.PublishBoardCommit(bg, ch.GuildID, channelID, payload)
-	return &result, nil
+	s.pub.PublishBoardCommit(bg, ch.GuildID, ch.ID, *payload)
+	return result, nil
 }
 
 func (s *Service) commitError(err error, channelID string) error {
@@ -274,6 +290,9 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 	}
 	writes := make([]write, len(changes))
 	var assetIDs []string
+	var creates int
+	deletedIDs := []string{}
+	var placed *bounds
 	for i, c := range changes {
 		w := write{action: c.req.Action, obj: Object{ID: c.req.ID, Version: seq}}
 		var previousBytes int64
@@ -292,6 +311,7 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 			}
 			w.obj.Body, w.body = raw, c.body
 			count++
+			creates++
 			bytes += int64(len(raw))
 			if c.body.kind() == "image" {
 				var assetID string
@@ -328,6 +348,24 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 		case ActionDelete:
 			count--
 			bytes -= previousBytes
+			deletedIDs = append(deletedIDs, c.req.ID)
+		}
+		if c.req.Action != ActionDelete {
+			var next Rect
+			if err := json.Unmarshal(w.obj.Body, &next); err != nil {
+				return nil, nil, fmt.Errorf("whiteboard.Service.apply: geometry: %w", err)
+			}
+			changed := c.req.Action == ActionCreate
+			if !changed {
+				var old Rect
+				if err := json.Unmarshal(existing[c.req.ID].Body, &old); err != nil {
+					return nil, nil, fmt.Errorf("whiteboard.Service.apply: previous geometry: %w", err)
+				}
+				changed = old != next
+			}
+			if changed {
+				placed = extendBounds(placed, next)
+			}
 		}
 		writes[i] = w
 	}
@@ -336,6 +374,24 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 	}
 	if bytes > MaxBoardBytes {
 		return nil, nil, limitf("board exceeds %d bytes", MaxBoardBytes)
+	}
+	if creates > 0 {
+		owned, err := tx.CountByAuthor(ctx, userID, deletedIDs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("whiteboard.Service.apply: author count: %w", err)
+		}
+		if owned+creates > MaxObjectsPerUser {
+			return nil, nil, limitf("you can hold at most %d objects on a board", MaxObjectsPerUser)
+		}
+	}
+	if placed != nil {
+		content, err := tx.Bounds(ctx, ids)
+		if err != nil {
+			return nil, nil, fmt.Errorf("whiteboard.Service.apply: bounds: %w", err)
+		}
+		if content != nil && !content.containsWithMargin(*placed, MaxPlacementMargin) {
+			return nil, nil, fiber.NewError(fiber.StatusUnprocessableEntity, "too far from existing content")
+		}
 	}
 	if len(assetIDs) > 0 {
 		unique := dedupe(assetIDs)
@@ -400,7 +456,7 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 		result.Changes[i] = ChangeResult{ID: w.obj.ID, Action: w.action, Version: seq}
 		payload.Changes[i] = cc
 	}
-	if err := tx.SetSeq(ctx, seq); err != nil {
+	if err := tx.SetState(ctx, seq, count, bytes); err != nil {
 		return nil, nil, fmt.Errorf("whiteboard.Service.apply: %w", err)
 	}
 	return result, payload, nil

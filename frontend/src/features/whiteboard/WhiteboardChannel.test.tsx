@@ -36,10 +36,13 @@ function signIn(id: string): void {
   useAuthStore.setState({ user: { id, username: 'me', status: 'online', createdAt: '2026-01-01T00:00:00Z' } } as never);
 }
 
-/** Lets the local adapter tasks, the coordinator pump and React commits run. */
+/** Lets adapter/coordinator tasks, the scene's animation frame and React commits run. */
 async function settle(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i++) await new Promise(resolve => setTimeout(resolve, 0));
+    // Zero-delay timers need not cross a browser frame boundary. The scene
+    // publishes visible ids in rAF, so await it rather than racing its mount.
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   });
 }
 

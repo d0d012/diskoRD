@@ -2,7 +2,7 @@ import {
   GEOMETRY_EPSILON, HEX_COLOUR_PATTERN, MAX_ASSET_URL_BYTES, MAX_COORDINATE, MAX_FRAME_LABEL_LENGTH,
   MAX_IMAGE_DIMENSION, MAX_IMAGE_PIXELS, MAX_OBJECT_BODY_BYTES, MAX_REACTION_EMOJI_LENGTH,
   MAX_STICKY_REACTION_EMOJIS, MAX_STICKY_REACTION_USERS, MAX_STICKY_TEXT_LENGTH,
-  MAX_STROKE_POINTS, MAX_TEXT_LENGTH, PALETTE_COLOURS, STICKY_TONES, UUID_PATTERN,
+  MAX_STROKE_POINTS, MAX_TEXT_LENGTH, PALETTE_COLOURS, STICKY_TONES, STROKE_WEIGHTS, UUID_PATTERN,
 } from '../contract';
 import type { BoardObject, PaletteColour, Point, StickyTone, StrokePoint } from '../contract';
 import { normalizePoints, rankPrefix } from '../core';
@@ -73,7 +73,7 @@ function text(value: unknown, maximum: number, multiline = true): void {
 function strokeStyle(value: unknown, fill = false): void {
   fields(value, fill ? ['colour', 'weight', 'fill'] : ['colour', 'weight']);
   requireValid(isValidColour(value.colour) &&
-    ['thin', 'thick'].includes(value.weight as string), 'Invalid stroke style');
+    (STROKE_WEIGHTS as readonly string[]).includes(value.weight as string), 'Invalid stroke style');
   if (fill) requireValid(['none', 'tint', 'solid'].includes(value.fill as string), 'Invalid fill');
 }
 

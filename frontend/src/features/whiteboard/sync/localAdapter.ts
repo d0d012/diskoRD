@@ -347,6 +347,28 @@ export function createLocalAdapter(options: LocalAdapterOptions = {}): LocalAdap
       if (disposed) throw abortError();
       return readLocalAsset(file);
     },
+    purge: async filter => {
+      if (disposed) throw abortError();
+      const matching: BoardObject[] = [];
+      for (const obj of objects.values()) {
+        if (filter.createdBy !== undefined && obj.createdBy !== filter.createdBy) continue;
+        if (filter.rect !== undefined) {
+          const r = filter.rect;
+          const overlapsX = obj.x <= r.x + r.w && obj.x + obj.w >= r.x;
+          const overlapsY = obj.y <= r.y + r.h && obj.y + obj.h >= r.y;
+          if (!overlapsX || !overlapsY) continue;
+        }
+        matching.push(obj);
+      }
+      if (matching.length > 0) {
+        const nextSeq = seq + 1;
+        const changes = matching.map(obj => ({ id: obj.id, action: 'delete' as const, version: nextSeq }));
+        for (const obj of matching) objects.delete(obj.id);
+        seq = nextSeq;
+        broadcast(immutableCopy({ channelId: boardId, userId, opId: crypto.randomUUID(), seq: nextSeq, changes }));
+      }
+      return { deleted: matching.length };
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;
