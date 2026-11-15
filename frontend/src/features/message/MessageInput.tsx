@@ -38,8 +38,11 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     gifTriggerRef.current?.focus();
   }, []);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
-  const { sendMessage, uploadImage, typingUsers, replyingTo, cancelReply } = useMessageStore();
-  const reply = replyingTo?.channelId === channelId ? replyingTo.message : null;
+  const sendMessage = useMessageStore((s) => s.sendMessage);
+  const uploadImage = useMessageStore((s) => s.uploadImage);
+  const cancelReply = useMessageStore((s) => s.cancelReply);
+  const typingUsers = useMessageStore((s) => s.typingUsers[channelId]);
+  const reply = useMessageStore((s) => (s.replyingTo?.channelId === channelId ? s.replyingTo.message : null));
   // Preserve the contents while the drawer animates closed.
   const [lastReply, setLastReply] = useState(reply);
   if (reply && reply !== lastReply) setLastReply(reply);
@@ -122,7 +125,7 @@ export function MessageInput({ channelId, guildId, channelName, onTyping, placeh
     });
   }
 
-  const typing = (typingUsers[channelId] ?? []).filter(
+  const typing = (typingUsers ?? []).filter(
     (u) => Date.now() - u.at < 5000
   );
 

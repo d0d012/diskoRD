@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { Message } from "../../types";
 import "./message.css";
 import { useMessageStore } from "../../stores/messageStore";
@@ -31,8 +31,10 @@ function formatDate(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function MessageItem({ message, isGrouped }: Props) {
-  const { editMessage, toggleReaction, startReply } = useMessageStore();
+function MessageItemInner({ message, isGrouped }: Props) {
+  const editMessage = useMessageStore((s) => s.editMessage);
+  const toggleReaction = useMessageStore((s) => s.toggleReaction);
+  const startReply = useMessageStore((s) => s.startReply);
   // Decorating: pick or draw art in the editor, then drop it anywhere in the chat.
   const [decorating, setDecorating] = useState(false);
   const startPlacement = useDecorationPlacementStore((s) => s.start);
@@ -317,6 +319,8 @@ export function MessageItem({ message, isGrouped }: Props) {
     </div>
   );
 }
+
+export const MessageItem = memo(MessageItemInner);
 
 function ReactionPill({ reaction, onToggle }: { reaction: NonNullable<Message["reactions"]>[number]; onToggle: () => void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);

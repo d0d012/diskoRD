@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useUserStore } from "../stores/userStore";
 import type { PublicUser } from "../types";
 
@@ -11,6 +12,8 @@ export function useLiveUser<T extends { id?: string }>(
   fallback: T
 ): T & Partial<PublicUser> {
   const live = useUserStore((s) => (id ? s.users[id] : undefined));
-  if (!live) return fallback;
-  return { ...fallback, ...live };
+  return useMemo(() => {
+    if (!live) return fallback;
+    return { ...fallback, ...live };
+  }, [live, fallback]);
 }
