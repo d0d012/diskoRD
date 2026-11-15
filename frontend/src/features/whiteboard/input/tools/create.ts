@@ -7,6 +7,7 @@ import {
   makeShape, makeSticky, makeText, rectFromPoints, safeDispatch, screenDistance, topRanks,
 } from '../objects';
 import type { Gesture, PointerSample, ToolContext } from '../types';
+import { createToolSnapper, snapCreatedObject } from '../snapping';
 
 export type CreationTool = Extract<ToolId, 'rect' | 'ellipse' | 'frame' | 'sticky' | 'text' | 'line' | 'arrow'>;
 
@@ -98,11 +99,13 @@ export function afterCreate(ctx: ToolContext, tool: ToolId, object: BoardObject)
 export function createCreationGesture(ctx: ToolContext, tool: CreationTool, start: PointerSample): Gesture {
   const { runtime, store } = ctx;
   const id = ctx.newId();
+  const snapper = createToolSnapper(ctx, [], start.world);
   let dragged = false;
   let done = false;
 
   function build(sample: PointerSample): BoardObject {
-    return buildCreation(ctx, tool, start.world, sample.world, dragged, sample.shiftKey, id);
+    const rebuild = (point: Point) => buildCreation(ctx, tool, start.world, point, dragged, sample.shiftKey, id);
+    return snapCreatedObject(rebuild(sample.world), sample, dragged, start.world, snapper, rebuild);
   }
 
   return {
