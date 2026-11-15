@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useShowcaseOverlayStore } from "../../stores/showcaseOverlayStore";
 import { Icon } from "../../features/pixelart/Icon";
 import { api } from "../../lib/api";
@@ -31,14 +31,14 @@ function RoleBadge({ role }: { role: GuildRole }) {
   );
 }
 
-function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildId: string; canManageRoles: boolean }) {
+function MemberRowInner({ member, guildId, canManageRoles }: { member: Member; guildId: string; canManageRoles: boolean }) {
   const live = useLiveUser(member.id, member);
   const liveStatus = usePresenceStore((s) => s.statuses[member.id] ?? member.status);
   const isOnline = liveStatus !== "offline";
   const currentUser = useAuthStore((s) => s.user);
   const rolesMap = useGuildStore((s) => s.roles);
   const roles = rolesMap[guildId] ?? [];
-  const { fetchRoles } = useGuildStore();
+  const fetchRoles = useGuildStore((s) => s.fetchRoles);
 
   const [showPicker, setShowPicker] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -131,6 +131,8 @@ function MemberRow({ member, guildId, canManageRoles }: { member: Member; guildI
   );
 }
 
+export const MemberRow = memo(MemberRowInner);
+
 function SectionHeader({ label, count }: { label: string; count: number }) {
   return (
     <p className="px-3 mb-1 mt-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-dc-text-muted)" }}>
@@ -143,10 +145,41 @@ export function MembersPanel() {
   const activeGuildId = useGuildStore((s) => s.activeGuildId);
   const rolesMap = useGuildStore((s) => s.roles);
   const roles = (activeGuildId ? rolesMap[activeGuildId] : undefined) ?? [];
-  const { fetchRoles } = useGuildStore();
+  const fetchRoles = useGuildStore((s) => s.fetchRoles);
   const currentUser = useAuthStore((s) => s.user);
   const [members, setMembers] = useState<Member[]>([]);
   const statuses = usePresenceStore((s) => s.statuses);
+
+  const canManageRoles = (members.find((m) => m.id === currentUser?.id)?.role ?? "member") !== "member";
+
+  const { sections, remainingOnline, offline } = useMemo(() => {
+    const online: Member[] = [];
+    const offline: Member[] = [];
+    for (const m of members) {
+      if ((statuses[m.id] ?? m.status) !== "offline") online.push(m);
+      else offline.push(m);
+    }
+
+    // Build hoisted sections from roles sorted by position desc
+    const hoistedRoles = [...roles].filter((r) => r.hoist).sort((a, b) => b.position - a.position);
+
+    // Track which member IDs have been placed
+    const placed = new Set<string>();
+    const sections: { label: string; color?: string; members: Member[] }[] = [];
+
+    for (const hoistRole of hoistedRoles) {
+      const inRole = online.filter(
+        (m) => (m.roles ?? []).some((r) => r.id === hoistRole.id) && !placed.has(m.id)
+      );
+      if (inRole.length > 0) {
+        inRole.forEach((m) => placed.add(m.id));
+        sections.push({ label: hoistRole.name, color: hoistRole.color, members: inRole });
+      }
+    }
+
+    const remainingOnline = online.filter((m) => !placed.has(m.id));
+    return { sections, remainingOnline, offline };
+  }, [members, statuses, roles]);
 
   useEffect(() => {
     if (!activeGuildId) return;
@@ -173,39 +206,6 @@ export function MembersPanel() {
   }, [activeGuildId]);
 
   if (!activeGuildId) return null;
-
-  const myRole = members.find((m) => m.id === currentUser?.id)?.role ?? "member";
-  // Assigning/removing roles requires at least the moderator tier (matches the server).
-  const canManageRoles = myRole !== "member";
-
-  const withStatus = members.map((m) => ({
-    ...m,
-    liveStatus: statuses[m.id] ?? m.status,
-  }));
-
-  // Anything that isn't offline counts as online, so idle/dnd stay grouped.
-  const online = withStatus.filter((m) => m.liveStatus !== "offline");
-  const offline = withStatus.filter((m) => m.liveStatus === "offline");
-
-  // Build hoisted sections from roles sorted by position desc
-  const hoistedRoles = [...roles].filter((r) => r.hoist).sort((a, b) => b.position - a.position);
-
-  // Track which member IDs have been placed
-  const placed = new Set<string>();
-
-  const sections: { label: string; color?: string; members: Member[] }[] = [];
-
-  for (const hoistRole of hoistedRoles) {
-    const inRole = online.filter(
-      (m) => (m.roles ?? []).some((r) => r.id === hoistRole.id) && !placed.has(m.id)
-    );
-    if (inRole.length > 0) {
-      inRole.forEach((m) => placed.add(m.id));
-      sections.push({ label: hoistRole.name, color: hoistRole.color, members: inRole });
-    }
-  }
-
-  const remainingOnline = online.filter((m) => !placed.has(m.id));
 
   return (
     <div

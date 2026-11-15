@@ -112,16 +112,23 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
   setActiveDM: (dmId) => set({ activeDMId: dmId }),
 
   updatePresence: (userId, status) => {
-    set((s) => ({
-      friends: s.friends.map((f) =>
-        f.id === userId ? { ...f, status } : f
-      ),
-      dms: s.dms.map((d) =>
-        d.recipient.id === userId
-          ? { ...d, recipient: { ...d.recipient, status } }
-          : d
-      ),
-    }));
+    set((s) => {
+      const friendChanged = s.friends.some((f) => f.id === userId && f.status !== status);
+      const dmChanged = s.dms.some((d) => d.recipient.id === userId && d.recipient.status !== status);
+      if (!friendChanged && !dmChanged) return s;
+      return {
+        friends: friendChanged
+          ? s.friends.map((f) => (f.id === userId ? { ...f, status } : f))
+          : s.friends,
+        dms: dmChanged
+          ? s.dms.map((d) =>
+              d.recipient.id === userId
+                ? { ...d, recipient: { ...d.recipient, status } }
+                : d
+            )
+          : s.dms,
+      };
+    });
   },
 
   addRequest: (req) => {

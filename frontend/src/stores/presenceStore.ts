@@ -14,8 +14,15 @@ export const usePresenceStore = create<PresenceStore>((set) => ({
   statuses: {},
   guildAudience: new Set(),
   setStatus: (userId, status) =>
-    set((s) => ({ statuses: { ...s.statuses, [userId]: status } })),
+    set((s) => (s.statuses[userId] === status ? s : { statuses: { ...s.statuses, [userId]: status } })),
   setStatuses: (incoming) =>
-    set((s) => ({ statuses: { ...s.statuses, ...incoming } })),
+    set((s) => {
+      for (const [userId, status] of Object.entries(incoming)) {
+        if (s.statuses[userId] !== status) {
+          return { statuses: { ...s.statuses, ...incoming } };
+        }
+      }
+      return s;
+    }),
   setGuildAudience: (userIds) => set({ guildAudience: new Set(userIds) }),
 }));
