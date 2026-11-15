@@ -1,0 +1,8 @@
+.wb-follow-border { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
+.wb-follow-border[data-following] { box-shadow: inset 0 0 0 2px var(--wb-cursor-color); }
+.wb-follow-pill { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); pointer-events: auto; border: 1px solid var(--wb-cursor-color); border-radius: 4px; padding: 5px 10px; background: var(--wb-dock-bg); color: var(--color-dc-text-normal); font-family: var(--wb-font-ui); font-size: 12px; box-shadow: var(--wb-dock-shadow); }
+.wb-presence-avatar[type=button] { cursor: pointer; }
+.wb-presence-avatar[aria-pressed=true] { outline: 2px solid var(--wb-cursor-color); outline-offset: 2px; }
+.wb-root .wb-root__cursor-pill[data-speaking] { outline: 2px solid var(--wb-cursor-color); outline-offset: 3px; box-shadow: 0 0 9px 3px color-mix(in srgb, var(--wb-cursor-color) 40%, transparent); animation: wb-speaking-halo 700ms ease-in-out 2; }
+@keyframes wb-speaking-halo { 50% { outline-offset: 5px; box-shadow: 0 0 13px 4px color-mix(in srgb, var(--wb-cursor-color) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .wb-root .wb-root__cursor-pill[data-speaking] { animation: none; } }

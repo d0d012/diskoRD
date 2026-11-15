@@ -12,6 +12,7 @@ import {
 import { playSound } from "../lib/sounds";
 import { attachSoundboard } from "../lib/soundboard";
 import { useVoiceStore } from "../stores/voiceStore";
+import { attachVoiceSpeaking } from "../stores/voiceSpeakingStore";
 import { useNoiseCancellation } from "./useNoiseCancellation";
 import { cameraDeviceId, micConstraints } from "../lib/mediaDevices";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -111,6 +112,7 @@ export function useVoice() {
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
     const cleanupSoundboard = attachSoundboard(room, useVoiceStore.getState().activeVoiceGuildId);
+    const cleanupSpeaking = attachVoiceSpeaking(room);
 
     room.on(RoomEvent.Connected, async () => {
       setConnectionState(ConnectionState.Connected);
@@ -169,6 +171,7 @@ export function useVoice() {
 
     return () => {
       cleanupSoundboard();
+      cleanupSpeaking();
       room.removeAllListeners();
       room.disconnect();
       roomRef.current = null;

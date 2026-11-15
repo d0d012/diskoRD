@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
+import { useVoiceSpeakingStore } from '../../../../stores/voiceSpeakingStore';
+import '../../ui/follow.css';
 import type { BoardStore, Runtime, SyncAdapter, UserId } from '../../contract';
 import { createPresencePainter } from './presencePainter';
 import { participantStyle, useRoomParticipants } from './presence';
@@ -13,6 +15,7 @@ export interface PresenceLayerProps {
 /** Screen-space child of Viewport. React owns membership, not samples. */
 export function PresenceLayer({ adapter, runtime, store, selfUserId }: PresenceLayerProps) {
   const members = useRoomParticipants(adapter);
+  const speaking = useVoiceSpeakingStore(state => state.userIds);
   const root = useRef<HTMLDivElement>(null);
   const painter = useRef<ReturnType<typeof createPresencePainter> | null>(null);
   useLayoutEffect(() => {
@@ -33,7 +36,7 @@ export function PresenceLayer({ adapter, runtime, store, selfUserId }: PresenceL
         <svg viewBox="0 0 20 20" shapeRendering="crispEdges" aria-hidden="true">
           <path fill="var(--wb-cursor-color)" d="M1 1H3V3H5V5H7V7H9V9H11V11H13V13H9V15H11V19H7V15H5V13H3V15H1Z" />
         </svg>
-        <span className="wb-root__cursor-pill">{p.name}<span className="wb-root__cursor-status" data-wb-cursor-status="" /></span>
+        <span className="wb-root__cursor-pill" data-speaking={speaking.has(p.userId) ? '' : undefined}>{p.name}<span className="wb-root__cursor-status" data-wb-cursor-status="" /></span>
       </div>
     </div>)}
   </div>;

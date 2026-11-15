@@ -11,6 +11,7 @@ import { connectBoard, createBoardResources } from './localBoard';
 import type { BoardConnection } from './localBoard';
 import { PresenceLayer } from './render/overlays/PresenceLayer';
 import { Participants } from './ui/Participants';
+import { FollowView } from './ui/FollowView';
 import { PeoplePanel } from './ui/PeoplePanel';
 import { ImagePicker } from './ui/ImagePicker';
 import { SyncStatusChip } from './ui/SyncStatus';
@@ -80,6 +81,7 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
   const ui = { store, session, runtime };
   return <Viewport ref={viewport} store={store} session={session} runtime={runtime}>
     {adapter && <PresenceLayer adapter={adapter} runtime={runtime} store={store} selfUserId={userId} />}
+    {adapter && <FollowView adapter={adapter} runtime={runtime} />}
     <TextEditor store={store} session={session} runtime={runtime} onNotice={notices.notify} />
     <CropEditor store={store} session={session} runtime={runtime} />
     {!ids.length && <div className="wb-ui-empty" aria-live="polite">A little space for big ideas.<span>Pick a tool below, or double-click to start writing.</span><small>Changes are saved automatically and shared live</small></div>}

@@ -9,6 +9,7 @@ import { participantStyle, useRoomParticipants } from '../render/overlays/presen
 import type { BoardNotify } from '../state';
 import { purgeBoard, purgeFailureMessage } from '../sync/networkAdapter';
 import { BoardIcon } from './icons';
+import { FollowPersonButton } from './FollowPersonButton';
 import type { BoardUIProps } from './Toolbar';
 import { useCanManageChannel } from './useCanManageChannel';
 
@@ -298,6 +299,7 @@ export function PeoplePanel({
                         </span>
                       </div>
                       <div className="wb-people-author__toggles">
+                        {adapter && author.authorId !== effectiveSelfId && participants.some(p => p.userId === author.authorId) && <FollowPersonButton adapter={adapter} userId={author.authorId} name={info.name} />}
                         <button
                           type="button"
                           className="wb-people-btn"
