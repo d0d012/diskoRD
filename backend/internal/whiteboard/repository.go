@@ -49,6 +49,9 @@ type BoardTx interface {
 	Insert(ctx context.Context, o Object) error
 	Update(ctx context.Context, o Object) error
 	Delete(ctx context.Context, id string) error
+	// WriteObjects applies writes in order with the same semantics as
+	// Insert/Update/Delete, in one round trip; it stops at the first error.
+	WriteObjects(ctx context.Context, writes []ObjectWrite) error
 	// SetState persists the sequence and quota counters with the object writes.
 	SetState(ctx context.Context, seq int64, count int, bytes int64) error
 }
@@ -352,14 +355,27 @@ func (t *pgBoardTx) InsertAsset(ctx context.Context, a Asset) error {
 	return nil
 }
 
-func (t *pgBoardTx) Insert(ctx context.Context, o Object) error {
-	_, err := t.tx.Exec(ctx,
-		`INSERT INTO whiteboard_objects (id, board_id, version, body, created_by, x, y, w, h)
+const (
+	insertObjectSQL = `INSERT INTO whiteboard_objects (id, board_id, version, body, created_by, x, y, w, h)
 		 VALUES ($1, $2, $3, $4::jsonb,
 		 (SELECT id FROM users WHERE id = ($4::jsonb->>'createdBy')::uuid),
 		 ($4::jsonb->>'x')::double precision, ($4::jsonb->>'y')::double precision,
-		 ($4::jsonb->>'w')::double precision, ($4::jsonb->>'h')::double precision)`,
-		o.ID, t.boardID, o.Version, []byte(o.Body))
+		 ($4::jsonb->>'w')::double precision, ($4::jsonb->>'h')::double precision)`
+	updateObjectSQL = `UPDATE whiteboard_objects SET version = $1, body = $2::jsonb, updated_at = now(),
+		 created_by = (SELECT id FROM users WHERE id = ($2::jsonb->>'createdBy')::uuid),
+		 x = ($2::jsonb->>'x')::double precision, y = ($2::jsonb->>'y')::double precision,
+		 w = ($2::jsonb->>'w')::double precision, h = ($2::jsonb->>'h')::double precision
+		 WHERE id = $3 AND board_id = $4`
+	deleteObjectSQL = `DELETE FROM whiteboard_objects WHERE id = $1 AND board_id = $2`
+)
+
+// ObjectWrite is one queued object mutation for BoardTx.WriteObjects.
+type ObjectWrite struct {
+	Action string // ActionCreate, ActionUpdate or ActionDelete
+	Object Object // Delete uses Object.ID only
+}
+
+func insertResult(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return ErrObjectIDTaken
@@ -370,31 +386,70 @@ func (t *pgBoardTx) Insert(ctx context.Context, o Object) error {
 	return nil
 }
 
-func (t *pgBoardTx) Update(ctx context.Context, o Object) error {
-	tag, err := t.tx.Exec(ctx,
-		`UPDATE whiteboard_objects SET version = $1, body = $2::jsonb, updated_at = now(),
-		 created_by = (SELECT id FROM users WHERE id = ($2::jsonb->>'createdBy')::uuid),
-		 x = ($2::jsonb->>'x')::double precision, y = ($2::jsonb->>'y')::double precision,
-		 w = ($2::jsonb->>'w')::double precision, h = ($2::jsonb->>'h')::double precision
-		 WHERE id = $3 AND board_id = $4`,
-		o.Version, []byte(o.Body), o.ID, t.boardID)
+func rowResult(op, id string, tag pgconn.CommandTag, err error) error {
 	if err != nil {
-		return fmt.Errorf("whiteboard.BoardTx.Update: %w", err)
+		return fmt.Errorf("whiteboard.BoardTx.%s: %w", op, err)
 	}
 	if tag.RowsAffected() != 1 {
-		return fmt.Errorf("whiteboard.BoardTx.Update: object %s vanished under lock", o.ID)
+		return fmt.Errorf("whiteboard.BoardTx.%s: object %s vanished under lock", op, id)
 	}
 	return nil
 }
 
+func (t *pgBoardTx) Insert(ctx context.Context, o Object) error {
+	_, err := t.tx.Exec(ctx, insertObjectSQL, o.ID, t.boardID, o.Version, []byte(o.Body))
+	return insertResult(err)
+}
+
+func (t *pgBoardTx) Update(ctx context.Context, o Object) error {
+	tag, err := t.tx.Exec(ctx, updateObjectSQL, o.Version, []byte(o.Body), o.ID, t.boardID)
+	return rowResult("Update", o.ID, tag, err)
+}
+
 func (t *pgBoardTx) Delete(ctx context.Context, id string) error {
-	tag, err := t.tx.Exec(ctx,
-		`DELETE FROM whiteboard_objects WHERE id = $1 AND board_id = $2`, id, t.boardID)
-	if err != nil {
-		return fmt.Errorf("whiteboard.BoardTx.Delete: %w", err)
+	tag, err := t.tx.Exec(ctx, deleteObjectSQL, id, t.boardID)
+	return rowResult("Delete", id, tag, err)
+}
+
+// WriteObjects pipelines a command's writes: a 500-object paste was 500
+// sequential round trips held under the board lock.
+func (t *pgBoardTx) WriteObjects(ctx context.Context, writes []ObjectWrite) (err error) {
+	if len(writes) == 0 {
+		return nil
 	}
-	if tag.RowsAffected() != 1 {
-		return fmt.Errorf("whiteboard.BoardTx.Delete: object %s vanished under lock", id)
+	batch := &pgx.Batch{}
+	for _, w := range writes {
+		o := w.Object
+		switch w.Action {
+		case ActionCreate:
+			batch.Queue(insertObjectSQL, o.ID, t.boardID, o.Version, []byte(o.Body))
+		case ActionUpdate:
+			batch.Queue(updateObjectSQL, o.Version, []byte(o.Body), o.ID, t.boardID)
+		case ActionDelete:
+			batch.Queue(deleteObjectSQL, o.ID, t.boardID)
+		default:
+			return fmt.Errorf("whiteboard.BoardTx.WriteObjects: unknown action %q", w.Action)
+		}
+	}
+	results := t.tx.SendBatch(ctx, batch)
+	defer func() {
+		if cerr := results.Close(); err == nil && cerr != nil {
+			err = fmt.Errorf("whiteboard.BoardTx.WriteObjects: close: %w", cerr)
+		}
+	}()
+	for _, w := range writes {
+		tag, execErr := results.Exec()
+		switch w.Action {
+		case ActionCreate:
+			err = insertResult(execErr)
+		case ActionUpdate:
+			err = rowResult("Update", w.Object.ID, tag, execErr)
+		case ActionDelete:
+			err = rowResult("Delete", w.Object.ID, tag, execErr)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

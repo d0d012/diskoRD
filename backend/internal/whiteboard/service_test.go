@@ -159,6 +159,23 @@ func (t *fakeTx) InsertAsset(_ context.Context, a Asset) error {
 func (t *fakeTx) Insert(_ context.Context, o Object) error  { t.objects[o.ID] = o; return nil }
 func (t *fakeTx) Update(_ context.Context, o Object) error  { t.objects[o.ID] = o; return nil }
 func (t *fakeTx) Delete(_ context.Context, id string) error { delete(t.objects, id); return nil }
+func (t *fakeTx) WriteObjects(ctx context.Context, writes []ObjectWrite) error {
+	for _, w := range writes {
+		var err error
+		switch w.Action {
+		case ActionCreate:
+			err = t.Insert(ctx, w.Object)
+		case ActionUpdate:
+			err = t.Update(ctx, w.Object)
+		case ActionDelete:
+			err = t.Delete(ctx, w.Object.ID)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (t *fakeTx) SetState(_ context.Context, seq int64, count int, bytes int64) error {
 	t.seq, t.count, t.bodyBytes = seq, count, bytes
 	return nil

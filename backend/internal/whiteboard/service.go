@@ -434,24 +434,24 @@ func (s *Service) apply(ctx context.Context, tx BoardTx, userID, channelID, opID
 		ChannelID: channelID, OpID: opID, Seq: seq, UserID: userID,
 		Changes: make([]CommittedChange, len(writes)),
 	}
+	objectWrites := make([]ObjectWrite, len(writes))
+	for i, w := range writes {
+		objectWrites[i] = ObjectWrite{Action: w.action, Object: w.obj}
+	}
+	if err := tx.WriteObjects(ctx, objectWrites); err != nil {
+		return nil, nil, fmt.Errorf("whiteboard.Service.apply: write: %w", err)
+	}
 	for i, w := range writes {
 		cc := CommittedChange{ID: w.obj.ID, Action: w.action, Version: seq}
 		switch w.action {
 		case ActionCreate:
-			err = tx.Insert(ctx, w.obj)
-			wire, werr := toWire(Object{ID: w.obj.ID, Version: seq, Body: w.obj.Body})
-			if err == nil {
-				err = werr
+			wire, err := toWire(Object{ID: w.obj.ID, Version: seq, Body: w.obj.Body})
+			if err != nil {
+				return nil, nil, fmt.Errorf("whiteboard.Service.apply: encode %s: %w", w.obj.ID, err)
 			}
 			cc.Body = wire
 		case ActionUpdate:
-			err = tx.Update(ctx, w.obj)
 			cc.Patch = w.patch
-		case ActionDelete:
-			err = tx.Delete(ctx, w.obj.ID)
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("whiteboard.Service.apply: %s %s: %w", w.action, w.obj.ID, err)
 		}
 		result.Changes[i] = ChangeResult{ID: w.obj.ID, Action: w.action, Version: seq}
 		payload.Changes[i] = cc
