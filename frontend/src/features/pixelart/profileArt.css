@@ -16,9 +16,14 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .buddy-idle { animation: profile-buddy-bob 1.8s ease-in-out infinite alternate; }
+  .buddy-idle {
+    animation: profile-buddy-bob 1.8s steps(var(--buddy-bob-steps, 3), end) infinite;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
   @keyframes profile-buddy-bob {
-    from { transform: translateY(0); }
-    to { transform: translateY(var(--buddy-bob, -3px)); }
+    0%, 100% { transform: translateY(0) translateZ(0); }
+    50% { transform: translateY(var(--buddy-bob, -3px)) translateZ(0); }
   }
 }

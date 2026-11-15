@@ -49,8 +49,8 @@ function BuddySprite({ buddy, index, selected, editing, onPointerDown }: {
         outline: selected ? "2px dashed #fff" : editing ? "1px dashed rgba(255,255,255,0.45)" : undefined,
         outlineOffset: 2,
         animationDelay: `${index * -0.37}s`,
-        animationTimingFunction: `steps(${Math.max(1, Math.round(3 * dpr))}, end)`,
         "--buddy-bob": `${snapDevicePixel(-3, dpr)}px`,
+        "--buddy-bob-steps": Math.max(1, Math.round(3 * dpr)),
       } as React.CSSProperties}
     >
       <img

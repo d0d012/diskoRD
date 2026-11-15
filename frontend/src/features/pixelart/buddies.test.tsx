@@ -93,7 +93,9 @@ describe("ProfileBuddies", () => {
     expect((parseFloat(sprite.style.left) + 0.25) * 2 % 1).toBe(0);
     expect((parseFloat(sprite.style.top) + 0.25) * 2 % 1).toBe(0);
     expect(parseFloat(sprite.style.top)).toBeLessThanOrEqual(52.25);
-    expect(sprite.style.animationTimingFunction).toBe("steps(6, end)");
+    expect(sprite.style.getPropertyValue("--buddy-bob-steps")).toBe("6");
+    expect(sprite.style.animationDelay).toBe("0s");
+    expect(sprite).toHaveClass("buddy-idle");
     const left = sprite.style.left;
     width = 401;
     act(() => resize());
