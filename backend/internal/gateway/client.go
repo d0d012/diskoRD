@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	fiberws "github.com/gofiber/websocket/v2"
@@ -21,6 +22,8 @@ type Client struct {
 	conn       *fiberws.Conn
 	send       chan []byte
 	userID     string
+	username   atomic.Value // string, refreshed by USER_UPDATE
+	lastTouch  atomic.Int64 // Unix nanoseconds of last successful Redis touch
 	registered chan struct{}
 	guildMu    sync.RWMutex
 	guilds     map[string]bool // guildID → member
@@ -34,6 +37,11 @@ type Client struct {
 	boardClosed    bool // guarded by hub.mu
 	boardPresence  map[presenceKey]*pendingPresence
 	presenceBucket presenceBucket // guarded by roomMu
+}
+
+func (c *Client) Username() string {
+	username, _ := c.username.Load().(string)
+	return username
 }
 
 func (c *Client) HasGuild(guildID string) bool {
@@ -77,7 +85,7 @@ func (c *Client) ReadPump() {
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		// Protocol-level pongs are not throttled by background tabs, unlike JS timers.
-		c.hub.touch(c.userID)
+		c.hub.touch(c)
 		return nil
 	})
 

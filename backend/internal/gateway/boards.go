@@ -216,6 +216,9 @@ func (h *Hub) cleanupBoardEvent(event routableEvent) {
 	if json.Unmarshal(event.D, &d) != nil {
 		return
 	}
+	if event.Op == OpChannelDelete {
+		h.typingChannels.invalidate(d.ID)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if event.Op == OpGuildMemberRemove {

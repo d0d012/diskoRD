@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
@@ -43,7 +44,7 @@ type Hub struct {
 	unregister chan *Client
 	// touch is a non-blocking liveness signal from client read loops. The Redis
 	// write happens in the hub goroutine so a read loop never blocks on Redis.
-	touchCh chan string
+	touchCh chan *Client
 	// presenceCh carries status changes so they are ordered against connect /
 	// disconnect lifecycle events in the hub goroutine.
 	presenceCh chan presenceUpdate
@@ -54,10 +55,11 @@ type Hub struct {
 	prefMu    sync.RWMutex
 	preferred map[string]string
 
-	rdb      *redis.Client
-	db       gatewayDB
-	presence *presence.Service
-	seq      int64 // monotonically increasing sequence number
+	rdb            *redis.Client
+	db             gatewayDB
+	presence       *presence.Service
+	seq            int64 // monotonically increasing sequence number
+	typingChannels typingCache
 }
 
 type presenceUpdate struct {
@@ -72,7 +74,7 @@ func NewHub(rdb *redis.Client, db gatewayDB, presenceSvc *presence.Service) *Hub
 		publisher:  rdb,
 		register:   make(chan *Client, 256),
 		unregister: make(chan *Client, 256),
-		touchCh:    make(chan string, 1024),
+		touchCh:    make(chan *Client, 1024),
 		presenceCh: make(chan presenceUpdate, 256),
 		done:       make(chan struct{}),
 		preferred:  make(map[string]string),
@@ -136,8 +138,8 @@ func (h *Hub) Run(ctx context.Context) {
 			}
 			log.Debug().Str("userID", client.userID).Msg("gateway: client disconnected")
 
-		case userID := <-h.touchCh:
-			h.handleTouch(userID)
+		case client := <-h.touchCh:
+			h.handleTouch(client)
 
 		case upd := <-h.presenceCh:
 			h.applyPresenceChange(upd.userID, upd.status)
@@ -174,7 +176,7 @@ func (h *Hub) subscribeRedis(ctx context.Context) {
 	sub := h.rdb.Subscribe(ctx, redisPubSubChannel)
 	defer sub.Close()
 
-	ch := sub.Channel()
+	ch := sub.Channel(redis.WithChannelSize(4096))
 	for {
 		select {
 		case <-ctx.Done():
@@ -233,7 +235,7 @@ func (h *Hub) handleClientMessage(c *Client, msg []byte) {
 	// Cursor-rate traffic must not cause a Redis round trip per frame. Pongs
 	// and heartbeats still maintain account presence while drawing.
 	if event.Op != OpBoardPresence {
-		h.touch(c.userID)
+		h.touch(c)
 	}
 
 	switch event.Op {
@@ -271,23 +273,16 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 		if !c.HasGuild(d.GuildID) {
 			return
 		}
-		var guildID, channelType string
-		if err := h.db.QueryRow(context.Background(),
-			`SELECT guild_id, type FROM channels WHERE id = $1`, d.ChannelID,
-		).Scan(&guildID, &channelType); err != nil || guildID != d.GuildID || channelType != "text" {
+		channel, ok := h.typingChannel(d.ChannelID, false)
+		if !ok || channel.guildID != d.GuildID || channel.kind != "text" {
 			return
 		}
 	}
 
-	var username string
-	h.db.QueryRow(context.Background(),
-		`SELECT username FROM users WHERE id = $1`, c.userID,
-	).Scan(&username)
-
 	payload := map[string]string{
 		"channelId": d.ChannelID,
 		"userId":    c.userID,
-		"username":  username,
+		"username":  c.Username(),
 	}
 
 	if d.GuildID != "" {
@@ -298,12 +293,11 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 		return
 	}
 
-	var userA, userB string
-	if err := h.db.QueryRow(context.Background(),
-		`SELECT user_a_id, user_b_id FROM dm_channels WHERE id = $1`, d.ChannelID,
-	).Scan(&userA, &userB); err != nil {
+	channel, ok := h.typingChannel(d.ChannelID, true)
+	if !ok {
 		return
 	}
+	userA, userB := channel.userA, channel.userB
 	if c.userID != userA && c.userID != userB {
 		return
 	}
@@ -314,20 +308,36 @@ func (h *Hub) handleTyping(c *Client, event Event) {
 	}
 }
 
+// A 10s coalescing window leaves ample margin within the 90s presence TTL;
+// protocol pongs and application heartbeats arrive every 30s.
+const touchInterval = 10 * time.Second
+
 // touch queues a non-blocking liveness signal. Drops when the buffer is full:
 // the next ping is only 30s away.
-func (h *Hub) touch(userID string) {
+func (h *Hub) touch(c *Client) {
+	if recentTouch(c, time.Now()) {
+		return
+	}
 	select {
-	case h.touchCh <- userID:
+	case h.touchCh <- c:
 	default:
 	}
 }
 
+func recentTouch(c *Client, now time.Time) bool {
+	last := c.lastTouch.Load()
+	return last != 0 && now.Sub(time.Unix(0, last)) < touchInterval
+}
+
 // handleTouch recreates or refreshes the user's presence key. When the key was
 // missing, the user is broadcast as back online. Runs in the hub goroutine.
-func (h *Hub) handleTouch(userID string) {
+func (h *Hub) handleTouch(c *Client) {
+	if recentTouch(c, time.Now()) {
+		return
+	}
+	userID := c.userID
 	h.mu.RLock()
-	connected := len(h.clients[userID]) > 0
+	connected := h.clients[userID][c]
 	h.mu.RUnlock()
 	if !connected {
 		return // a queued touch from a connection that has since closed
@@ -339,6 +349,7 @@ func (h *Hub) handleTouch(userID string) {
 		log.Error().Err(err).Str("userID", userID).Msg("gateway: touch presence")
 		return
 	}
+	c.lastTouch.Store(time.Now().UnixNano())
 	if !recreated {
 		return
 	}
@@ -403,6 +414,18 @@ func (h *Hub) lookupPreferredStatus(ctx context.Context, userID string) (status 
 // belongs to and every DM partner, then sends the self copy (which carries the
 // preferred status) back to the user's own connections.
 func (h *Hub) PublishUserUpdate(userID string, public any, self any) {
+	// Keep typing names current on all local tabs without another database query.
+	raw, err := json.Marshal(public)
+	var profile struct {
+		Username *string `json:"username"`
+	}
+	if err == nil && json.Unmarshal(raw, &profile) == nil && profile.Username != nil {
+		h.mu.RLock()
+		for c := range h.clients[userID] {
+			c.username.Store(*profile.Username)
+		}
+		h.mu.RUnlock()
+	}
 	ctx := context.Background()
 	for _, guildID := range h.guildIDsForUser(ctx, userID) {
 		h.PublishToGuild(guildID, OpUserUpdate, public)
@@ -663,8 +686,10 @@ func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
 	// learns its own preferred status. `audience` is the set of user IDs the
 	// presence snapshot covers, letting the client drop stale guild entries
 	// without guessing and without touching DM/friend-only users.
-	myStatus, ok := h.lookupPreferredStatus(ctx, client.userID)
-	if !ok {
+	var myStatus, username string
+	err := h.db.QueryRow(ctx, `SELECT preferred_status, username FROM users WHERE id = $1`, client.userID).Scan(&myStatus, &username)
+	client.username.Store(username)
+	if err != nil || myStatus == "" {
 		myStatus = "online"
 	}
 	me := map[string]string{"preferredStatus": myStatus}
