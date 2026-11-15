@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { applyReadState, seedReadStates, useReadState, type ServerReadState } from "./useReadState";
+import { setReadConnection } from "../lib/readStateAck";
 import { emitDMMessage } from "../lib/dmMessageEvent";
 import { useAuthStore } from "../stores/authStore";
 import { refreshSession } from "../lib/api";
@@ -93,6 +95,7 @@ export function sendGatewayTyping(channelId: string, guildId: string) {
 }
 
 export function useGateway() {
+  useReadState();
   // Only the presence of a session matters here: token refreshes must not tear
   // down the socket, and each (re)connect reads the freshest token itself.
   const isAuthed = useAuthStore((s) => !!s.accessToken && s.accessToken !== "mock-token");
@@ -325,13 +328,22 @@ export function useGateway() {
             break;
           }
 
+          case "READ_STATE_UPDATE": {
+            const d = event.d as { channelId: string; lastReadAt: string };
+            applyReadState(d.channelId, d.lastReadAt);
+            break;
+          }
           case "READY": {
             const d = event.d as {
+              readStates?: ServerReadState[];
+              connectionId?: string;
               presences: Record<string, PresenceStatus> | null;
               voiceStates: { userId: string; username: string; channelId: string; joined: boolean }[];
               audience?: string[] | null;
               me?: { preferredStatus?: PreferredStatus };
             };
+            setReadConnection(d.connectionId ?? "");
+            if (d.readStates) seedReadStates(d.readStates);
             const presences = d.presences ?? {};
             // `audience` is exactly the guild membership the snapshot covers.
             // Only entries that fell out of that previous audience are stale, so
@@ -562,6 +574,7 @@ export function useGateway() {
       window.removeEventListener("online", onOnline);
       clearInterval(driftInterval);
       liveness.dispose();
+      setReadConnection("");
       destroyed = true;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (reconnectRef.current) clearTimeout(reconnectRef.current);

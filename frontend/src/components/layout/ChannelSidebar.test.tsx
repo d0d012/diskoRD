@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { ChannelSidebar } from "./ChannelSidebar";
 import { useGuildStore } from "../../stores/guildStore";
+import { useMessageStore } from "../../stores/messageStore";
 import { useAuthStore } from "../../stores/authStore";
 import type { Channel } from "../../types";
 
@@ -20,6 +21,7 @@ const channels: Channel[] = [
 ] as Channel[];
 
 beforeEach(() => {
+  useMessageStore.setState({ unreadChannels: {}, mentionCounts: {} });
   useAuthStore.setState({ user: { id: "me", username: "me", status: "online", createdAt: "2026-01-01T00:00:00Z" } } as never);
   useGuildStore.setState({
     guilds: [{ id: "g1", name: "Guild", ownerId: "me" }] as never,
@@ -34,6 +36,19 @@ describe("ChannelSidebar", () => {
     expect(screen.getByText("sprint-board")).toBeInTheDocument();
     expect(screen.getByText("general")).toBeInTheDocument();
     expect(screen.getByText("lounge")).toBeInTheDocument();
+  });
+
+  it("renders unread text in bold white with a dot, replaced by a mention badge", () => {
+    useMessageStore.setState({ unreadChannels: { t1: true } });
+    const { rerender } = render(<ChannelSidebar />);
+    const name = screen.getByText("general");
+    expect(name).toHaveClass("font-semibold");
+    expect(name.parentElement?.className).toContain("text-[var(--color-dc-header-primary)]");
+    expect(name.parentElement?.querySelector("span.w-2.h-2")).not.toBeNull();
+    act(() => useMessageStore.setState({ mentionCounts: { t1: 3 } }));
+    rerender(<ChannelSidebar />);
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(name.parentElement?.querySelector("span.w-2.h-2")).toBeNull();
   });
 
   it("hides the Boards section for a non-owner when the guild has no boards", () => {

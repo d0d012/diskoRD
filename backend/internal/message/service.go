@@ -109,6 +109,7 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 		}
 		msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 		s.resolveMentions(ctx, msg)
+		s.recordMentions(ctx, msg, cc)
 		if s.pub != nil {
 			s.pub.PublishToDM(userID, recipientID, "MESSAGE_CREATE", msg)
 		}
@@ -132,6 +133,7 @@ func (s *Service) Send(ctx context.Context, userID, channelID string, req Create
 	msg.ReplyTo, msg.ReferencedMessage = req.ReplyTo, ref
 	msg.GuildID = cc.GuildID
 	s.resolveMentions(ctx, msg)
+	s.recordMentions(ctx, msg, cc)
 	if s.pub != nil {
 		s.pub.PublishToGuild(cc.GuildID, "MESSAGE_CREATE", msg)
 	}

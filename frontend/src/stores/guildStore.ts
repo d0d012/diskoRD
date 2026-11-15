@@ -64,7 +64,6 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
         .then(({ data }) => {
           const channels: Channel[] = data.data ?? [];
           const firstText = channels.find((c) => c.type === "text");
-          if (firstText) useMessageStore.getState().markRead(firstText.id);
           set((s) => ({
             channels: { ...s.channels, [guildId]: channels },
             activeChannelId: firstText?.id ?? null,
@@ -79,8 +78,6 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
 
   setActiveChannel: (channelId) => {
     set({ activeChannelId: channelId });
-    const channel = Object.values(get().channels).flat().find((item) => item.id === channelId);
-    if (channel?.type === "text") useMessageStore.getState().markRead(channelId);
   },
 
   fetchGuilds: async () => {

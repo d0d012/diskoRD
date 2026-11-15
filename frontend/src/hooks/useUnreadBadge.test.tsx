@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: vi.fn(), UserAttentionType: { Informational: 2 },
 }));
 const badge = vi.fn();
+const label = vi.fn();
 const overlay = vi.fn();
 const attention = vi.fn();
 const fillText = vi.fn();
@@ -37,9 +38,10 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   vi.mocked(isTauri).mockReturnValue(true);
-  vi.mocked(getCurrentWindow).mockReturnValue({ setBadgeCount: badge, setOverlayIcon: overlay,
+  vi.mocked(getCurrentWindow).mockReturnValue({ setBadgeCount: badge, setBadgeLabel: label, setOverlayIcon: overlay,
     requestUserAttention: attention } as unknown as ReturnType<typeof getCurrentWindow>);
   badge.mockResolvedValue(undefined);
+  label.mockResolvedValue(undefined);
   overlay.mockResolvedValue(undefined);
   attention.mockResolvedValue(undefined);
   vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Macintosh");
@@ -53,13 +55,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("home badge and title", () => {
-  it("shows capped DM count and hides active/muted/zero DMs", () => {
+  it("shows capped DM count even when selected, and hides muted/zero DMs", () => {
     render(<ServerSidebar />);
     expect(screen.queryByLabelText(/unread direct messages/)).toBeNull();
     setCount(101);
     expect(screen.getByLabelText("101 unread direct messages")).toHaveTextContent("99+");
     act(() => useFriendStore.setState({ activeDMId: "dm" }));
-    expect(screen.queryByLabelText(/unread direct messages/)).toBeNull();
+    expect(screen.getByLabelText("101 unread direct messages")).toHaveTextContent("99+");
     act(() => {
       useFriendStore.setState({ activeDMId: null });
       useNotificationStore.setState({ mutedDmUsers: new Set(["u"]) });
@@ -67,6 +69,17 @@ describe("home badge and title", () => {
     expect(screen.queryByLabelText(/unread direct messages/)).toBeNull();
     act(() => useNotificationStore.setState({ mutedDmUsers: new Set(), mutedChannels: new Set(["dm"]) }));
     expect(screen.queryByLabelText(/unread direct messages/)).toBeNull();
+  });
+  it("shows a server unread pill and mentions even on the selected server", () => {
+    useGuildStore.setState({ guilds: [{ id: "g", name: "Guild", ownerId: "me", createdAt: "" }], activeGuildId: null });
+    useMessageStore.setState({ channelGuilds: { channel: "g" }, unreadChannels: { channel: true } });
+    const { container } = render(<ServerSidebar />);
+    expect(container.querySelector('.dc-server-pill[data-state="unread"]')).not.toBeNull();
+    act(() => {
+      useGuildStore.setState({ activeGuildId: "g" });
+      useMessageStore.setState({ mentionCounts: { channel: 3 } });
+    });
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
   it("prefixes browser title with DM plus mentions, updates, and restores on unmount", () => {
     vi.mocked(isTauri).mockReturnValue(false);
@@ -121,12 +134,30 @@ describe("OS badges", () => {
     fillText.mockClear();
     setCount(10);
     await tick();
-    expect(fillText).not.toHaveBeenCalled();
-    expect(context.fillStyle).toBe("#f23f43");
+    expect(fillText).toHaveBeenCalledWith("9+", 16, 17);
+    expect(context.fillStyle).toBe("#ffffff");
     setCount(0);
     await tick();
     expect(overlay).toHaveBeenLastCalledWith(undefined);
     expect(badge).not.toHaveBeenCalled();
+  });
+  it("shows a plain dot on macOS and clears its label when mentions arrive", async () => {
+    renderHook(useOSBadge);
+    act(() => useMessageStore.setState({ unreadChannels: { channel: true }, channelGuilds: { channel: "g" } }));
+    await tick();
+    expect(label).toHaveBeenLastCalledWith("•");
+    expect(badge).toHaveBeenLastCalledWith(undefined);
+    act(() => useMessageStore.setState({ mentionCounts: { channel: 2 } }));
+    await tick();
+    expect(label).toHaveBeenLastCalledWith(undefined);
+    expect(badge).toHaveBeenLastCalledWith(2);
+  });
+  it("draws a smaller, unnumbered Windows dot", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,iVBORw==");
+    createBadgeIcon(0);
+    expect(context.arc).toHaveBeenCalledWith(16, 16, 8, 0, Math.PI * 2);
+    expect(fillText).not.toHaveBeenCalled();
   });
   it("makes no native calls in browser", async () => {
     vi.mocked(isTauri).mockReturnValue(false);

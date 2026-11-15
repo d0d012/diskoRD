@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { acknowledgeChannel } from "../lib/readStateAck";
 import { api } from "../lib/api";
 import { useAuthStore } from "./authStore";
 import { useUserStore } from "./userStore";
@@ -138,7 +139,8 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         };
       }
 
-      const isActive = msg.channelId === activeChannelId;
+      const isActive = msg.channelId === activeChannelId && document.hasFocus() && document.visibilityState !== "hidden";
+      if (isActive) acknowledgeChannel(msg.channelId);
 
       const isOwnMessage = !!currentUserId && msg.author?.id === currentUserId;
 
@@ -152,7 +154,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         : s.unreadCounts;
 
       // Track mention count
-      const isMentioned = shouldMarkUnread && !!currentUserId && (msg.mentions ?? []).includes(currentUserId);
+      const isMentioned = shouldMarkUnread && (!msg.guildId || (!!currentUserId && (msg.mentions ?? []).includes(currentUserId)));
       const mentionCounts = isMentioned
         ? { ...s.mentionCounts, [msg.channelId]: (s.mentionCounts[msg.channelId] ?? 0) + 1 }
         : s.mentionCounts;
@@ -385,6 +387,8 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   },
 
   markRead: (channelId) => {
+    if (!document.hasFocus() || document.visibilityState === "hidden") return;
+    acknowledgeChannel(channelId);
     set((s) => {
       if (!s.unreadChannels[channelId] && !s.unreadCounts[channelId] && !s.mentionCounts[channelId]) return s;
       const unread = { ...s.unreadChannels };

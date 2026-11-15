@@ -692,13 +692,16 @@ func (h *Hub) sendReadyEvent(ctx context.Context, client *Client) {
 	if err != nil || myStatus == "" {
 		myStatus = "online"
 	}
+	readStates := h.readyReadStates(ctx, client)
 	me := map[string]string{"preferredStatus": myStatus}
 	seq := atomic.LoadInt64(&h.seq)
 	raw, err := json.Marshal(map[string]interface{}{
-		"presences":   presences,
-		"voiceStates": voiceStates,
-		"audience":    memberIDs,
-		"me":          me,
+		"readStates":   readStates,
+		"connectionId": client.readConnectionID.Load(),
+		"presences":    presences,
+		"voiceStates":  voiceStates,
+		"audience":     memberIDs,
+		"me":           me,
 	})
 	if err != nil {
 		return

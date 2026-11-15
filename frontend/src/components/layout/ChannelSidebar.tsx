@@ -121,7 +121,7 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
     <>
       <div className="relative flex items-center mx-2">
         {/* Unread pill on the left edge */}
-        {unread && !active && (
+        {unread && mentionCount === 0 && (
           <div
             className="absolute -left-2 w-1 rounded-r-full"
             style={{ height: "8px", backgroundColor: "var(--color-dc-header-primary)" }}
@@ -147,10 +147,10 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
             <path d="M9 9a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V9z"/>
           </svg>
         )}
-        <span className={`truncate flex-1 ${unread && !active ? "font-semibold" : ""}`}>{channel.name}</span>
+        <span className={`truncate flex-1 ${unread ? "font-semibold" : ""}`}>{channel.name}</span>
 
         {/* Mention badge (right side, hidden on hover) */}
-        {mentionCount > 0 && !active && (
+        {mentionCount > 0 && (
           <span
             className="group-hover:hidden flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-xs font-bold text-white flex items-center justify-center"
             style={{ backgroundColor: "var(--color-dc-red, #ed4245)" }}
@@ -158,7 +158,7 @@ function ChannelItem({ channel, guildId, active, isOwner, unread, mentionCount, 
             {mentionCount > 99 ? "99+" : mentionCount}
           </span>
         )}
-        {unread && !active && mentionCount === 0 && (
+        {unread && mentionCount === 0 && (
           <span className="group-hover:hidden w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--color-dc-header-primary)" }} />
         )}
 

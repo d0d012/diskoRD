@@ -21,39 +21,42 @@ export function createBadgeIcon(total: number): Uint8Array {
   if (!context) throw new Error("Canvas unavailable");
   context.fillStyle = "#f23f43";
   context.beginPath();
-  context.arc(16, 16, 15, 0, Math.PI * 2);
+  context.arc(16, 16, total > 0 ? 15 : 8, 0, Math.PI * 2);
   context.fill();
-  if (total <= 9) {
+  if (total > 0) {
     context.fillStyle = "#ffffff";
-    context.font = "bold 23px sans-serif";
+    context.font = total > 9 ? "bold 18px sans-serif" : "bold 23px sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(String(total), 16, 17);
+    context.fillText(total > 9 ? "9+" : String(total), 16, 17);
   }
   const bytes = atob(canvas.toDataURL("image/png").split(",")[1]);
   return Uint8Array.from(bytes, (byte) => byte.charCodeAt(0));
 }
 
 export function useOSBadge() {
-  const { osTotal } = useUnreadBadge();
-  const lastApplied = useRef<number | undefined>(undefined);
+  const { osTotal, dot } = useUnreadBadge();
+  const badgeKey = `${osTotal}:${dot}`;
+  const lastApplied = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!isTauri() || lastApplied.current === osTotal) return;
+    if (!isTauri() || lastApplied.current === badgeKey) return;
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
           const currentWindow = getCurrentWindow();
           if (/Windows/i.test(navigator.userAgent)) {
-            await currentWindow.setOverlayIcon(osTotal > 0 ? createBadgeIcon(osTotal) : undefined);
+            await currentWindow.setOverlayIcon(osTotal > 0 || dot ? createBadgeIcon(osTotal) : undefined);
           } else {
+            await currentWindow.setBadgeLabel(undefined).catch((error) => logOnce("label", error));
             await currentWindow.setBadgeCount(osTotal > 0 ? osTotal : undefined);
+            if (dot) await currentWindow.setBadgeLabel("•").catch((error) => logOnce("label", error));
           }
-          lastApplied.current = osTotal;
+          lastApplied.current = badgeKey;
         } catch (error) { logOnce("sync", error); }
       })();
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [osTotal]);
+  }, [osTotal, dot, badgeKey]);
 
   useEffect(() => {
     if (!isTauri()) return;

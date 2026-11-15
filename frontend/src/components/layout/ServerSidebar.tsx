@@ -45,7 +45,7 @@ function ServerIcon({ guild, active, unread, mentionCount, onClick }: ServerIcon
         )}
       </div>
       {/* Mention badge */}
-      {mentionCount > 0 && !active && (
+      {mentionCount > 0 && (
         <div
           className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-white font-bold pointer-events-none"
           style={{ backgroundColor: "var(--color-dc-red)", fontSize: "10px", outline: "4px solid var(--color-dc-bg-tertiary)" }}

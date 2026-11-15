@@ -18,15 +18,16 @@ const (
 
 // Client represents a single WebSocket connection.
 type Client struct {
-	hub        *Hub
-	conn       *fiberws.Conn
-	send       chan []byte
-	userID     string
-	username   atomic.Value // string, refreshed by USER_UPDATE
-	lastTouch  atomic.Int64 // Unix nanoseconds of last successful Redis touch
-	registered chan struct{}
-	guildMu    sync.RWMutex
-	guilds     map[string]bool // guildID → member
+	hub              *Hub
+	conn             *fiberws.Conn
+	send             chan []byte
+	userID           string
+	readConnectionID atomic.Value // string identifying the originating ack connection
+	username         atomic.Value // string, refreshed by USER_UPDATE
+	lastTouch        atomic.Int64 // Unix nanoseconds of last successful Redis touch
+	registered       chan struct{}
+	guildMu          sync.RWMutex
+	guilds           map[string]bool // guildID → member
 
 	roomMu         sync.Mutex
 	rooms          map[string]bool
