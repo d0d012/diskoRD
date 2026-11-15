@@ -128,7 +128,7 @@ describe('createStampPlacer', () => {
       adapter: failing, store: h.store, session: h.session, runtime: h.runtime, userId: USER, notify,
     });
 
-    const id = await place(stamps, 'bug', 0, 0);
+    const id = await place(stamps, 'frog', 0, 0);
 
     expect(id).toBeNull();
     expect(h.store.getObjectIds()).toHaveLength(0);

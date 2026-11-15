@@ -7,7 +7,7 @@ describe('stamp definitions', () => {
   it('ships the 16 required stickers', () => {
     expect(STAMPS.map(stamp => stamp.id)).toEqual([
       'thumbs-up', 'star', 'heart', 'check', 'cross', 'question', 'fire', 'crown',
-      'skull', 'arrow', 'flag', 'eyes', 'hundred', 'party', 'coffee', 'bug',
+      'skull', 'arrow', 'flag', 'eyes', 'hundred', 'party', 'coffee', 'frog',
     ]);
   });
 
