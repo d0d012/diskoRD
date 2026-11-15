@@ -7,6 +7,7 @@ import {
 } from './objects';
 import type { ToolContext } from './types';
 import { isSoftLocked } from './presence';
+import { expandFrameSelection } from './frameCopy';
 
 export interface KeyInput {
   readonly key: string;
@@ -193,5 +194,7 @@ export function insertCopies(ctx: ToolContext, sources: readonly BoardObject[], 
 }
 
 export function duplicateSelection(ctx: ToolContext): boolean {
-  return insertCopies(ctx, selection(ctx), DUPLICATE_OFFSET, DUPLICATE_OFFSET, 'Duplicate') !== null;
+  // A duplicated frame carries its contents, like copy/paste does.
+  const objects = expandFrameSelection(ctx.store.getObjectsInRank(), ctx.session.getState().selectedIds);
+  return insertCopies(ctx, objects, DUPLICATE_OFFSET, DUPLICATE_OFFSET, 'Duplicate') !== null;
 }
