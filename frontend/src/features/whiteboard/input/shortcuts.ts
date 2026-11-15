@@ -34,7 +34,8 @@ export type ShortcutAction =
   | { readonly type: 'redo' }
   | { readonly type: 'zoom-to-fit' }
   | { readonly type: 'escape' }
-  | { readonly type: 'edit' };
+  | { readonly type: 'edit' }
+  | { readonly type: 'export' };
 
 export const TOOL_KEYS: Readonly<Record<string, Exclude<ToolId, 'image'>>> = {
   v: 'select', h: 'hand', p: 'pen', e: 'eraser', k: 'laser', s: 'sticky', r: 'rect', o: 'ellipse',
@@ -74,6 +75,7 @@ export function matchShortcut(event: KeyInput): ShortcutAction | null {
     if (key === 'd' && !event.shiftKey) return { type: 'duplicate' };
     if (key === 'c' && !event.shiftKey) return { type: 'copy' };
     if (key === 'x' && !event.shiftKey) return { type: 'cut' };
+    if (key === 'e' && event.shiftKey) return { type: 'export' };
     return null;
   }
   if (mod || event.altKey) return null;

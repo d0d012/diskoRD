@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-export type BoardIconName = 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | 'frame' | 'minus' | 'plus' | 'undo' | 'redo' | 'front' | 'back' | 'delete' | 'people';
+export type BoardIconName = 'select' | 'hand' | 'pen' | 'eraser' | 'laser' | 'sticky' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | 'frame' | 'minus' | 'plus' | 'undo' | 'redo' | 'front' | 'back' | 'delete' | 'people' | 'download';
 
 const paths: Record<BoardIconName, string> = {
   select: 'M5 3 20 13l-7 1-3 7Z',
@@ -22,6 +22,7 @@ const paths: Record<BoardIconName, string> = {
   back: 'M4 4h12v12H4ZM9 20h11V9M8 8h4v4H8Z',
   delete: 'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7',
   people: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  download: 'M12 3v12M6 11l6 6 6-6M4 21h16',
 };
 
 export function BoardIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: BoardIconName }) {

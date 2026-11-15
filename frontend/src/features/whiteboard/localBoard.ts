@@ -48,6 +48,8 @@ export interface LocalBoardOptions extends BoardIdentity {
   readonly element: HTMLElement;
   /** The Image shortcut was pressed: the host opens its picker. */
   readonly onRequestImage?: () => void;
+  /** The Export shortcut (Ctrl/Cmd+Shift+E) was pressed. */
+  readonly onExport?: () => void;
   /** Initial in-memory server state (tests). */
   readonly snapshot?: Snapshot;
 }
@@ -90,6 +92,8 @@ export interface BoardConnectionOptions {
   readonly element: HTMLElement;
   /** The Image shortcut was pressed: the host opens its picker. */
   readonly onRequestImage?: () => void;
+  /** The Export shortcut (Ctrl/Cmd+Shift+E) was pressed. */
+  readonly onExport?: () => void;
   /** Display-name lookup for presence; the server-provided name is the fallback. */
   readonly resolveName?: (userId: UserId) => string | undefined;
 }
@@ -100,7 +104,7 @@ export interface BoardConnectionOptions {
  * store's user; presence flows adapter <-> controller from here.
  */
 function wireBoard(
-  resources: BoardResources, adapter: SyncAdapter, element: HTMLElement, userId: UserId, onRequestImage?: () => void,
+  resources: BoardResources, adapter: SyncAdapter, element: HTMLElement, userId: UserId, onRequestImage?: () => void, onExport?: () => void,
 ): BoardConnection {
   const { store, session, runtime, notices } = resources;
   const coordinator = createSyncCoordinator({
@@ -114,7 +118,7 @@ function wireBoard(
     getViewportSize: () => element.getBoundingClientRect(),
   });
   const controller = createInputController({
-    element, store, session, runtime, userId, onNotice: notices.notify, onRequestImage,
+    element, store, session, runtime, userId, onNotice: notices.notify, onRequestImage, onExport,
     onImageFiles: (files, at) => { void ingest.addFiles(files, at ? { at } : undefined); },
     presence: { send: adapter.sendPresence, getParticipants: adapter.getPresence },
   });
@@ -147,12 +151,12 @@ function wireBoard(
 export function connectBoard(resources: BoardResources, options: BoardConnectionOptions): BoardConnection {
   const { boardId, userId } = resources.identity;
   const adapter = createNetworkAdapter({ boardId, userId, resolveName: options.resolveName });
-  return wireBoard(resources, adapter, options.element, userId, options.onRequestImage);
+  return wireBoard(resources, adapter, options.element, userId, options.onRequestImage, options.onExport);
 }
 
 /** Local-only connection (tests, standalone): in-memory adapter standing in for the server. */
 export function connectLocalBoard(resources: BoardResources, options: LocalBoardOptions): LocalBoardConnection {
-  const { boardId, userId, element, snapshot, onRequestImage } = options;
+  const { boardId, userId, element, snapshot, onRequestImage, onExport } = options;
   const adapter = createLocalAdapter({ boardId, userId, snapshot });
-  return { ...wireBoard(resources, adapter, element, userId, onRequestImage), adapter };
+  return { ...wireBoard(resources, adapter, element, userId, onRequestImage, onExport), adapter };
 }

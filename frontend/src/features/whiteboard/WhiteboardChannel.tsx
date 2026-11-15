@@ -15,6 +15,7 @@ import { PeoplePanel } from './ui/PeoplePanel';
 import { ImagePicker } from './ui/ImagePicker';
 import { SyncStatusChip } from './ui/SyncStatus';
 import { Toolbar, StyleBar, ZoomControl, UndoRedo, BoardNotice } from './ui';
+import { exportBoardPng } from './export';
 import './ui/whiteboard.css';
 
 interface WhiteboardChannelProps { channelId: string }
@@ -51,6 +52,9 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
   const closePicker = useCallback(() => {
     if (session.getState().tool === 'image') session.setTool('select');
   }, [session]);
+  const exportPng = useCallback(() => {
+    void exportBoardPng(store, session, notices.notify);
+  }, [store, session, notices]);
   const ids = useSyncExternalStore(store.subscribeIds, store.getObjectIds);
   useEffect(() => {
     const element = viewport.current;
@@ -59,7 +63,7 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
     let started: Promise<void>;
     try {
       // Identities come from `resources` (the store's own), never from props again.
-      live = connectBoard(resources, { element, resolveName, onRequestImage: requestImage });
+      live = connectBoard(resources, { element, resolveName, onRequestImage: requestImage, onExport: exportPng });
       started = live.started;
       setConnection({ adapter: live.adapter, ingest: live.ingest });
     } catch (cause) {
@@ -76,7 +80,7 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
       live?.dispose();
       setConnection(null);
     };
-  }, [resources, requestImage]);
+  }, [resources, requestImage, exportPng]);
   const ui = { store, session, runtime };
   return <Viewport ref={viewport} store={store} session={session} runtime={runtime}>
     {adapter && <PresenceLayer adapter={adapter} runtime={runtime} store={store} selfUserId={userId} />}
@@ -93,6 +97,6 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
         void connection.ingest.addFiles(files, { pixelated });
       }} />
     </div>}
-    <Toolbar {...ui} /><StyleBar {...ui} /><ZoomControl {...ui} /><UndoRedo {...ui} />
+    <Toolbar {...ui} /><StyleBar {...ui} notify={notices.notify} /><ZoomControl {...ui} notify={notices.notify} /><UndoRedo {...ui} />
   </Viewport>;
 }

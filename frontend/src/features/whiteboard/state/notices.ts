@@ -14,7 +14,9 @@ export type BoardNoticeKind =
   /** The adapter/server rejected an already applied optimistic command. */
   | 'rejected'
   /** Transport/recovery problems reported by the sync coordinator. */
-  | 'sync';
+  | 'sync'
+  /** Export progress/problems (skipped images, nothing to export). */
+  | 'export';
 
 export interface BoardNotice {
   /** Monotonic per channel; a repeated message is still a new notice. */

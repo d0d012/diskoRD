@@ -24,6 +24,8 @@ export interface InputControllerOptions {
   readonly userId: UserId;
   /** The Image shortcut (I) was pressed; the host opens its picker. */
   readonly onRequestImage?: () => void;
+  /** The Export shortcut (Ctrl/Cmd+Shift+E) was pressed. */
+  readonly onExport?: () => void;
   /**
    * Image files pasted (`at` = pointer, or null with no pointer over the board)
    * or dropped (`at` = drop point), in world space. Without this, paste/drop of
@@ -80,7 +82,7 @@ function cursorFor(tool: string, spaceHeld: boolean, panning: boolean): string {
  * finished gesture performs at most one store dispatch.
  */
 export function createInputController(options: InputControllerOptions): InputController {
-  const { element, store, session, runtime, userId, onRequestImage, onImageFiles, onNotice } = options;
+  const { element, store, session, runtime, userId, onRequestImage, onImageFiles, onNotice, onExport } = options;
   const doc = element.ownerDocument;
   const win = doc.defaultView ?? window;
   const presence = options.presence ? {
@@ -433,6 +435,9 @@ export function createInputController(options: InputControllerOptions): InputCon
       }
       case 'edit':
         return editSelection(ctx);
+      case 'export':
+        onExport?.();
+        return true;
     }
   }
 

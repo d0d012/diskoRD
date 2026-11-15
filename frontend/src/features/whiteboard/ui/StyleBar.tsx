@@ -9,6 +9,7 @@ import {
 } from '../core';
 import { BoardIcon } from './icons';
 import { textObjectHeight } from '../editing/measure';
+import { exportBoardPng } from '../export';
 import type { BoardNotify } from '../state';
 import type { BoardUIProps } from './Toolbar';
 
@@ -220,5 +221,6 @@ export function StyleBar({ store, session, runtime, notify }: StyleBarProps) {
     <button type="button" aria-label="Bring to front" title="Bring to front · ]" onClick={() => reorder(true)}><BoardIcon name="front" /></button>
     <button type="button" aria-label="Send to back" title="Send to back · [" onClick={() => reorder(false)}><BoardIcon name="back" /></button>
     <button type="button" aria-label="Delete selection" title="Delete" onClick={() => { if (dispatch(selected.map(object => ({ id: object.id, action: 'delete', expectedVersion: object.version })), 'Delete selection')) session.setSelectedIds([]); }}><BoardIcon name="delete" /></button>
+    <button type="button" aria-label="Export selection as PNG" title="Export selection as PNG · Ctrl+Shift+E" onClick={() => { void exportBoardPng(store, session, notify ?? (() => {})); }}><BoardIcon name="download" /></button>
   </div>;
 }
