@@ -1,8 +1,9 @@
 import { DEFAULT_TEXT_WIDTH, MAX_OBJECT_BODY_BYTES, MAX_TEXT_LENGTH } from '../contract';
 import type { BoardObject, Point } from '../contract';
 import { getBounds, unionBounds } from '../core';
-import { DUPLICATE_OFFSET, createChange, existingObjects, makeText, safeDispatch, topRanks } from './objects';
+import { DUPLICATE_OFFSET, createChange, makeText, safeDispatch, topRanks } from './objects';
 import { insertCopies } from './shortcuts';
+import { expandFrameSelection } from './frameCopy';
 import type { ToolContext } from './types';
 
 /**
@@ -26,7 +27,9 @@ export function clipboardText(objects: readonly BoardObject[]): string {
 }
 
 export function copySelection(ctx: ToolContext): BoardClipboard | null {
-  const objects = existingObjects(ctx.store, ctx.session.getState().selectedIds);
+  // Frames carry their contents: expand the selection with the same spatial
+  // containment rule used when dragging a frame (see core/frames.ts).
+  const objects = expandFrameSelection(ctx.store.getObjectsInRank(), ctx.session.getState().selectedIds);
   if (objects.length === 0) return null;
   return { objects, text: clipboardText(objects), pastes: 0 };
 }
