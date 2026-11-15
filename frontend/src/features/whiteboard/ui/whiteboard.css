@@ -8,6 +8,7 @@
 @import "@fontsource/silkscreen/400.css";
 
 .wb-root {
+  container: wb-board / inline-size;
   --wb-canvas: #15171e;
   --wb-grid-size: 24px;
   --wb-grid-dot: rgba(255, 255, 255, 0.12);
@@ -325,9 +326,11 @@
   backdrop-filter: none;
   max-width: calc(100% - 32px);
 }
-/* The dock is wider than the space between the undo/redo and zoom groups on
-   narrower boards, so lift it above them instead of letting it slide under. */
-@media (max-width: 1500px) {
+/* left:50% would shrink-wrap the dock to half the board and wrap it early. */
+.wb-root .wb-root__dock { width: max-content; }
+/* On boards narrower than dock + undo/redo + zoom groups, lift the dock above
+   them instead of letting it slide under; it wraps only when even that fails. */
+@container wb-board (max-width: 1180px) {
   .wb-root .wb-root__dock { bottom: calc(var(--wb-dock-bottom) + 52px); flex-wrap: wrap; justify-content: center; }
 }
 
