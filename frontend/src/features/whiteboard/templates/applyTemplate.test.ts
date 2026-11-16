@@ -47,6 +47,17 @@ describe('applyTemplate', () => {
     expect(h.store.getObjectIds()).toHaveLength(0);
   });
 
+  it.each(TEMPLATES)('$name has fitting frame labels and stickies inside their frames', template => {
+    const frames = template.items.filter(i => i.kind === 'frame');
+    for (const f of frames) expect(f.kind === 'frame' && f.label.length * 7.7 + 60 <= f.w).toBe(true);
+    for (const s of template.items.filter(i => i.kind === 'sticky')) {
+      const hosts = frames.filter(f => s.x < f.x + f.w && s.x + s.w > f.x && s.y < f.y + f.h && s.y + s.h > f.y);
+      for (const f of hosts) {
+        expect(s.x >= f.x + 40 && s.y >= f.y + 40 && s.x + s.w <= f.x + f.w - 40 && s.y + s.h <= f.y + f.h - 40).toBe(true);
+      }
+    }
+  });
+
   it('places a second template at the current viewport centre and preserves existing content', () => {
     const h = createHarness();
     const options = { store: h.store, session: h.session, runtime: h.runtime, userId: USER,
