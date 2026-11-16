@@ -74,6 +74,11 @@ migrate \
   -database "postgres://${DB_USER}:${DB_PASSWORD}@${POSTGRES_IP}:5432/${DB_NAME}?sslmode=disable" \
   up
 
+# nginx resolves upstream container names once at startup; a recreated backend
+# gets a new IP, so reload it or /api and /gateway return 502.
+echo "==> Reloading nginx..."
+"${COMPOSE[@]}" exec -T nginx nginx -s reload
+
 "${COMPOSE[@]}" ps --format "table {{.Name}}\t{{.Status}}"
 
 echo ""
