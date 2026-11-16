@@ -35,6 +35,19 @@ describe('Template gallery', () => {
     expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(trigger);
   });
 
+  it('lets WebKit-style clicks through: focus landing on the hosting board does not jump back to the top', () => {
+    const { h, board } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
+    const dialog = screen.getByRole('dialog', { name: 'Template gallery' });
+    const card = within(dialog).getByRole('button', { name: 'Insert Icebreaker' });
+    // WebKit does not focus a clicked button; focus goes to the board ancestor.
+    board.focus();
+    expect(document.activeElement).toBe(board);
+    fireEvent.click(card);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(h.store.getObjectIds().length).toBeGreaterThan(0);
+  });
+
   it('applies on an already populated board as a single command and restores board focus', () => {
     const { h, board } = setup();
     const trigger = screen.getByRole('button', { name: 'Templates' });

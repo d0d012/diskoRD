@@ -33,7 +33,13 @@ export function TemplateGallery({ board, onClose, ...options }: TemplateGalleryP
       }
     }
     function focus(event: FocusEvent): void {
-      if (event.target instanceof Node && !dialog.contains(event.target)) buttons()[0]?.focus();
+      // WebKit (Tauri on macOS) does not focus a clicked button; focus lands on
+      // the board that hosts this portal. That ancestor is not "leaving" the
+      // dialog, and refocusing the first button there scrolled the list to the
+      // top and swallowed the click.
+      const target = event.target;
+      if (!(target instanceof Node) || dialog.contains(target) || target.contains(dialog)) return;
+      buttons()[0]?.focus({ preventScroll: true });
     }
     doc.addEventListener('keydown', key, true);
     doc.addEventListener('focusin', focus);
