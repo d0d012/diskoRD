@@ -47,8 +47,8 @@ export function TextEditor(props: TextEditorProps): ReactElement | null {
   const usable = isEditable(initial);
   useEffect(() => {
     // Nothing editable behind the id (deleted, wrong kind): drop the stale session state.
-    if (editingId !== null && !usable && session.getState().editingId === editingId) session.setEditingId(null);
-  }, [editingId, usable, session]);
+    if (editingId !== null && !usable && initial?.kind !== 'frame' && session.getState().editingId === editingId) session.setEditingId(null);
+  }, [editingId, usable, session, initial?.kind]);
   if (editingId === null || !usable) return null;
   return <EditorSurface key={editingId} {...props} initial={initial} />;
 }

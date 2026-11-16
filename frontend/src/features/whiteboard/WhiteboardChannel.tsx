@@ -7,6 +7,7 @@ import type { ImageIngest } from './assets';
 import { StampPicker, armStamp, stampSession, useArmedStamp, type StampPlacer } from './stamps';
 import { Viewport } from './render/Viewport';
 import { TextEditor } from './editing/TextEditor';
+import { FrameLabelEditor } from './editing/FrameLabelEditor';
 import { CropEditor } from './editing/CropEditor';
 import { connectBoard, createBoardResources } from './localBoard';
 import type { BoardConnection } from './localBoard';
@@ -108,6 +109,7 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
     {adapter && <FollowView adapter={adapter} runtime={runtime} />}
     <TextEditor store={store} session={session} runtime={runtime} onNotice={notices.notify} />
     <CropEditor store={store} session={session} runtime={runtime} />
+    <FrameLabelEditor store={store} session={session} adapter={adapter} selfUserId={userId} onNotice={notices.notify} />
     {!ids.length && <EmptyState store={store} session={session} runtime={runtime} userId={userId} notify={notices.notify} getViewportSize={() => viewport.current?.getBoundingClientRect() ?? null} />}
     {error && <div data-wb-ui className="wb-ui-start-error" role="alert">{error}</div>}
     <BoardNotice notices={notices} />

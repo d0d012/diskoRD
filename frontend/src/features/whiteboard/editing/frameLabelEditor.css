@@ -1,0 +1,31 @@
+.wb-root .wb-render-object[data-wb-selected="true"] .wb-render-frame-label,
+.wb-root .wb-render-frame-label[data-wb-renaming] {
+  width: max-content !important;
+  max-width: none;
+  overflow: visible;
+}
+.wb-root .wb-render-object[data-wb-selected="true"] [data-wb-frame-title] {
+  overflow: visible;
+  text-overflow: clip;
+  flex-shrink: 0;
+}
+.wb-root .wb-render-frame-label[data-wb-renaming] [data-wb-frame-title] {
+  visibility: hidden;
+}
+.wb-root .wb-frame-label-input {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: calc(100% - 28px);
+  min-width: 120px;
+  box-sizing: border-box;
+  border: 1px solid var(--wb-primary);
+  border-radius: var(--wb-radius-chip);
+  outline: none;
+  padding: 0;
+  background: var(--wb-dock-bg);
+  color: inherit;
+  font: inherit;
+  font-family: var(--wb-font-ui);
+  pointer-events: auto;
+}

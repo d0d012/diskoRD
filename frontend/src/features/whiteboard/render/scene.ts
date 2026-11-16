@@ -131,6 +131,7 @@ export function createRenderScene(store: BoardStore, session: SessionStore, runt
     if (editing) repaint.add(editing);
     for (const [id, node] of nodes) {
       node.hidden = !visible.has(id);
+      node.dataset.wbSelected = String(session.getState().selectedIds.includes(id));
       node.classList.toggle('wb-render-retired', retired.has(id));
       node.classList.toggle('wb-root__object-exit', retired.has(id));
       if (repaint.has(id)) {

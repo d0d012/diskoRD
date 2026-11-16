@@ -233,6 +233,7 @@ export function paintObject(node: HTMLDivElement, object: BoardObject, editing =
       const label = node.querySelector<HTMLElement>('[data-wb-frame-label]')!;
       const bounds = frameLabelBounds(object);
       Object.assign(label.style, { left: '0px', top: `${-FRAME_LABEL_HEIGHT}px`, width: `${bounds.w}px`, height: `${FRAME_LABEL_HEIGHT}px`, paddingInline: `${FRAME_LABEL_PADDING_X}px`, fontSize: `${FRAME_LABEL_FONT_SIZE}px` });
+      label.title = object.label;
       textContent(label.querySelector('[data-wb-frame-title]')!, object.label);
       break;
     }
