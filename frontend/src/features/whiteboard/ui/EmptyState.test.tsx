@@ -56,7 +56,7 @@ describe('EmptyState', () => {
     const { h } = renderEmpty();
 
     const names = screen.getAllByRole('button').map(button => button.textContent);
-    expect(names).toEqual(['Sprint board', 'Retro', 'Moodboard', 'Sprite critique wall']);
+    expect(names).toEqual(['Sprint board', 'Retro', 'Moodboard', 'Sprite critique wall', 'All templates']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sprint board' }));
     expect(applyTemplate).toHaveBeenCalledExactlyOnceWith('sprint', expect.objectContaining({ store: h.store, userId: USER }));

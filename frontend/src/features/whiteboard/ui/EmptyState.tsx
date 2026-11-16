@@ -6,7 +6,9 @@ import type { BoardStore, Runtime, UserId } from '../contract';
 import { STAMPS } from '../stamps';
 import { StampGlyph } from '../stamps';
 import type { BoardNotify, SessionStore } from '../state';
-import { TEMPLATES, applyTemplate } from '../templates';
+import { applyTemplate } from '../templates';
+import { FEATURED_TEMPLATES } from '../templates/templates';
+import { TemplateGalleryButton } from './TemplateGallery';
 import './emptyState.css';
 
 interface EmptyStateProps {
@@ -47,7 +49,7 @@ export function EmptyState({ store, session, runtime, userId, notify, getViewpor
       <strong>This board is ready for ideas.</strong>
       <span>Start from a template, pick a tool, or double-click to write.</span>
       <div className="wb-empty-templates" data-wb-ui="">
-        {TEMPLATES.map(template => (
+        {FEATURED_TEMPLATES.map(template => (
           <button type="button" key={template.id} title={template.description}
             onClick={event => {
               const board = event.currentTarget.closest<HTMLElement>('[data-wb-viewport]');
@@ -58,6 +60,7 @@ export function EmptyState({ store, session, runtime, userId, notify, getViewpor
             {template.name}
           </button>
         ))}
+        <TemplateGalleryButton label="All templates" store={store} session={session} runtime={runtime} userId={userId} notify={notify} getViewportSize={getViewportSize} />
       </div>
     </div>
   );

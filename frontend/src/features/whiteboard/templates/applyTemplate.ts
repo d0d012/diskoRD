@@ -2,6 +2,7 @@ import type { BoardObject, BoardStore, ObjectId, Rank, Runtime, UserId } from '.
 import { fitToBounds, getBounds, unionBounds } from '../core';
 import { createChange, safeDispatch, topRanks } from '../input/objects';
 import type { BoardNotify, SessionStore } from '../state';
+import { DEFAULT_STYLE_DEFAULTS } from '../state/sessionStore';
 import { templateById } from './templates';
 import type { TemplateItem } from './templates';
 
@@ -26,7 +27,12 @@ const FRAME_STYLE = { colour: 'blue', weight: 'thin' } as const;
 function toObject(item: TemplateItem, rank: Rank, id: ObjectId, createdBy: UserId): BoardObject {
   const base = { id, rank, version: 0, createdBy, x: item.x, y: item.y, w: item.w, h: item.h };
   if (item.kind === 'frame') return { ...base, kind: 'frame', label: item.label, style: FRAME_STYLE };
-  return { ...base, kind: 'sticky', text: item.text, style: { tone: item.tone, font: 'handwriting' } };
+  switch (item.kind) {
+    case 'sticky': return { ...base, kind: 'sticky', text: item.text, style: { tone: item.tone, font: 'handwriting' } };
+    case 'text': return { ...base, kind: 'text', text: item.text, style: { ...DEFAULT_STYLE_DEFAULTS.text, ...item.style } };
+    case 'rect': case 'ellipse': return { ...base, kind: item.kind, style: { ...DEFAULT_STYLE_DEFAULTS.shape, colour: item.colour ?? DEFAULT_STYLE_DEFAULTS.shape.colour, fill: item.fill ?? DEFAULT_STYLE_DEFAULTS.shape.fill } };
+    case 'line': case 'arrow': return { ...base, kind: item.kind, start: item.start, end: item.end, style: { ...DEFAULT_STYLE_DEFAULTS.stroke, colour: item.colour ?? DEFAULT_STYLE_DEFAULTS.stroke.colour } };
+  }
 }
 
 export function applyTemplate(templateId: string, options: ApplyTemplateOptions): ObjectId[] | null {

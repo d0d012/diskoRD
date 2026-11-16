@@ -1,0 +1,30 @@
+import type { FillMode, PaletteColour, StickyTone, TextSize } from '../contract';
+import { textObjectHeight } from '../editing/measure';
+import { DEFAULT_STYLE_DEFAULTS } from '../state/sessionStore';
+import type { TemplateItem } from './templates';
+
+export function frame(label: string, x: number, y: number, w = 560, h = 560): TemplateItem {
+  return { kind: 'frame', label, x, y, w, h };
+}
+export function sticky(text: string, tone: StickyTone, x: number, y: number): TemplateItem {
+  return { kind: 'sticky', text, tone, x, y, w: 200, h: 200 };
+}
+export function text(value: string, x: number, y: number, w = 480, size: TextSize = 'M', bold = false, colour: PaletteColour = 'ink'): TemplateItem {
+  const style = { ...DEFAULT_STYLE_DEFAULTS.text, size, bold, colour };
+  return { kind: 'text', text: value, x, y, w, h: textObjectHeight({ text: value, w, style }), style };
+}
+export function shape(kind: 'rect' | 'ellipse', x: number, y: number, w: number, h: number, colour: PaletteColour = 'blue', fill: FillMode = 'tint'): TemplateItem {
+  return { kind, x, y, w, h, colour, fill };
+}
+export function connector(kind: 'line' | 'arrow', x1: number, y1: number, x2: number, y2: number, colour: PaletteColour = 'blue'): TemplateItem {
+  const x = Math.min(x1, x2); const y = Math.min(y1, y2);
+  return { kind, x, y, w: Math.abs(x2 - x1), h: Math.abs(y2 - y1), start: { x: x1 - x, y: y1 - y }, end: { x: x2 - x, y: y2 - y }, colour };
+}
+/** Two short, useful samples per column; the 40-unit gutters leave labels clear. */
+export function columns(labels: readonly string[], samples: readonly (readonly [string, string])[], tones: readonly StickyTone[]): TemplateItem[] {
+  return labels.flatMap((label, i) => [
+    frame(label, i * 320, 160, 280, 560),
+    sticky(samples[i][0], tones[i % tones.length], i * 320 + 40, 200),
+    sticky(samples[i][1], tones[i % tones.length], i * 320 + 40, 440),
+  ]);
+}

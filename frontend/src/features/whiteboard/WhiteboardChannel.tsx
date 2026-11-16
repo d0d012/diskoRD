@@ -16,6 +16,7 @@ import { FollowView } from './ui/FollowView';
 import { PeoplePanel } from './ui/PeoplePanel';
 import { ImagePicker } from './ui/ImagePicker';
 import { EmptyState } from './ui/EmptyState';
+import { TemplateGalleryButton } from './ui/TemplateGallery';
 import { SyncStatusChip } from './ui/SyncStatus';
 import { Toolbar, StyleBar, ZoomControl, UndoRedo, BoardNotice } from './ui';
 import { exportBoardPng } from './export';
@@ -111,7 +112,7 @@ function Board({ channelId, userId }: WhiteboardChannelProps & { userId: string 
     {error && <div data-wb-ui className="wb-ui-start-error" role="alert">{error}</div>}
     <BoardNotice notices={notices} />
     {adapter && <><Participants adapter={adapter} selfUserId={userId} /><SyncStatusChip adapter={adapter} /></>}
-    <PeoplePanel {...ui} adapter={adapter} selfUserId={userId} boardId={channelId} notify={notices.notify} resolveName={resolveName} />
+    <PeoplePanel {...ui} adapter={adapter} selfUserId={userId} boardId={channelId} notify={notices.notify} resolveName={resolveName} controls={<TemplateGalleryButton {...ui} userId={userId} notify={notices.notify} getViewportSize={() => viewport.current?.getBoundingClientRect() ?? null} />} />
     {pickerOpen && connection && <div data-wb-ui className="wb-assets-anchor">
       <ImagePicker onClose={closePicker} onPick={(files, { pixelated }) => {
         closePicker();

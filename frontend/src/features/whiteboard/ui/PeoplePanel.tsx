@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import { useUserStore } from '../../../stores/userStore';
 import type { BoardId, PurgeFilter, PurgeResult, Rect, SyncAdapter, UserId } from '../contract';
@@ -14,6 +14,7 @@ import type { BoardUIProps } from './Toolbar';
 import { useCanManageChannel } from './useCanManageChannel';
 
 export interface PeoplePanelProps extends BoardUIProps {
+  readonly controls?: ReactNode;
   readonly adapter?: SyncAdapter | null;
   readonly selfUserId?: UserId;
   readonly boardId?: BoardId;
@@ -42,6 +43,7 @@ function hashColourIndex(userId: string): number {
 }
 
 export function PeoplePanel({
+  controls,
   store,
   session,
   runtime,
@@ -186,6 +188,7 @@ export function PeoplePanel({
   return (
     <div ref={rootRef} data-wb-ui="" className="wb-people-chrome">
       <div className="wb-people-controls">
+        {controls}
         {hasHidden && (
           <div className="wb-hidden-indicator" role="status" aria-label="Hidden objects indicator">
             <span className="wb-hidden-indicator__label">
