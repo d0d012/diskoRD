@@ -339,6 +339,25 @@ describe('input controller: wheel, pinch, clipboard, dispose', () => {
     expect(copies).toHaveLength(2);
   });
 
+  it('writes a board marker on copy and pastes objects when the system rewrote the plain text', () => {
+    setup();
+    const id = h.store.getObjectIds()[0];
+    element.focus();
+    h.session.setSelectedIds([id]);
+    const written: Record<string, string> = {};
+    const copy = Object.assign(new Event('copy', { bubbles: true, cancelable: true }), {
+      clipboardData: { setData: (type: string, value: string) => { written[type] = value; } },
+    });
+    element.dispatchEvent(copy);
+    expect(written['text/html']).toContain('data-diskord-board-clip');
+    const event = Object.assign(new Event('paste', { bubbles: true, cancelable: true }), {
+      clipboardData: { getData: (type: string) => (type === 'text/html' ? written['text/html'] : 'rewritten by the OS') },
+    });
+    element.dispatchEvent(event);
+    expect(h.store.getObjectsInRank().filter(object => object.kind === 'rect')).toHaveLength(2);
+    expect(h.store.getObjectsInRank().some(object => object.kind === 'text')).toBe(false);
+  });
+
   it('removes every listener on dispose', () => {
     setup([]);
     const removeElement = vi.spyOn(element, 'removeEventListener');

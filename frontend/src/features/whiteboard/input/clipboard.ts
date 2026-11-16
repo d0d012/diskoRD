@@ -19,6 +19,37 @@ export interface BoardClipboard {
   readonly text: string;
   /** How many times these objects have been pasted (cascades the offset). */
   pastes: number;
+  /** Marker written into the copy's text/html so a paste can recognise it. */
+  readonly token: string;
+}
+
+const CLIP_ATTR = 'data-diskord-board-clip';
+
+function newToken(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
+}
+
+/** text/html written alongside the plain text: the marker plus a readable copy for other apps. */
+export function clipboardHtml(clipboard: BoardClipboard): string {
+  return `<meta ${CLIP_ATTR}="${clipboard.token}"><pre>${escapeHtml(clipboard.text)}</pre>`;
+}
+
+function normalise(text: string): string {
+  return text.replace(/\r\n?/g, '\n').trim();
+}
+
+/**
+ * True when a paste carries this board copy. System clipboards rewrite plain
+ * text (Windows turns LF into CRLF, apps trim it), so prefer the html marker
+ * and fall back to a normalised text comparison.
+ */
+export function isBoardPaste(clipboard: BoardClipboard, text: string, html: string): boolean {
+  if (html.includes(`${CLIP_ATTR}="${clipboard.token}"`)) return true;
+  return normalise(text) === normalise(clipboard.text);
 }
 
 export function clipboardText(objects: readonly BoardObject[]): string {
@@ -31,7 +62,7 @@ export function copySelection(ctx: ToolContext): BoardClipboard | null {
   // containment rule used when dragging a frame (see core/frames.ts).
   const objects = expandFrameSelection(ctx.store.getObjectsInRank(), ctx.session.getState().selectedIds);
   if (objects.length === 0) return null;
-  return { objects, text: clipboardText(objects), pastes: 0 };
+  return { objects, text: clipboardText(objects), pastes: 0, token: newToken() };
 }
 
 /**

@@ -2,7 +2,7 @@ import { ERASER_RADIUS_PX } from '../contract';
 import { setSnapGuides } from '../render/overlays/snapState';
 import type { BoardStore, HandleId, ObjectId, Point, Runtime, UserId } from '../contract';
 import type { BoardNotify, SessionStore } from '../state';
-import { carriesFiles, copySelection, filesOf, pasteObjects, pasteText } from './clipboard';
+import { carriesFiles, clipboardHtml, copySelection, filesOf, isBoardPaste, pasteObjects, pasteText } from './clipboard';
 import type { BoardClipboard } from './clipboard';
 import {
   deleteSelection, duplicateSelection, editSelection, isComposing, isGuardedElement, matchShortcut,
@@ -513,16 +513,17 @@ export function createInputController(options: InputControllerOptions): InputCon
   /** copy/cut events: the keydown already captured the objects (cut already deleted them). */
   function onCopy(event: ClipboardEvent): void {
     if (!boardFocused() || !event.clipboardData) return;
-    let text = pendingSystemText;
+    const fromKeydown = pendingSystemText !== null;
     pendingSystemText = null;
-    if (text === null) {
+    if (!fromKeydown) {
       // Copy from a menu (no keydown): capture the selection now.
       const copied = copySelection(ctx);
       if (!copied) return;
       clipboard = copied;
-      text = copied.text;
     }
-    event.clipboardData.setData('text/plain', text);
+    if (!clipboard) return;
+    event.clipboardData.setData('text/plain', clipboard.text);
+    event.clipboardData.setData('text/html', clipboardHtml(clipboard));
     event.preventDefault();
   }
 
@@ -546,8 +547,9 @@ export function createInputController(options: InputControllerOptions): InputCon
       }
     }
     const text = event.clipboardData?.getData('text/plain') ?? '';
+    const html = event.clipboardData?.getData('text/html') ?? '';
     const at = pastePoint();
-    if (clipboard && (text === clipboard.text || text === '')) {
+    if (clipboard && (text === '' || isBoardPaste(clipboard, text, html))) {
       event.preventDefault();
       pasteObjects(ctx, clipboard, at);
       return;
